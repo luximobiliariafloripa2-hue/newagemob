@@ -1,0 +1,2725 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AGEMOB — Autorizações Imobiliárias Inteligentes</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#101828; --ink-2:#475467; --ink-3:#98A2B3;
+  --paper:#F8F9FB; --card:#FFFFFF; --line:#E4E7EC;
+  --brand:#04273B; --brand-dark:#021c2b; --brand-soft:#E6EEF3;
+  --gold:#B8860B; --gold-soft:#FBF3DD;
+  --red:#D92D20; --red-soft:#FEF3F2;
+  --blue:#175CD3; --blue-soft:#EFF8FF;
+  --radius:14px; --shadow:0 1px 3px rgba(16,24,40,.08),0 1px 2px rgba(16,24,40,.04);
+  --shadow-lg:0 12px 32px -8px rgba(16,24,40,.16);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Inter',sans-serif;background:var(--paper);color:var(--ink);font-size:15px;line-height:1.55}
+h1,h2,h3,.display{font-family:'Sora',sans-serif}
+button{font-family:inherit;cursor:pointer}
+input,select,textarea{font-family:inherit;font-size:15px;width:100%;padding:11px 13px;border:1.5px solid var(--line);border-radius:10px;background:#fff;color:var(--ink);outline:none;transition:border .15s, box-shadow .15s}
+input:focus,select:focus,textarea:focus{border-color:var(--brand);box-shadow:0 0 0 3px rgba(11,122,92,.12)}
+label{display:block;font-size:13px;font-weight:600;color:var(--ink-2);margin-bottom:5px}
+.field{margin-bottom:14px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+@media(max-width:720px){.grid2,.grid3,.grid4{grid-template-columns:1fr}}
+
+/* ---------- Topbar ---------- */
+.topbar{background:#fff;border-bottom:1px solid var(--line);position:sticky;top:0;z-index:50}
+.topbar-in{max-width:1180px;margin:0 auto;padding:0 20px;height:62px;display:flex;align-items:center;gap:14px}
+.logo{font-family:'Sora';font-weight:800;font-size:20px;letter-spacing:-.5px;display:flex;align-items:center;gap:8px}
+.logo .seal{width:30px;height:30px;border-radius:50%;background:var(--brand);color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800}
+.logo b{color:var(--brand)}
+.topbar .tag{font-size:11.5px;color:var(--ink-3);font-weight:500;border-left:1px solid var(--line);padding-left:14px}
+.topbar .agency{margin-left:auto;display:flex;align-items:center;gap:9px;font-size:13px;font-weight:600}
+.topbar .agency .dot{width:8px;height:8px;border-radius:50%;background:var(--brand)}
+@media(max-width:640px){.topbar .tag{display:none}}
+
+/* ---------- Buttons / badges ---------- */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border:none;border-radius:10px;padding:11px 18px;font-weight:600;font-size:14.5px;transition:.15s}
+.btn-primary{background:var(--brand);color:#fff}
+.btn-primary:hover{background:var(--brand-dark)}
+.btn-ghost{background:#fff;border:1.5px solid var(--line);color:var(--ink)}
+.btn-ghost:hover{border-color:var(--ink-3)}
+.btn-gold{background:var(--gold);color:#fff}
+.btn-lg{padding:14px 26px;font-size:15.5px;border-radius:12px}
+.badge{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:3px 10px;border-radius:99px}
+.b-green{background:var(--brand-soft);color:var(--brand-dark)}
+.b-gold{background:var(--gold-soft);color:var(--gold)}
+.b-red{background:var(--red-soft);color:var(--red)}
+.b-blue{background:var(--blue-soft);color:var(--blue)}
+.b-gray{background:#F2F4F7;color:var(--ink-2)}
+
+/* ---------- Admin layout ---------- */
+.wrap{max-width:1180px;margin:0 auto;padding:28px 20px 60px}
+.page-head{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:24px;flex-wrap:wrap}
+.page-head h1{font-size:24px;letter-spacing:-.5px}
+.page-head p{color:var(--ink-2);font-size:14px;margin-top:3px}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:14px}
+@media(max-width:980px){.kpis{grid-template-columns:repeat(2,1fr)}}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:18px;box-shadow:var(--shadow)}
+.kpi .k-label{font-size:12.5px;font-weight:600;color:var(--ink-2)}
+.kpi .k-num{font-family:'Sora';font-size:30px;font-weight:700;letter-spacing:-1px;margin-top:6px}
+.kpi .k-sub{font-size:12px;color:var(--ink-3);margin-top:2px}
+.kpi.k-gold .k-num{color:var(--gold)}
+.kpi.k-green .k-num{color:var(--brand)}
+.kpi.k-red .k-num{color:var(--red)}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:22px;margin-bottom:14px}
+.panel h2{font-size:16px;margin-bottom:16px}
+.two-col{display:grid;grid-template-columns:1.1fr 2fr;gap:14px;align-items:start}
+@media(max-width:980px){.two-col{grid-template-columns:1fr}}
+
+/* chart */
+.chart{display:flex;align-items:flex-end;gap:10px;height:160px;padding-top:8px}
+.chart .bar{flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;height:100%;justify-content:flex-end}
+.chart .bar i{display:block;width:100%;max-width:42px;background:linear-gradient(180deg,var(--brand) 0%,#073d5e 100%);border-radius:7px 7px 3px 3px;transition:height .6s cubic-bezier(.2,.8,.2,1)}
+.chart .bar span{font-size:11px;color:var(--ink-3);font-weight:600}
+.chart .bar b{font-size:12px;color:var(--ink-2)}
+
+/* table */
+.tbl{width:100%;border-collapse:collapse;font-size:13.5px}
+.tbl th{text-align:left;font-size:11.5px;text-transform:uppercase;letter-spacing:.4px;color:var(--ink-3);font-weight:700;padding:10px 12px;border-bottom:1px solid var(--line)}
+.tbl td{padding:13px 12px;border-bottom:1px solid #F2F4F7;vertical-align:middle}
+.tbl tr:hover td{background:#FAFBFC}
+.tbl .prop{font-weight:600}
+.tbl .sub{font-size:12px;color:var(--ink-3)}
+.tbl-scroll{overflow-x:auto}
+.icon-btn{border:1px solid var(--line);background:#fff;border-radius:8px;width:32px;height:32px;display:inline-flex;align-items:center;justify-content:center;font-size:14px;margin-right:4px}
+.icon-btn:hover{border-color:var(--brand);color:var(--brand)}
+
+/* ---------- Modal ---------- */
+.overlay{position:fixed;inset:0;background:rgba(16,24,40,.55);backdrop-filter:blur(3px);display:none;align-items:center;justify-content:center;z-index:100;padding:20px}
+.overlay.open{display:flex}
+.modal{background:#fff;border-radius:18px;max-width:520px;width:100%;padding:30px;box-shadow:var(--shadow-lg);animation:pop .25s cubic-bezier(.2,.8,.2,1)}
+@keyframes pop{from{transform:scale(.95);opacity:0}to{transform:scale(1);opacity:1}}
+.modal h2{font-size:19px;margin-bottom:6px}
+.modal p{color:var(--ink-2);font-size:14px}
+.linkbox{display:flex;gap:8px;margin:18px 0}
+.linkbox input{font-size:13.5px;font-weight:600;color:var(--brand-dark);background:var(--brand-soft);border-color:transparent}
+
+/* ---------- Owner flow ---------- */
+.owner-shell{max-width:680px;margin:0 auto;padding:26px 18px 80px}
+.owner-brand{display:flex;align-items:center;gap:12px;margin-bottom:22px}
+.owner-brand .mark{width:44px;height:44px;border-radius:12px;background:var(--ink);color:#fff;display:flex;align-items:center;justify-content:center;font-family:'Sora';font-weight:800;font-size:15px}
+.owner-brand h2{font-size:17px;letter-spacing:-.3px}
+.owner-brand p{font-size:12.5px;color:var(--ink-3)}
+.progress{display:flex;gap:6px;margin-bottom:8px}
+.progress i{flex:1;height:5px;border-radius:99px;background:var(--line);transition:.3s}
+.progress i.on{background:var(--brand)}
+.step-label{font-size:12.5px;font-weight:600;color:var(--brand-dark);margin-bottom:18px}
+.card-step{background:#fff;border:1px solid var(--line);border-radius:18px;padding:26px;box-shadow:var(--shadow)}
+.card-step h1{font-size:21px;letter-spacing:-.4px;margin-bottom:4px}
+.card-step .lead{color:var(--ink-2);font-size:14px;margin-bottom:22px}
+.nav-row{display:flex;justify-content:space-between;gap:10px;margin-top:24px}
+
+/* upload */
+.uploads{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media(max-width:600px){.uploads{grid-template-columns:1fr}}
+.up{border:1.5px dashed var(--line);border-radius:12px;padding:14px;display:flex;align-items:center;gap:11px;cursor:pointer;transition:.15s;background:#FCFCFD}
+.up:hover{border-color:var(--brand)}
+.up.done{border-style:solid;border-color:var(--brand);background:var(--brand-soft)}
+.up .ic{width:36px;height:36px;border-radius:9px;background:#F2F4F7;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+.up.done .ic{background:var(--brand);color:#fff}
+.up b{font-size:13.5px;display:block}
+.up span{font-size:11.5px;color:var(--ink-3)}
+
+/* tipo de autorização */
+.choice{border:2px solid var(--line);border-radius:16px;padding:20px;cursor:pointer;transition:.15s;margin-bottom:12px;background:#fff}
+.choice:hover{border-color:var(--ink-3)}
+.choice.sel{border-color:var(--brand);background:var(--brand-soft)}
+.choice.sel.gold{border-color:var(--gold);background:var(--gold-soft)}
+.choice h3{font-size:16px;display:flex;align-items:center;gap:9px}
+.choice p{font-size:13px;color:var(--ink-2);margin-top:4px}
+.bens{list-style:none;margin-top:14px;display:grid;gap:8px}
+.bens li{font-size:13.5px;display:flex;gap:9px;align-items:flex-start}
+.bens li::before{content:"✓";color:var(--brand);font-weight:800;flex-shrink:0}
+.gold .bens li::before{color:var(--gold)}
+.pitch{background:linear-gradient(135deg,#0E1B2C 0%,#173A2F 100%);color:#fff;border-radius:16px;padding:24px;margin-top:14px}
+.pitch h3{font-size:16px;color:#F4D06F;margin-bottom:4px}
+.pitch p{font-size:13px;color:#CBD5E1;margin-bottom:12px}
+.pitch .bens li{color:#E8EDF2}
+.pitch .bens li::before{color:#F4D06F}
+
+/* resumo */
+.sum-block{border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:12px}
+.sum-block h4{font-size:13px;text-transform:uppercase;letter-spacing:.5px;color:var(--ink-3);margin-bottom:10px;display:flex;justify-content:space-between;align-items:center}
+.sum-block h4 button{border:none;background:none;color:var(--brand);font-weight:600;font-size:12.5px}
+.sum-row{display:flex;justify-content:space-between;gap:14px;font-size:13.5px;padding:4px 0}
+.sum-row span{color:var(--ink-3)}
+.sum-row b{text-align:right;font-weight:600}
+
+/* assinatura */
+.sig-tabs{display:flex;gap:8px;margin-bottom:12px}
+.sig-tabs button{flex:1;padding:9px;border-radius:9px;border:1.5px solid var(--line);background:#fff;font-weight:600;font-size:13.5px}
+.sig-tabs button.on{border-color:var(--brand);background:var(--brand-soft);color:var(--brand-dark)}
+#sigCanvas{width:100%;height:190px;border:1.5px dashed var(--ink-3);border-radius:12px;background:#fff;touch-action:none;display:block}
+.sig-typed{font-family:'Sora';font-size:34px;text-align:center;padding:36px 10px;border:1.5px dashed var(--ink-3);border-radius:12px;min-height:120px;color:var(--ink)}
+.legal{font-size:12px;color:var(--ink-3);background:#F9FAFB;border:1px solid var(--line);border-radius:10px;padding:12px;margin-top:14px}
+
+/* sucesso */
+.success{text-align:center;padding:14px 4px}
+.success .seal-big{width:84px;height:84px;border-radius:50%;background:var(--brand);color:#fff;font-size:38px;display:flex;align-items:center;justify-content:center;margin:0 auto 18px;box-shadow:0 0 0 10px var(--brand-soft);animation:pop .4s}
+.success h1{font-size:22px}
+.success p{color:var(--ink-2);font-size:14px;margin-top:6px}
+.success .code{font-family:'Sora';font-weight:700;letter-spacing:2px;background:#F2F4F7;border-radius:9px;padding:8px 16px;display:inline-block;margin:14px 0;font-size:14px}
+
+/* portal proprietário */
+.portal-kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:18px 0}
+@media(max-width:600px){.portal-kpis{grid-template-columns:repeat(2,1fr)}}
+.pk{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px;text-align:center}
+.pk b{font-family:'Sora';font-size:22px;display:block;color:var(--brand-dark)}
+.pk span{font-size:11.5px;color:var(--ink-3);font-weight:600}
+.hint{font-size:12.5px;color:var(--ink-3);margin-top:8px}
+.hidden{display:none!important}
+.comissao-live{background:var(--blue-soft);border:1px solid #B2DDFF;border-radius:10px;padding:11px 14px;font-size:13.5px;color:var(--blue);font-weight:600;margin-top:-4px;margin-bottom:14px}
+.switch-view{position:fixed;bottom:18px;right:18px;z-index:60;box-shadow:var(--shadow-lg)}
+
+/* ---------- Login Screen ---------- */
+#viewLogin{position:fixed;inset:0;background:var(--paper);z-index:200;display:flex;align-items:center;justify-content:center;padding:20px}
+#viewLogin.hidden{display:none!important}
+.login-card{background:#fff;border:1px solid var(--line);border-radius:20px;padding:40px 36px;max-width:400px;width:100%;box-shadow:var(--shadow-lg)}
+.login-card .login-logo{display:flex;align-items:center;gap:10px;margin-bottom:28px;justify-content:center}
+.login-card h2{font-family:'Sora';font-size:22px;text-align:center;margin-bottom:4px;color:var(--brand)}
+.login-card .sub{font-size:13.5px;color:var(--ink-3);text-align:center;margin-bottom:24px}
+.login-card .field{margin-bottom:16px}
+.login-error{color:var(--red);font-size:13px;font-weight:600;margin-top:-8px;margin-bottom:12px;display:none}
+.logout-btn{background:none;border:1.5px solid var(--line);border-radius:8px;padding:6px 13px;font-size:13px;font-weight:600;color:var(--ink-2);cursor:pointer;transition:.15s}
+.logout-btn:hover{border-color:var(--red);color:var(--red)}
+
+/* ---------- Visualizar Modal ---------- */
+.modal-view{background:#fff;border-radius:18px;max-width:540px;width:100%;padding:30px;box-shadow:var(--shadow-lg);animation:pop .25s cubic-bezier(.2,.8,.2,1);max-height:90vh;overflow-y:auto}
+.modal-view h2{font-size:19px;margin-bottom:16px}
+.detail-section{margin-bottom:14px}
+.detail-section h4{font-size:11.5px;text-transform:uppercase;letter-spacing:.5px;color:var(--ink-3);font-weight:700;margin-bottom:8px}
+.detail-row{display:flex;justify-content:space-between;gap:12px;font-size:13.5px;padding:5px 0;border-bottom:1px solid #F2F4F7}
+.detail-row:last-child{border-bottom:none}
+.detail-row span{color:var(--ink-3)}
+.detail-row b{text-align:right;font-weight:600;max-width:65%}
+
+/* CEP button row */
+.cep-row{display:flex;gap:8px;align-items:flex-end}
+.cep-row input{flex:1}
+.btn-cep{white-space:nowrap;padding:11px 14px;font-size:13.5px;border-radius:10px;font-weight:600;background:var(--brand);color:#fff;border:none;cursor:pointer;transition:.15s;flex-shrink:0}
+.btn-cep:hover{background:var(--brand-dark)}
+.btn-cep:disabled{background:var(--ink-3);cursor:not-allowed}
+</style>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+</head>
+<body>
+
+<!-- ====================== LOGIN SCREEN ====================== -->
+<div id="viewLogin">
+  <div class="login-card">
+    <div class="login-logo">
+      <div class="logo"><span class="seal">A</span><b>AGEMOB</b></div>
+    </div>
+    <h2>Acesso ao Painel</h2>
+    <p class="sub">Entre com suas credenciais para acessar o painel da imobiliária.</p>
+    <div class="field">
+      <label>E-mail</label>
+      <input type="text" id="loginEmail" placeholder="usuário" onkeydown="if(event.key==='Enter')doLogin()">
+    </div>
+    <div class="field">
+      <label>Senha</label>
+      <input type="password" id="loginSenha" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()">
+    </div>
+    <div class="login-error" id="loginError">E-mail ou senha incorretos. Tente novamente.</div>
+    <button class="btn btn-primary" style="width:100%;margin-top:4px" onclick="doLogin()">Entrar →</button>
+    <p style="font-size:12px;color:var(--ink-3);text-align:center;margin-top:16px">Acesso restrito a usuários cadastrados.</p>
+  </div>
+</div>
+
+<!-- ====================== TOPBAR ====================== -->
+<header class="topbar">
+  <div class="topbar-in">
+    <div class="logo"><span class="seal">A</span><b>AGEMOB</b></div>
+    <span class="tag">Autorizações Imobiliárias Inteligentes</span>
+    <div class="agency" id="agencyBadge" style="display:flex;align-items:center;gap:14px">
+      <span class="dot"></span><span id="agencyName">Lux House Imóveis</span>
+      <button class="logout-btn" id="logoutBtn" onclick="doLogout()">Sair</button>
+    </div>
+  </div>
+</header>
+
+<!-- ====================== VIEW: ADMIN ====================== -->
+<main class="wrap" id="viewAdmin">
+  <div class="page-head">
+    <div>
+      <h1>Painel da Imobiliária</h1>
+      <p>Lux House Imóveis Ltda. · CNPJ 48.192.939/0001-21 · Jurerê Internacional, Florianópolis/SC</p>
+    </div>
+    <button class="btn btn-primary btn-lg" onclick="novaAutorizacao()">+ NOVA AUTORIZAÇÃO</button>
+  </div>
+
+  <div class="kpis" id="kpis"></div>
+
+  <div class="two-col">
+    <div class="panel">
+      <h2>Autorizações por mês</h2>
+      <div class="chart" id="chart"></div>
+    </div>
+    <div class="panel">
+      <h2>Autorizações</h2>
+      <div class="tbl-scroll">
+        <table class="tbl">
+          <thead><tr>
+            <th>Proprietário / Imóvel</th><th>Valor</th><th>Tipo</th><th>Status</th><th>Vencimento</th><th>Ações</th>
+          </tr></thead>
+          <tbody id="tblBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</main>
+
+<!-- ====================== MODAL: VISUALIZAR AUTORIZAÇÃO ====================== -->
+<div class="overlay" id="modalView">
+  <div class="modal-view">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <h2>Detalhes da Autorização</h2>
+      <button class="btn btn-ghost" style="padding:6px 12px" onclick="document.getElementById('modalView').classList.remove('open')">✕</button>
+    </div>
+    <div id="modalViewContent"></div>
+    <div style="display:flex;gap:10px;margin-top:18px">
+      <button class="btn btn-primary" style="flex:1" id="modalViewPdf" onclick="">⬇ Baixar PDF</button>
+      <button class="btn btn-ghost" onclick="document.getElementById('modalView').classList.remove('open')">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ====================== MODAL: LINK ====================== -->
+<div class="overlay" id="modalLink">
+  <div class="modal">
+    <h2>Link gerado com sucesso ✦</h2>
+    <p>Envie este link ao proprietário. Ele preencherá os dados, anexará os documentos e assinará digitalmente — tudo em menos de 5 minutos.</p>
+    <div class="linkbox">
+      <input id="genLink" readonly>
+      <button class="btn btn-ghost" onclick="copyLink()" id="copyBtn">Copiar</button>
+    </div>
+    <div style="display:flex;gap:10px">
+      <button class="btn btn-primary" style="flex:1" onclick="openOwner()">Simular como proprietário →</button>
+      <button class="btn btn-ghost" onclick="closeModal()">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ====================== VIEW: PROPRIETÁRIO ====================== -->
+<main class="owner-shell hidden" id="viewOwner">
+  <div class="owner-brand">
+    <div class="mark">LH</div>
+    <div>
+      <h2>Lux House Imóveis</h2>
+      <p>Autorização de Venda · Código <b id="ownerCode"></b></p>
+    </div>
+  </div>
+  <div class="progress" id="prog"></div>
+  <div class="step-label" id="stepLabel"></div>
+
+  <!-- STEP 1: proprietário -->
+  <section class="card-step" data-step="1">
+    <h1>Seus dados</h1>
+    <p class="lead">Preencha seus dados pessoais. Eles serão usados na autorização de venda.</p>
+    <div class="grid2">
+      <div class="field" style="grid-column:1/-1"><label>Nome completo *</label><input id="p_nome" placeholder="Ex.: Bruno Amorim Costa"></div>
+      <div class="field"><label>CPF *</label><input id="p_cpf" placeholder="000.000.000-00" oninput="maskCPF(this)" maxlength="14"></div>
+      <div class="field"><label>RG</label><input id="p_rg" placeholder="Número do RG"></div>
+      <div class="field"><label>Data de nascimento</label><input id="p_nasc" type="date"></div>
+      <div class="field"><label>Estado civil</label>
+        <select id="p_civil"><option>Solteiro(a)</option><option>Casado(a)</option><option>Divorciado(a)</option><option>Viúvo(a)</option><option>União estável</option></select>
+      </div>
+      <div class="field"><label>Profissão</label><input id="p_prof" placeholder="Ex.: Empresário"></div>
+      <div class="field"><label>WhatsApp *</label><input id="p_zap" placeholder="(48) 9 9999-9999" oninput="maskTel(this)" maxlength="16"></div>
+      <div class="field"><label>E-mail *</label><input id="p_email" type="email" placeholder="voce@email.com"></div>
+      <div class="field">
+        <label>CEP</label>
+        <div class="cep-row">
+          <input id="p_cep" placeholder="88053-000" oninput="maskCEPOnly(this)" maxlength="9">
+          <button class="btn-cep" id="btnBuscarCepP" onclick="buscarCEP('p')">Buscar CEP</button>
+        </div>
+      </div>
+      <div class="field" style="grid-column:1/-1"><label>Endereço</label><input id="p_end" placeholder="Rua, avenida..."></div>
+      <div class="field"><label>Número</label><input id="p_num"></div>
+      <div class="field"><label>Complemento</label><input id="p_comp"></div>
+      <div class="field"><label>Bairro</label><input id="p_bairro"></div>
+      <div class="field"><label>Cidade / UF</label><input id="p_cidade" placeholder="Florianópolis/SC"></div>
+    </div>
+    <div class="nav-row">
+      <span></span>
+      <button class="btn btn-primary" onclick="nextStep(1)">Continuar →</button>
+    </div>
+  </section>
+
+  <!-- STEP 2: imóvel -->
+  <section class="card-step hidden" data-step="2">
+    <h1>Dados do imóvel</h1>
+    <p class="lead">Informe os dados do imóvel que será comercializado.</p>
+    <div class="grid2">
+      <div class="field"><label>Tipo de imóvel *</label>
+        <select id="i_tipo"><option>Casa</option><option>Apartamento</option><option>Terreno</option><option>Sala Comercial</option><option>Galpão</option><option>Fazenda</option><option>Sítio</option><option>Outro</option></select>
+      </div>
+      <div class="field"><label>Valor de venda (incluindo a comissão) *</label><input id="i_valor" placeholder="R$ 0,00" oninput="maskMoney(this)"></div>
+    </div>
+    <p style="font-size:13px;color:var(--ink-3);margin-top:-6px;margin-bottom:14px">Valor da imobiliária é 6% sobre o valor da venda.</p>
+    <div class="grid2">
+      <div class="field" style="grid-column:1/-1"><label>Endereço do imóvel *</label><input id="i_end" placeholder="Rua, avenida..."></div>
+      <div class="field"><label>Número</label><input id="i_num"></div>
+      <div class="field">
+        <label>CEP</label>
+        <div class="cep-row">
+          <input id="i_cep" oninput="maskCEPOnly(this)" maxlength="9">
+          <button class="btn-cep" id="btnBuscarCepI" onclick="buscarCEP('i')">Buscar CEP</button>
+        </div>
+      </div>
+      <div class="field"><label>Bairro *</label><input id="i_bairro" placeholder="Ex.: Jurerê Internacional"></div>
+      <div class="field"><label>Cidade / UF *</label><input id="i_cidade" value="Florianópolis/SC"></div>
+    </div>
+    <div class="nav-row">
+      <button class="btn btn-ghost" onclick="prevStep(2)">← Voltar</button>
+      <button class="btn btn-primary" onclick="nextStep(2)">Continuar →</button>
+    </div>
+  </section>
+
+  <!-- STEP 3: tipo -->
+  <section class="card-step hidden" data-step="3">
+    <h1>Tipo de autorização</h1>
+    <p class="lead">Escolha como deseja autorizar a Lux House a comercializar seu imóvel.</p>
+
+    <div class="choice gold" id="chExc" onclick="setTipo('exclusiva')">
+      <h3>⭐ Com exclusividade <span class="badge b-gold">Recomendado</span></h3>
+      <p>A Lux House assume a gestão comercial completa do seu imóvel, com investimento direto em marketing.</p>
+    </div>
+    <div class="choice" id="chSem" onclick="setTipo('simples')">
+      <h3>Sem exclusividade</h3>
+      <p>Você mantém liberdade para anunciar com outras imobiliárias.</p>
+    </div>
+
+    <div class="pitch hidden" id="pitchExc">
+      <h3>Por que escolher a exclusividade?</h3>
+      <p>Com a exclusividade, a Lux House realiza:</p>
+      <ul class="bens">
+        <li>Vídeo profissional do imóvel</li>
+        <li>Fotos profissionais</li>
+        <li>Divulgação nos maiores portais imobiliários</li>
+        <li>Impulsionamento nas redes sociais</li>
+        <li>Campanhas de marketing digital</li>
+        <li>Divulgação em canais parceiros</li>
+        <li>Atendimento prioritário</li>
+        <li>Estratégia personalizada de comercialização</li>
+        <li>Relatórios periódicos de desempenho</li>
+        <li>Gestão comercial completa</li>
+        <li>Maior dedicação da equipe de vendas</li>
+      </ul>
+    </div>
+
+    <div class="choice hidden" id="pitchSem" style="cursor:default;border-style:dashed">
+      <h3>Benefícios</h3>
+      <ul class="bens">
+        <li>Divulgação em portais imobiliários</li>
+        <li>Divulgação para carteira de clientes</li>
+        <li>Divulgação para corretores parceiros</li>
+        <li>Inserção na base de imóveis da imobiliária</li>
+      </ul>
+    </div>
+
+    <div class="nav-row">
+      <button class="btn btn-ghost" onclick="prevStep(3)">← Voltar</button>
+      <button class="btn btn-primary" onclick="nextStep(3)">Continuar →</button>
+    </div>
+  </section>
+
+  <!-- STEP 4: resumo -->
+  <section class="card-step hidden" data-step="4">
+    <h1>Resumo</h1>
+    <p class="lead">Confira as informações antes de assinar. Você pode editar qualquer etapa.</p>
+    <div id="resumo"></div>
+    <div class="legal">
+      <b>Condições da autorização:</b> validade de 365 dias com renovação automática por períodos iguais e sucessivos, salvo manifestação contrária de qualquer das partes com antecedência mínima de 30 dias do vencimento. Comissão de corretagem de <b>6% (seis por cento)</b> sobre o valor total da venda efetivamente realizada.
+    </div>
+    <div class="nav-row">
+      <button class="btn btn-ghost" onclick="prevStep(4)">← Voltar</button>
+      <button class="btn btn-primary" onclick="nextStep(4)">Continuar →</button>
+    </div>
+  </section>
+
+  <!-- STEP 5: assinatura -->
+  <section class="card-step hidden" data-step="5">
+    <h1>Assinatura digital</h1>
+    <p class="lead">Assine abaixo para concluir sua autorização de venda.</p>
+    <div class="sig-tabs">
+      <button id="tabDraw" class="on" onclick="sigMode('draw')">✍️ Desenhar</button>
+      <button id="tabType" onclick="sigMode('type')">⌨️ Digitar</button>
+    </div>
+    <div id="sigDrawWrap">
+      <canvas id="sigCanvas"></canvas>
+      <button class="btn btn-ghost" style="margin-top:10px" onclick="clearSig()">Limpar</button>
+    </div>
+    <div id="sigTypeWrap" class="hidden">
+      <input id="sigTyped" placeholder="Digite seu nome completo" oninput="document.getElementById('sigPreview').textContent=this.value">
+      <div class="sig-typed" id="sigPreview" style="margin-top:10px"></div>
+    </div>
+    <div class="legal" id="sigMeta"></div>
+    <div class="nav-row">
+      <button class="btn btn-ghost" onclick="prevStep(5)">← Voltar</button>
+      <button class="btn btn-primary btn-lg" onclick="assinar()">Assinar e concluir ✓</button>
+    </div>
+  </section>
+
+  <!-- SUCESSO + PORTAL -->
+  <section class="card-step hidden" data-step="6">
+    <div class="success">
+      <div class="seal-big">✓</div>
+      <h1>Autorização assinada!</h1>
+      <p>Sua autorização foi gerada e a Lux House já foi notificada.<br>Uma cópia em PDF está disponível para download.</p>
+      <div class="code" id="finalCode"></div><br>
+      <button class="btn btn-primary btn-lg" onclick="gerarPDF()">⬇ Baixar autorização em PDF</button>
+      <div id="qrHolder" style="display:flex;justify-content:center;margin-top:20px"></div>
+    </div>
+    <hr style="border:none;border-top:1px solid var(--line);margin:26px 0">
+    <h2 style="font-size:16px">📊 Painel do proprietário</h2>
+    <p class="hint">Acompanhe em tempo real o trabalho da Lux House na divulgação do seu imóvel.</p>
+    <div class="portal-kpis">
+      <div class="pk"><b>1.284</b><span>Visualizações</span></div>
+      <div class="pk"><b>37</b><span>Leads recebidos</span></div>
+      <div class="pk"><b>21</b><span>Contatos realizados</span></div>
+      <div class="pk"><b>8</b><span>Visitas agendadas</span></div>
+      <div class="pk"><b>5</b><span>Visitas realizadas</span></div>
+      <div class="pk"><b>2</b><span>Propostas recebidas</span></div>
+    </div>
+    <div class="sum-block">
+      <h4>Divulgação ativa</h4>
+      <div class="sum-row"><span>Portais</span><b>ZAP Imóveis · VivaReal · OLX · Imovelweb</b></div>
+      <div class="sum-row"><span>Redes sociais</span><b>Instagram + Meta Ads (campanha ativa)</b></div>
+      <div class="sum-row"><span>Status da autorização</span><b style="color:var(--brand-dark)">Ativa · renova automaticamente</b></div>
+    </div>
+    <div style="text-align:center;margin-top:18px">
+      <button class="btn btn-ghost" onclick="backToAdmin()">← Voltar ao painel da imobiliária</button>
+    </div>
+  </section>
+</main>
+
+<button class="btn btn-ghost switch-view hidden" id="btnBack" onclick="backToAdmin()">↩ Painel da imobiliária</button>
+
+<script>
+/* ================= AUTENTICAÇÃO ================= */
+/**
+ * Usuários cadastrados no sistema.
+ * Estrutura preparada para múltiplas imobiliárias.
+ * Em produção, substituir por autenticação via backend.
+ */
+const USUARIOS = [
+  { email: "admin", senha: "lux2026", nomeImobiliaria: "Lux House Imóveis", perfil: "admin" }
+];
+
+/** Verifica se há sessão ativa ao carregar a página */
+function checkAuth(){
+  const sessao = localStorage.getItem('agemob_sessao');
+  if(sessao){
+    const user = JSON.parse(sessao);
+    document.getElementById('agencyName').textContent = user.nomeImobiliaria;
+    document.getElementById('viewLogin').classList.add('hidden');
+  } else {
+    document.getElementById('viewLogin').classList.remove('hidden');
+  }
+}
+
+/** Realiza o login */
+function doLogin(){
+  const email  = document.getElementById('loginEmail').value.trim().toLowerCase();
+  const senha  = document.getElementById('loginSenha').value;
+  const errEl  = document.getElementById('loginError');
+  const user   = USUARIOS.find(u => u.email === email && u.senha === senha);
+  if(user){
+    localStorage.setItem('agemob_sessao', JSON.stringify(user));
+    document.getElementById('agencyName').textContent = user.nomeImobiliaria;
+    document.getElementById('viewLogin').classList.add('hidden');
+    errEl.style.display = 'none';
+  } else {
+    errEl.style.display = 'block';
+    document.getElementById('loginSenha').value = '';
+    document.getElementById('loginSenha').focus();
+  }
+}
+
+/** Realiza o logout */
+function doLogout(){
+  if(!confirm('Deseja sair do painel?')) return;
+  localStorage.removeItem('agemob_sessao');
+  document.getElementById('loginEmail').value = '';
+  document.getElementById('loginSenha').value = '';
+  document.getElementById('loginError').style.display = 'none';
+  document.getElementById('viewLogin').classList.remove('hidden');
+  // Garantir que volta para viewAdmin caso esteja em outra view
+  document.getElementById('viewOwner').classList.add('hidden');
+  document.getElementById('btnBack').classList.add('hidden');
+  document.getElementById('viewAdmin').classList.remove('hidden');
+}
+
+/* ================= STATE ================= */
+const AG = {
+  imob: {
+    razao: "Lux House Imóveis Ltda.",
+    cnpj: "48.192.939/0001-21",
+    end: "Rua das Algas, 733 - Sala 1, Jurerê Internacional, Florianópolis/SC"
+  },
+  code: null,
+  tipo: null,
+  sigImg: null,
+  sigModeNow: "draw",
+  docs: {},
+  autorizacoes: [
+    {prop:"Marina Telles Duarte", imovel:"Apartamento · Jurerê Internacional", valor:2850000, tipo:"exclusiva", status:"ativa",      venc:"14/03/2027", corretor:"Lucas Siqueira"},
+    {prop:"Ricardo Sant'Anna",     imovel:"Casa · Daniela",                    valor:1990000, tipo:"simples",   status:"ativa",      venc:"02/02/2027", corretor:"Rodrigo Brito"},
+    {prop:"Helena Borba",          imovel:"Terreno · Cachoeira do Bom Jesus",  valor:760000,  tipo:"simples",   status:"aguardando", venc:"—",          corretor:"Lucas Siqueira"},
+    {prop:"Fábio Mendonça",        imovel:"Casa · Jurerê Internacional",       valor:5400000, tipo:"exclusiva", status:"ativa",      venc:"21/05/2027", corretor:"Rodrigo Brito"},
+    {prop:"Patrícia Lemos",        imovel:"Apartamento · Ingleses",            valor:890000,  tipo:"simples",   status:"vencida",    venc:"30/04/2026", corretor:"Lucas Siqueira"},
+    {prop:"João Vitor Ramos",      imovel:"Sala Comercial · Jurerê Office 408",valor:640000,  tipo:"exclusiva", status:"ativa",      venc:"11/01/2027", corretor:"Rodrigo Brito"},
+  ]
+};
+const BRL = v => v.toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+
+/* ================= ATUALIZAÇÃO AUTOMÁTICA EM TEMPO REAL ================= */
+/**
+ * Atualiza KPIs e tabela automaticamente a cada 15 segundos.
+ * Também é chamado manualmente sempre que houver mudança de status.
+ */
+let _realtimeInterval = null;
+function iniciarAtualizacaoRealtime(){
+  // Atualiza imediatamente e depois a cada 15 segundos
+  renderKPIs(); renderTable();
+  clearInterval(_realtimeInterval);
+  _realtimeInterval = setInterval(()=>{ renderKPIs(); renderTable(); }, 15000);
+}
+
+/** Notifica mudança de status e força re-render imediato */
+function notificarMudancaStatus(){
+  renderKPIs();
+  renderTable();
+}
+
+/* ================= ADMIN RENDER ================= */
+function renderKPIs(){
+  const a = AG.autorizacoes;
+  const vgv = a.reduce((s,x)=>s+x.valor,0);
+  const k = [
+    {l:"Total de autorizações",    n:a.length,                                    s:"todas as modalidades", c:""},
+    {l:"Ativas",                   n:a.filter(x=>x.status==='ativa').length,       s:"em vigência",          c:"k-green"},
+    {l:"Com exclusividade",        n:a.filter(x=>x.tipo==='exclusiva').length,     s:"gestão completa",      c:"k-gold"},
+    {l:"Sem exclusividade",        n:a.filter(x=>x.tipo==='simples').length,       s:"modalidade aberta",    c:""},
+    {l:"Aguardando assinatura",    n:a.filter(x=>x.status==='aguardando').length,  s:"links enviados",       c:""},
+    {l:"Vencidas",                 n:a.filter(x=>x.status==='vencida').length,     s:"requerem ação",        c:"k-red"},
+    {l:"Renovadas",                n:2,                                            s:"renovação automática", c:"k-green"},
+    {l:"VGV em carteira",          n:BRL(vgv).replace(',00',''),                   s:"valor geral de venda", c:""},
+  ];
+  document.getElementById('kpis').innerHTML = k.map(x=>
+    `<div class="kpi ${x.c}"><div class="k-label">${x.l}</div><div class="k-num">${x.n}</div><div class="k-sub">${x.s}</div></div>`).join('');
+}
+function renderChart(){
+  const meses=[["Jan",3],["Fev",5],["Mar",4],["Abr",7],["Mai",6],["Jun",9]];
+  const max=Math.max(...meses.map(m=>m[1]));
+  document.getElementById('chart').innerHTML = meses.map(([m,v])=>
+    `<div class="bar"><b>${v}</b><i style="height:${(v/max)*78}%"></i><span>${m}</span></div>`).join('');
+}
+
+/**
+ * Renderiza a tabela de autorizações com botões de ação funcionais.
+ * Cada botão recebe o índice da autorização para operar sobre os dados corretos.
+ */
+function renderTable(){
+  const map={ativa:['b-green','Ativa'],aguardando:['b-blue','Aguardando assinatura'],vencida:['b-red','Vencida']};
+  document.getElementById('tblBody').innerHTML = AG.autorizacoes.map((a, idx)=>{
+    const [cls,txt]=map[a.status]||['b-gray','Desconhecido'];
+    const tipo = a.tipo==='exclusiva' ? '<span class="badge b-gold">⭐ Exclusiva</span>' : '<span class="badge b-gray">Sem exclusividade</span>';
+    return `<tr>
+      <td><div class="prop">${a.prop}</div><div class="sub">${a.imovel} · ${a.corretor}</div></td>
+      <td><b>${BRL(a.valor).replace(',00','')}</b><div class="sub">Comissão ${BRL(a.valor*0.06).replace(',00','')}</div></td>
+      <td>${tipo}</td>
+      <td><span class="badge ${cls}">${txt}</span></td>
+      <td>${a.venc}</td>
+      <td style="white-space:nowrap">
+        <button class="icon-btn" title="Visualizar" onclick="visualizarAutorizacao(${idx})">👁</button>
+        <button class="icon-btn" title="Baixar PDF" onclick="baixarPDFAutorizacao(${idx})">⬇</button>
+        <button class="icon-btn" title="Reenviar link" onclick="reenviarLink(${idx})">↗</button>
+      </td></tr>`;
+  }).join('');
+}
+iniciarAtualizacaoRealtime();
+renderChart();
+
+/* ================= BOTÕES DE AÇÕES ================= */
+
+/** 👁 Abre modal com todos os dados da autorização */
+function visualizarAutorizacao(idx){
+  const a = AG.autorizacoes[idx];
+  if(!a) return;
+  const map={ativa:['b-green','Ativa'],aguardando:['b-blue','Aguardando assinatura'],vencida:['b-red','Vencida']};
+  const [cls,txt]=map[a.status]||['b-gray','Desconhecido'];
+  const tipo = a.tipo==='exclusiva' ? '⭐ Com exclusividade' : 'Sem exclusividade';
+  const comissao = BRL(a.valor * 0.06).replace(',00','');
+  document.getElementById('modalViewContent').innerHTML = `
+    <div class="detail-section">
+      <h4>Proprietário</h4>
+      <div class="detail-row"><span>Nome</span><b>${a.prop}</b></div>
+      <div class="detail-row"><span>Corretor responsável</span><b>${a.corretor}</b></div>
+    </div>
+    <div class="detail-section">
+      <h4>Imóvel</h4>
+      <div class="detail-row"><span>Endereço / Tipo</span><b>${a.imovel}</b></div>
+      <div class="detail-row"><span>Valor de venda</span><b>${BRL(a.valor).replace(',00','')}</b></div>
+      <div class="detail-row"><span>Comissão (6%)</span><b>${comissao}</b></div>
+    </div>
+    <div class="detail-section">
+      <h4>Autorização</h4>
+      <div class="detail-row"><span>Modalidade</span><b>${tipo}</b></div>
+      <div class="detail-row"><span>Status</span><b><span class="badge ${cls}">${txt}</span></b></div>
+      <div class="detail-row"><span>Vencimento</span><b>${a.venc}</b></div>
+      <div class="detail-row"><span>Assinatura</span><b>${a.status==='aguardando'?'⏳ Pendente':'✓ Assinada'}</b></div>
+    </div>`;
+  // Configura botão de PDF no modal
+  document.getElementById('modalViewPdf').onclick = ()=>baixarPDFAutorizacao(idx);
+  document.getElementById('modalView').classList.add('open');
+}
+
+/** ⬇ Gera e baixa o PDF de uma autorização específica */
+function baixarPDFAutorizacao(idx){
+  const a = AG.autorizacoes[idx];
+  if(!a) return;
+  const {jsPDF}=window.jspdf;
+  const doc=new jsPDF({unit:'mm',format:'a4'});
+  const W=210, M=18; let y=20;
+  const tipoTxt = a.tipo==='exclusiva' ? 'COM EXCLUSIVIDADE' : 'SEM EXCLUSIVIDADE';
+  const d=new Date();
+  const code = a.code || 'AGM-'+Math.random().toString(36).substr(2,9).toUpperCase();
+
+  const h=(t,size=11)=>{doc.setFont('helvetica','bold');doc.setFontSize(size);doc.text(t,M,y);y+=6;};
+  const p=(t,size=9.5)=>{
+    doc.setFont('helvetica','normal');doc.setFontSize(size);
+    const lines=doc.splitTextToSize(t,W-M*2);
+    doc.text(lines,M,y); y+=lines.length*4.4+2;
+  };
+  const row=(k,v)=>{doc.setFont('helvetica','bold');doc.setFontSize(9.5);doc.text(k,M,y);doc.setFont('helvetica','normal');doc.text(String(v),M+52,y);y+=5.4;};
+  const line=()=>{doc.setDrawColor(200);doc.line(M,y,W-M,y);y+=6;};
+
+  // header
+  doc.setFillColor(4,39,59); doc.rect(0,0,W,14,'F');
+  doc.setTextColor(255); doc.setFont('helvetica','bold'); doc.setFontSize(12);
+  doc.text('AGEMOB · AUTORIZAÇÃO DE VENDA '+tipoTxt, M, 9.5);
+  doc.setTextColor(16,24,40); y=24;
+
+  h('AUTORIZAÇÃO DE VENDA DE IMÓVEL '+tipoTxt, 13); y+=2;
+  doc.setFontSize(9); doc.setFont('helvetica','normal');
+  doc.text('Emitida em '+d.toLocaleDateString('pt-BR')+' · Proprietário: '+a.prop,M,y); y+=8;
+
+  line();
+  h('1. IMOBILIÁRIA AUTORIZADA');
+  row('Razão social:',AG.imob.razao);
+  row('CNPJ:',AG.imob.cnpj);
+  row('Endereço:',AG.imob.end); y+=2;
+
+  h('2. PROPRIETÁRIO');
+  row('Nome:',a.prop);
+  row('Corretor:',a.corretor); y+=2;
+
+  h('3. IMÓVEL');
+  row('Tipo/Local:',a.imovel);
+  row('Valor de venda:',BRL(a.valor));
+  row('Comissão (6%):',BRL(a.valor*0.06)); y+=2;
+
+  h('4. CONDIÇÕES');
+  p('MODALIDADE — '+tipoTxt+'. Validade de 365 dias com renovação automática. Comissão de 6% sobre o valor total da venda.');
+  p('STATUS — '+({ativa:'Ativa e em vigor.',aguardando:'Aguardando assinatura do proprietário.',vencida:'Autorização vencida. Requer renovação.'}[a.status]||''));
+
+  h('5. VENCIMENTO');
+  row('Data de vencimento:',a.venc);
+
+  doc.setFontSize(8); doc.setTextColor(130);
+  doc.text('Documento gerado eletronicamente pela plataforma AGEMOB · '+d.toLocaleDateString('pt-BR'), M, 290);
+
+  doc.save('AGEMOB_Autorizacao_'+a.prop.replace(/\s/g,'_')+'.pdf');
+}
+
+/** ↗ Copia o link da autorização para a área de transferência */
+function reenviarLink(idx){
+  const a = AG.autorizacoes[idx];
+  if(!a) return;
+  if(a.status === 'ativa'){
+    showToast('Autorização já concluída.', 'info');
+    return;
+  }
+  const code = a.code || 'AGM-'+Math.random().toString(36).substr(2,9).toUpperCase();
+  const link = `agemob.com/autorizacao/${code}`;
+  navigator.clipboard?.writeText(link).catch(()=>{});
+  showToast('Link copiado com sucesso.', 'success');
+}
+
+/**
+ * Exibe uma mensagem toast temporária na tela.
+ * @param {string} msg - Mensagem a exibir
+ * @param {string} tipo - 'success' | 'info' | 'error'
+ */
+function showToast(msg, tipo='success'){
+  let toast = document.getElementById('_toast');
+  if(!toast){
+    toast = document.createElement('div');
+    toast.id = '_toast';
+    toast.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);padding:12px 22px;border-radius:12px;font-weight:600;font-size:14px;z-index:9999;box-shadow:0 4px 20px rgba(0,0,0,.18);transition:opacity .3s;pointer-events:none;white-space:nowrap';
+    document.body.appendChild(toast);
+  }
+  const colors = {success:'background:#04273B;color:#fff', info:'background:#175CD3;color:#fff', error:'background:#D92D20;color:#fff'};
+  toast.style.cssText += ';'+colors[tipo]||colors.success;
+  toast.textContent = msg;
+  toast.style.opacity = '1';
+  clearTimeout(toast._timer);
+  toast._timer = setTimeout(()=>{ toast.style.opacity='0'; }, 3000);
+}
+
+/* ================= LINK / MODAL ================= */
+function genCode(){
+  const c="ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; let s="";
+  for(let i=0;i<9;i++) s+=c[Math.floor(Math.random()*c.length)];
+  return s;
+}
+function novaAutorizacao(){
+  AG.code = genCode();
+  document.getElementById('genLink').value = `agemob.com/autorizacao/${AG.code}`;
+  document.getElementById('copyBtn').textContent='Copiar';
+  document.getElementById('modalLink').classList.add('open');
+}
+function copyLink(){
+  navigator.clipboard?.writeText(document.getElementById('genLink').value);
+  document.getElementById('copyBtn').textContent='Copiado ✓';
+}
+function closeModal(){ document.getElementById('modalLink').classList.remove('open'); }
+
+/* ================= OWNER FLOW ================= */
+const TOTAL_STEPS=5;
+let step=1;
+const stepNames=["Dados do proprietário","Dados do imóvel","Tipo de autorização","Resumo","Assinatura digital"];
+
+function showInlineError(id, msg){
+  const el=document.getElementById(id);
+  el.style.borderColor='var(--red)';
+  setTimeout(()=>el.style.borderColor='',2500);
+  let errEl=document.getElementById('err_'+id);
+  if(!errEl){ errEl=document.createElement('div'); errEl.id='err_'+id; errEl.style.cssText='color:var(--red);font-size:12px;margin-top:4px;font-weight:600'; el.parentNode.appendChild(errEl); }
+  errEl.textContent=msg;
+  setTimeout(()=>{ if(errEl) errEl.textContent=''; },3000);
+  el.focus();
+}
+
+function nextStep(s){
+  if(s===1){
+    if(!req(['p_nome','p_cpf','p_zap','p_email'])) return;
+    if(!validarCPF(document.getElementById('p_cpf').value)){
+      showInlineError('p_cpf','CPF inválido. Verifique o número informado.');
+      return;
+    }
+    if(!validarEmail(document.getElementById('p_email').value)){
+      showInlineError('p_email','E-mail inválido. Verifique o endereço informado.');
+      return;
+    }
+  }
+  if(s===2 && !req(['i_valor','i_end','i_bairro','i_cidade'])) return;
+  if(s===3 && !AG.tipo){ alert('Selecione o tipo de autorização para continuar.'); return; }
+  if(s===3) buildResumo();
+  step=s+1; showStep();
+}
+function prevStep(s){ step=s-1; showStep(); }
+
+function openOwner(){
+  closeModal();
+  document.getElementById('viewAdmin').classList.add('hidden');
+  document.getElementById('viewOwner').classList.remove('hidden');
+  document.getElementById('btnBack').classList.remove('hidden');
+  document.getElementById('ownerCode').textContent = AG.code || (AG.code=genCode());
+  step=1; showStep();
+  window.scrollTo(0,0);
+}
+function backToAdmin(){
+  document.getElementById('viewOwner').classList.add('hidden');
+  document.getElementById('btnBack').classList.add('hidden');
+  document.getElementById('viewAdmin').classList.remove('hidden');
+  renderKPIs(); renderTable();
+  window.scrollTo(0,0);
+}
+function showStep(){
+  document.querySelectorAll('[data-step]').forEach(s=>s.classList.toggle('hidden', +s.dataset.step!==step));
+  const prog = Array.from({length:TOTAL_STEPS},(_,i)=>`<i class="${i<step?'on':''}"></i>`).join('');
+  document.getElementById('prog').innerHTML=prog;
+  document.getElementById('stepLabel').textContent = step<=TOTAL_STEPS ? `Etapa ${step} de ${TOTAL_STEPS} · ${stepNames[step-1]}` : 'Concluído';
+  if(step===5){ initSig(); fillSigMeta(); }
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+function req(ids){
+  for(const id of ids){
+    const el=document.getElementById(id);
+    if(!el.value.trim()){ el.focus(); el.style.borderColor='var(--red)'; setTimeout(()=>el.style.borderColor='',1800); return false; }
+  }
+  return true;
+}
+
+/* ---------- masks ---------- */
+function maskCPF(el){ el.value=el.value.replace(/\D/g,'').slice(0,11).replace(/(\d{3})(\d)/,'$1.$2').replace(/(\d{3})(\d)/,'$1.$2').replace(/(\d{3})(\d{1,2})$/,'$1-$2'); }
+function maskTel(el){ el.value=el.value.replace(/\D/g,'').slice(0,11).replace(/(\d{2})(\d)/,'($1) $2').replace(/(\d{5})(\d)/,'$1-$2'); }
+
+/** Máscara de CEP sem auto-busca (busca feita pelo botão) */
+function maskCEPOnly(el){
+  el.value=el.value.replace(/\D/g,'').slice(0,8).replace(/(\d{5})(\d)/,'$1-$2');
+}
+
+/** Mantida para compatibilidade com código existente */
+function maskCEP(el){ maskCEPOnly(el); }
+
+function maskMoney(el){
+  let v=el.value.replace(/\D/g,'');
+  if(!v){ el.value=''; return; }
+  const n=parseInt(v,10)/100;
+  el.value=n.toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+}
+function moneyVal(){ const v=document.getElementById('i_valor').value.replace(/\D/g,''); return v?parseInt(v,10)/100:0; }
+
+/* ---------- CEP lookup (botão) ---------- */
+/**
+ * Consulta o ViaCEP ao clicar em "Buscar CEP".
+ * @param {string} prefix - 'p' para proprietário, 'i' para imóvel
+ */
+async function buscarCEP(prefix){
+  const cepEl = document.getElementById(prefix+'_cep');
+  const btnEl = document.getElementById('btnBuscarCep'+(prefix==='p'?'P':'I'));
+  const raw   = cepEl.value.replace(/\D/g,'');
+  if(raw.length !== 8){
+    showToast('Digite um CEP com 8 dígitos.', 'error');
+    cepEl.focus();
+    return;
+  }
+  btnEl.disabled = true;
+  btnEl.textContent = '⏳';
+  try {
+    const r = await fetch(`https://viacep.com.br/ws/${raw}/json/`);
+    const d = await r.json();
+    if(d.erro){
+      showToast('CEP não encontrado. Verifique e tente novamente.', 'error');
+    } else {
+      if(d.logradouro) document.getElementById(prefix+'_end').value    = d.logradouro;
+      if(d.bairro)     document.getElementById(prefix+'_bairro').value = d.bairro;
+      if(d.localidade && d.uf)
+                       document.getElementById(prefix+'_cidade').value = d.localidade+'/'+d.uf;
+      showToast('Endereço preenchido com sucesso!', 'success');
+    }
+  } catch(e){
+    showToast('Erro ao consultar o CEP. Verifique sua conexão.', 'error');
+  } finally {
+    btnEl.disabled = false;
+    btnEl.textContent = 'Buscar CEP';
+  }
+}
+
+/** Mantida para compatibilidade – não usada diretamente (substituída pelo botão) */
+async function lookupCEP(triggerEl, cep){
+  const prefix = triggerEl.id === 'p_cep' ? 'p' : 'i';
+  try {
+    const r = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+    const d = await r.json();
+    if(d.erro) return;
+    if(d.logradouro) document.getElementById(prefix+'_end').value    = d.logradouro;
+    if(d.bairro)     document.getElementById(prefix+'_bairro').value = d.bairro;
+    if(d.localidade && d.uf)
+                     document.getElementById(prefix+'_cidade').value = d.localidade+'/'+d.uf;
+  } catch(e){}
+}
+
+/* ---------- CPF validation ---------- */
+function validarCPF(cpf){
+  const c=cpf.replace(/\D/g,'');
+  if(c.length!==11||/^(\d)\1+$/.test(c)) return false;
+  let s=0; for(let i=0;i<9;i++) s+=+c[i]*(10-i);
+  let r=s%11<2?0:11-s%11;
+  if(r!==+c[9]) return false;
+  s=0; for(let i=0;i<10;i++) s+=+c[i]*(11-i);
+  r=s%11<2?0:11-s%11;
+  return r===+c[10];
+}
+
+/* ---------- Email validation ---------- */
+function validarEmail(email){
+  return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email);
+}
+
+/* ---------- uploads - kept for compatibility ---------- */
+const DOCS=[["rg","RG"],["cnh","CNH"],["cpf","CPF"],["resid","Comprovante de residência"],["matr","Matrícula do imóvel"],["iptu","IPTU"],["outros","Outros documentos"]];
+
+/* ---------- tipo ---------- */
+function setTipo(t){
+  AG.tipo=t;
+  document.getElementById('chExc').classList.toggle('sel', t==='exclusiva');
+  document.getElementById('chSem').classList.toggle('sel', t==='simples');
+  document.getElementById('pitchExc').classList.toggle('hidden', t!=='exclusiva');
+  document.getElementById('pitchSem').classList.toggle('hidden', t!=='simples');
+}
+
+/* ---------- resumo ---------- */
+const V=id=>{ const el=document.getElementById(id); return el ? (el.value||'—') : '—'; };
+function buildResumo(){
+  const valor=moneyVal();
+  document.getElementById('resumo').innerHTML=`
+    <div class="sum-block"><h4>Proprietário <button onclick="step=1;showStep()">Editar</button></h4>
+      <div class="sum-row"><span>Nome</span><b>${V('p_nome')}</b></div>
+      <div class="sum-row"><span>CPF</span><b>${V('p_cpf')}</b></div>
+      <div class="sum-row"><span>WhatsApp</span><b>${V('p_zap')}</b></div>
+      <div class="sum-row"><span>E-mail</span><b>${V('p_email')}</b></div>
+    </div>
+    <div class="sum-block"><h4>Imóvel <button onclick="step=2;showStep()">Editar</button></h4>
+      <div class="sum-row"><span>Tipo</span><b>${V('i_tipo')}</b></div>
+      <div class="sum-row"><span>Endereço</span><b>${V('i_end')}, ${V('i_num')} · ${V('i_bairro')} · ${V('i_cidade')}</b></div>
+      <div class="sum-row"><span>Valor de venda</span><b>${valor?BRL(valor):'—'}</b></div>
+    </div>
+    <div class="sum-block"><h4>Autorização <button onclick="step=3;showStep()">Editar</button></h4>
+      <div class="sum-row"><span>Modalidade</span><b>${AG.tipo==='exclusiva'?'⭐ Com exclusividade':'Sem exclusividade'}</b></div>
+      <div class="sum-row"><span>Validade</span><b>365 dias · renovação automática</b></div>
+    </div>`;
+}
+
+/* ---------- assinatura ---------- */
+let drawing=false, ctx, canvas, hasInk=false;
+function initSig(){
+  canvas=document.getElementById('sigCanvas');
+  const r=canvas.getBoundingClientRect();
+  if(canvas.width!==r.width*2){ canvas.width=r.width*2; canvas.height=380; }
+  ctx=canvas.getContext('2d');
+  ctx.lineWidth=3.4; ctx.lineCap='round'; ctx.lineJoin='round'; ctx.strokeStyle='#101828';
+  const pos=e=>{
+    const rect=canvas.getBoundingClientRect();
+    const p=e.touches?e.touches[0]:e;
+    return [(p.clientX-rect.left)*(canvas.width/rect.width),(p.clientY-rect.top)*(canvas.height/rect.height)];
+  };
+  canvas.onpointerdown=e=>{drawing=true;hasInk=true;const[x,y]=pos(e);ctx.beginPath();ctx.moveTo(x,y);};
+  canvas.onpointermove=e=>{if(!drawing)return;const[x,y]=pos(e);ctx.lineTo(x,y);ctx.stroke();};
+  canvas.onpointerup=canvas.onpointerleave=()=>drawing=false;
+}
+function clearSig(){ ctx.clearRect(0,0,canvas.width,canvas.height); hasInk=false; }
+function sigMode(m){
+  AG.sigModeNow=m;
+  document.getElementById('tabDraw').classList.toggle('on',m==='draw');
+  document.getElementById('tabType').classList.toggle('on',m==='type');
+  document.getElementById('sigDrawWrap').classList.toggle('hidden',m!=='draw');
+  document.getElementById('sigTypeWrap').classList.toggle('hidden',m!=='type');
+}
+function fillSigMeta(){
+  const d=new Date();
+  document.getElementById('sigMeta').innerHTML=
+    `Ao assinar, você declara estar de acordo com as condições desta autorização.<br>
+     <b>Registro:</b> ${d.toLocaleDateString('pt-BR')} ${d.toLocaleTimeString('pt-BR')} · Dispositivo: ${navigator.platform||'web'} · Navegador: ${navigator.userAgent.split(') ')[0].split(' (')[0]}`;
+}
+function typedToImage(name){
+  const c=document.createElement('canvas'); c.width=900; c.height=240;
+  const x=c.getContext('2d');
+  x.fillStyle='#101828'; x.font='600 84px Sora, sans-serif'; x.textAlign='center'; x.textBaseline='middle';
+  x.fillText(name,450,120);
+  return c.toDataURL('image/png');
+}
+function assinar(){
+  if(AG.sigModeNow==='draw'){
+    if(!hasInk){ alert('Desenhe sua assinatura para continuar.'); return; }
+    AG.sigImg=canvas.toDataURL('image/png');
+  } else {
+    const n=document.getElementById('sigTyped').value.trim();
+    if(!n){ alert('Digite seu nome para assinar.'); return; }
+    AG.sigImg=typedToImage(n);
+  }
+  // registra no painel e notifica atualização em tempo real
+  const valor=moneyVal();
+  const venc=new Date(); venc.setDate(venc.getDate()+365);
+  AG.autorizacoes.unshift({
+    prop:V('p_nome'), imovel:`${V('i_tipo')} · ${V('i_bairro')}`,
+    valor:valor||0, tipo:AG.tipo, status:'ativa',
+    venc:venc.toLocaleDateString('pt-BR'), corretor:'Lucas Siqueira'
+  });
+  // Atualiza painel em tempo real
+  notificarMudancaStatus();
+  document.getElementById('finalCode').textContent='Código: '+AG.code;
+  const qh=document.getElementById('qrHolder'); qh.innerHTML='';
+  new QRCode(qh,{text:`https://agemob.com/validar/${AG.code}`,width:110,height:110,colorDark:'#04273B'});
+  step=6; showStep();
+}
+
+/* ---------- PDF (fluxo do proprietário) ---------- */
+function gerarPDF(){
+  const {jsPDF}=window.jspdf;
+  const doc=new jsPDF({unit:'mm',format:'a4'});
+  const W=210, M=18; let y=20;
+  const tipoTxt = AG.tipo==='exclusiva' ? 'COM EXCLUSIVIDADE' : 'SEM EXCLUSIVIDADE';
+  const valor=moneyVal();
+  const d=new Date();
+  const venc=new Date(); venc.setDate(venc.getDate()+365);
+
+  const h=(t,size=11)=>{doc.setFont('helvetica','bold');doc.setFontSize(size);doc.text(t,M,y);y+=6;};
+  const p=(t,size=9.5)=>{
+    doc.setFont('helvetica','normal');doc.setFontSize(size);
+    const lines=doc.splitTextToSize(t,W-M*2);
+    doc.text(lines,M,y); y+=lines.length*4.4+2;
+  };
+  const row=(k,v)=>{doc.setFont('helvetica','bold');doc.setFontSize(9.5);doc.text(k,M,y);doc.setFont('helvetica','normal');doc.text(String(v),M+52,y);y+=5.4;};
+  const line=()=>{doc.setDrawColor(200);doc.line(M,y,W-M,y);y+=6;};
+  const check=t=>{doc.setFont('helvetica','normal');doc.setFontSize(9.5);doc.text('•  '+t,M+2,y);y+=5;};
+
+  // header
+  doc.setFillColor(4,39,59); doc.rect(0,0,W,14,'F');
+  doc.setTextColor(255); doc.setFont('helvetica','bold'); doc.setFontSize(12);
+  doc.text('AGEMOB · AUTORIZAÇÃO DE VENDA '+tipoTxt, M, 9.5);
+  doc.setTextColor(16,24,40); y=24;
+
+  h('AUTORIZAÇÃO DE VENDA DE IMÓVEL '+tipoTxt, 13); y+=2;
+  doc.setFontSize(9); doc.setFont('helvetica','normal');
+  doc.text('Código da autorização: '+AG.code+'  ·  Emitida em '+d.toLocaleDateString('pt-BR')+' às '+d.toLocaleTimeString('pt-BR'),M,y); y+=8;
+
+  line();
+  h('1. IMOBILIÁRIA AUTORIZADA');
+  row('Razão social:',AG.imob.razao);
+  row('CNPJ:',AG.imob.cnpj);
+  row('Endereço:',AG.imob.end); y+=2;
+
+  h('2. PROPRIETÁRIO');
+  row('Nome:',V('p_nome'));
+  row('CPF:',V('p_cpf')); if(V('p_rg')!=='—') row('RG:',V('p_rg'));
+  row('Estado civil:',V('p_civil')); row('Profissão:',V('p_prof'));
+  row('Contato:',V('p_zap')+' · '+V('p_email'));
+  row('Endereço:',`${V('p_end')}, ${V('p_num')} ${V('p_comp')!=='—'?V('p_comp'):''} - ${V('p_bairro')}, ${V('p_cidade')}`); y+=2;
+
+  h('3. IMÓVEL');
+  row('Tipo:',V('i_tipo'));
+  row('Endereço:',`${V('i_end')}, ${V('i_num')} - ${V('i_bairro')}, ${V('i_cidade')}`);
+  row('Valor de venda:', valor?BRL(valor):'—'); y+=2;
+
+  h('4. CONDIÇÕES');
+  p('PRAZO E RENOVAÇÃO — A presente autorização terá validade inicial de 365 (trezentos e sessenta e cinco) dias, contados da data de assinatura, com vencimento em '+venc.toLocaleDateString('pt-BR')+'. Ao término do prazo, será renovada automaticamente por períodos iguais e sucessivos, até manifestação contrária de qualquer das partes, comunicada formalmente com antecedência mínima de 30 (trinta) dias do vencimento.');
+  p('COMISSÃO DE CORRETAGEM — Será devida comissão de 6% (seis por cento) sobre o valor total da venda efetivamente realizada. A comissão permanecerá integralmente devida caso o imóvel seja vendido, durante a vigência desta autorização, a cliente apresentado pela imobiliária, originado de suas campanhas de marketing, cadastrado em seus sistemas ou apresentado por seus parceiros.');
+  if(AG.tipo==='exclusiva'){
+    p('EXCLUSIVIDADE — Toda negociação do imóvel deverá ser conduzida exclusivamente pela imobiliária autorizada. Caso o proprietário realize a venda diretamente ou por intermédio de terceiros durante o prazo de exclusividade, a comissão contratada permanecerá devida.');
+  } else {
+    p('MODALIDADE SEM EXCLUSIVIDADE — O proprietário poderá anunciar ou negociar o imóvel por meio de outras imobiliárias, sendo a comissão devida apenas à imobiliária que efetivamente intermediar a venda.');
+  }
+
+  if(y>225){ doc.addPage(); y=20; }
+
+  h('5. ASSINATURA');
+  p('Assinado eletronicamente em '+d.toLocaleDateString('pt-BR')+' às '+d.toLocaleTimeString('pt-BR')+' · Dispositivo: '+(navigator.platform||'web')+' · Validação: agemob.com/validar/'+AG.code);
+  if(AG.sigImg){ doc.addImage(AG.sigImg,'PNG',M,y,70,22); }
+  y+=26;
+  doc.setDrawColor(120); doc.line(M,y,M+80,y); y+=5;
+  doc.setFontSize(9); doc.text(V('p_nome')+' · CPF '+V('p_cpf'),M,y);
+
+  const qrCanvas=document.querySelector('#qrHolder canvas');
+  if(qrCanvas){ doc.addImage(qrCanvas.toDataURL('image/png'),'PNG',W-M-30,y-26,30,30); }
+
+  doc.setFontSize(8); doc.setTextColor(130);
+  doc.text('Documento gerado eletronicamente pela plataforma AGEMOB · Autorizações Imobiliárias Inteligentes · Código '+AG.code, M, 290);
+
+  doc.save('AGEMOB_Autorizacao_'+AG.code+'.pdf');
+}
+
+/* ================= INICIALIZAÇÃO ================= */
+// Verifica autenticação ao carregar
+checkAuth();
+</script>
+<!-- ════════════════════════════════════════════════════════════════════
+     AGEMOB v2 · CAMADA DE SEGURANÇA JURÍDICA (100% ADITIVA)
+     Nada do código original foi alterado. Todo o bloco abaixo apenas
+     ADICIONA recursos: evidências jurídicas, OTP, aceite expresso,
+     fluxo configurável, uploads, selfie, reconhecimento facial,
+     prova de vida, hash SHA-256, certificado, QR de validação,
+     trilha de auditoria e assinantes adicionais.
+     ════════════════════════════════════════════════════════════════════ -->
+<style id="agemob-v2-css">
+/* ---------- componentes novos (não sobrescrevem classes existentes) ---------- */
+.v2-switch{position:relative;width:42px;height:24px;flex:0 0 42px;border-radius:99px;background:#D0D5DD;transition:background .2s;cursor:pointer}
+.v2-switch::after{content:'';position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;transition:left .2s;box-shadow:0 1px 3px rgba(0,0,0,.2)}
+.v2-switch.on{background:var(--brand)}
+.v2-switch.on::after{left:21px}
+.v2-step-item{display:flex;align-items:center;gap:12px;padding:11px 13px;border:1.5px solid var(--line);border-radius:11px;background:#fff;margin-bottom:8px}
+.v2-step-item.off{opacity:.55}
+.v2-step-item b{flex:1;font-size:14px}
+.v2-step-item .v2-ord{display:flex;gap:4px}
+.v2-step-item .v2-ord button{width:28px;height:28px;border:1px solid var(--line);background:#fff;border-radius:8px;font-size:13px;color:var(--ink-2)}
+.v2-step-item .v2-ord button:hover{background:var(--brand-soft)}
+.v2-presets{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px}
+@media(max-width:720px){.v2-presets{grid-template-columns:1fr 1fr}}
+.v2-preset{border:1.5px solid var(--line);border-radius:11px;background:#fff;padding:10px 8px;text-align:center;cursor:pointer;transition:border .15s}
+.v2-preset:hover,.v2-preset.sel{border-color:var(--brand);background:var(--brand-soft)}
+.v2-preset b{display:block;font-size:13px;font-family:'Sora',sans-serif}
+.v2-preset span{font-size:11px;color:var(--ink-3)}
+.v2-otp-box{display:flex;gap:8px;justify-content:center;margin:18px 0}
+.v2-otp-box input{width:46px;height:56px;text-align:center;font-size:24px;font-weight:700;font-family:'Sora',sans-serif;padding:0}
+.v2-demo-note{background:var(--blue-soft);border:1px dashed var(--blue);color:var(--blue);border-radius:10px;padding:10px 14px;font-size:13px;font-weight:600;margin:12px 0;text-align:center}
+.v2-up-tile{border:1.5px dashed var(--line);border-radius:12px;padding:18px;text-align:center;cursor:pointer;transition:border .15s;background:#fff}
+.v2-up-tile:hover{border-color:var(--brand)}
+.v2-up-tile.ok{border-style:solid;border-color:#12B76A;background:#F0FDF4}
+.v2-up-tile .v2-up-ic{font-size:26px}
+.v2-up-tile p{font-size:13px;font-weight:600;margin-top:6px}
+.v2-up-tile span{font-size:11.5px;color:var(--ink-3)}
+.v2-cam-wrap{position:relative;border-radius:14px;overflow:hidden;background:#0b1620;max-width:440px;margin:0 auto}
+.v2-cam-wrap video{width:100%;display:block;transform:scaleX(-1)}
+.v2-cam-oval{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none}
+.v2-cam-oval i{width:58%;height:78%;border:3px dashed rgba(255,255,255,.75);border-radius:50%}
+.v2-chip{display:inline-flex;align-items:center;gap:6px;padding:5px 12px;border-radius:99px;font-size:12.5px;font-weight:700}
+.v2-chip.ok{background:#F0FDF4;color:#067647;border:1px solid #ABEFC6}
+.v2-chip.warn{background:var(--gold-soft);color:var(--gold);border:1px solid #F2E2B4}
+.v2-chip.err{background:var(--red-soft);color:var(--red);border:1px solid #FECDCA}
+.v2-aceite{display:flex;gap:11px;align-items:flex-start;background:var(--brand-soft);border:1.5px solid var(--brand);border-radius:12px;padding:14px;margin:16px 0;cursor:pointer}
+.v2-aceite input{width:20px;height:20px;margin-top:2px;flex:0 0 20px;accent-color:var(--brand)}
+.v2-aceite p{font-size:13.5px;line-height:1.5;color:var(--ink)}
+.v2-evid{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px;margin-top:14px}
+.v2-evid h4{font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:var(--ink-3);margin-bottom:8px}
+.v2-evid .sum-row span{font-size:12.5px}
+.v2-evid .sum-row b{font-size:12.5px;word-break:break-all;text-align:right}
+.v2-audit{max-height:260px;overflow:auto;border:1px solid var(--line);border-radius:12px;background:#fff}
+.v2-audit table{width:100%;border-collapse:collapse;font-size:12.5px}
+.v2-audit td{padding:8px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+.v2-audit td:first-child{white-space:nowrap;color:var(--ink-3)}
+.v2-hashbox{font-family:monospace;font-size:11.5px;word-break:break-all;background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:10px 12px;color:var(--ink-2)}
+.v2-signer-card{border:1.5px solid var(--line);border-radius:12px;padding:16px;margin-bottom:14px;background:#fff}
+.v2-signer-card h3{font-size:15px;margin-bottom:10px}
+.v2-signer-card canvas{width:100%;height:150px;border:1.5px dashed var(--line);border-radius:10px;background:#fff;touch-action:none}
+#v2ConfigBtn{margin-left:auto}
+.v2-facial-cols{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:14px 0}
+@media(max-width:720px){.v2-facial-cols{grid-template-columns:1fr}}
+.v2-facial-cols img{width:100%;border-radius:12px;border:1px solid var(--line);object-fit:cover;aspect-ratio:4/3;background:#0b1620}
+.v2-pct{font-size:40px;font-weight:800;font-family:'Sora',sans-serif;text-align:center}
+.v2-validation-ok{text-align:center;padding:10px 0}
+.v2-validation-ok .seal-big{margin:0 auto 14px}
+</style>
+
+<!-- ───────── MODAL: CONFIGURAÇÃO DO FLUXO (ADMIN) ───────── -->
+<div class="overlay" id="v2ModalFluxo">
+  <div class="modal" style="max-width:640px;max-height:88vh;overflow:auto">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+      <h2>⚙ Fluxo de assinatura</h2>
+      <button class="btn btn-ghost" onclick="v2CloseFluxo()">✕</button>
+    </div>
+    <p class="hint" style="margin-bottom:14px">Defina quais etapas de validação serão exigidas antes da assinatura e em qual ordem. As alterações valem para os próximos links enviados.</p>
+    <h3 style="font-size:13px;color:var(--ink-2);margin-bottom:8px">Níveis pré-configurados</h3>
+    <div class="v2-presets" id="v2Presets"></div>
+    <h3 style="font-size:13px;color:var(--ink-2);margin-bottom:8px">Etapas (ative, desative e ordene)</h3>
+    <div id="v2StepList"></div>
+    <div class="v2-step-item" style="margin-top:14px;border-color:var(--gold);background:var(--gold-soft)">
+      <b>Reconhecimento facial obrigatório<br><span style="font-weight:400;font-size:12px;color:var(--ink-2)">Se ativado, a assinatura é bloqueada sem aprovação facial.</span></b>
+      <div class="v2-switch" id="v2FacialObrig" onclick="v2ToggleFacialObrig()"></div>
+    </div>
+    <div class="nav-row" style="margin-top:16px">
+      <button class="btn btn-ghost" onclick="v2CloseFluxo()">Cancelar</button>
+      <button class="btn btn-primary" onclick="v2SalvarFluxo()">Salvar configuração ✓</button>
+    </div>
+  </div>
+</div>
+
+<!-- ───────── MODAL: VALIDAÇÃO DE DOCUMENTO (QR CODE) ───────── -->
+<div class="overlay" id="v2ModalValidar">
+  <div class="modal" style="max-width:520px">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <h2>🛡 Validação de documento</h2>
+      <button class="btn btn-ghost" onclick="document.getElementById('v2ModalValidar').classList.remove('open')">✕</button>
+    </div>
+    <div id="v2ValidarBody" style="margin-top:14px"></div>
+  </div>
+</div>
+
+<!-- ───────── SEÇÃO: ETAPAS DINÂMICAS DE VALIDAÇÃO (FLUXO DO PROPRIETÁRIO) ───────── -->
+<script>
+/* injeta a seção dinâmica dentro do viewOwner, antes da etapa de assinatura */
+(function(){
+  const sec = document.createElement('section');
+  sec.className = 'card-step hidden';
+  sec.id = 'v2DynStep';
+  sec.setAttribute('data-v2','1');
+  document.querySelector('#viewOwner [data-step="5"]').before(sec);
+})();
+</script>
+
+<script id="agemob-v2">
+/* ════════════════════════════════════════════════════════════════════
+   AGEMOB v2 — MÓDULO DE EVIDÊNCIAS JURÍDICAS E VALIDAÇÃO DE IDENTIDADE
+   Conformidade: MP 2.200-2/2001, art. 10, §2º (assinatura eletrônica
+   admitida como válida mediante acordo entre as partes) + Lei 14.063/2020.
+   ════════════════════════════════════════════════════════════════════ */
+
+/* ---------- 17. ARQUITETURA PREPARADA PARA INTEGRAÇÕES FUTURAS ----------
+   Interface de provedores. Para integrar Clicksign, D4Sign, DocuSign ou
+   ZapSign no futuro, basta registrar um driver que implemente:
+     enviarOTP(canal, destino) -> Promise<{enviado:bool, ref:string}>
+     validarOTP(ref, codigo)   -> Promise<{valido:bool}>
+     assinarDocumento(payload) -> Promise<{id, url, hash}>
+     compararFaces(imgDoc, imgSelfie) -> Promise<{score:0..1}>
+   Nenhuma integração é realizada agora — apenas a estrutura. */
+window.AGEMOB_PROVIDERS = {
+  assinatura: { driver: 'nativo', drivers: { nativo: true, clicksign: null, d4sign: null, docusign: null, zapsign: null } },
+  otp:        { driver: 'demo',   drivers: { demo: true, twilio: null, zapi: null, smtp: null } },
+  facial:     { driver: 'local',  drivers: { local: true, aws_rekognition: null, serpro: null } }
+};
+const AGEMOB_V2 = { demo: true, limiarFacial: 60 }; // demo:true exibe o OTP na tela p/ demonstração
+
+/* ════════════ 1 + 15. EVIDÊNCIAS JURÍDICAS E TRILHA DE AUDITORIA ════════════ */
+const V2E = {
+  sessao: (crypto.randomUUID ? crypto.randomUUID() : 'S-'+Date.now()+'-'+Math.random().toString(36).slice(2)),
+  ip: null, geo: null, eventos: [],
+  navegador(){ const ua=navigator.userAgent;
+    if(/edg/i.test(ua)) return 'Microsoft Edge'; if(/opr|opera/i.test(ua)) return 'Opera';
+    if(/chrome|crios/i.test(ua)) return 'Google Chrome'; if(/firefox|fxios/i.test(ua)) return 'Mozilla Firefox';
+    if(/safari/i.test(ua)) return 'Safari'; return 'Navegador web'; },
+  so(){ const ua=navigator.userAgent;
+    if(/android/i.test(ua)) return 'Android'; if(/iphone|ipad|ipod/i.test(ua)) return 'iOS';
+    if(/windows/i.test(ua)) return 'Windows'; if(/mac os/i.test(ua)) return 'macOS';
+    if(/linux/i.test(ua)) return 'Linux'; return 'Outro'; },
+  dispositivo(){ return /mobi|android|iphone|ipad/i.test(navigator.userAgent) ? 'Dispositivo móvel' : 'Computador (desktop)'; },
+  snapshot(){
+    return { dataHora: new Date().toISOString(), dataHoraLocal: new Date().toLocaleString('pt-BR'),
+      ip: this.ip || 'não disponível', geolocalizacao: this.geo || 'não autorizada',
+      navegador: this.navegador(), sistemaOperacional: this.so(), userAgent: navigator.userAgent,
+      resolucao: screen.width+'×'+screen.height+' (janela '+innerWidth+'×'+innerHeight+')',
+      sessao: this.sessao, dispositivo: this.dispositivo(),
+      fusoHorario: Intl.DateTimeFormat().resolvedOptions().timeZone+' (UTC'+(-new Date().getTimezoneOffset()/60>=0?'+':'')+(-new Date().getTimezoneOffset()/60)+')' };
+  }
+};
+/* IP público — coletado em tempo de execução no navegador do signatário */
+fetch('https://api.ipify.org?format=json').then(r=>r.json()).then(d=>{ V2E.ip=d.ip; }).catch(()=>{});
+/* Geolocalização aproximada (somente quando autorizada pelo usuário) */
+function v2PedirGeo(){
+  if(!navigator.geolocation || V2E.geo) return;
+  navigator.geolocation.getCurrentPosition(
+    p=>{ V2E.geo = p.coords.latitude.toFixed(5)+', '+p.coords.longitude.toFixed(5)+' (±'+Math.round(p.coords.accuracy)+'m)';
+         v2Evento('Geolocalização autorizada', V2E.geo); },
+    ()=>{ V2E.geo=null; }, {enableHighAccuracy:false, timeout:8000});
+}
+/* Trilha de auditoria — todos os eventos com data, hora, IP, usuário e sessão */
+function v2Evento(tipo, detalhe){
+  const ev = { tipo, detalhe: detalhe||'', dataHora: new Date().toISOString(),
+    dataHoraLocal: new Date().toLocaleString('pt-BR'), ip: V2E.ip||'—',
+    sessao: V2E.sessao, usuario: (V('p_nome')!=='—'?V('p_nome'):'visitante') };
+  V2E.eventos.push(ev);
+  try{ const all = JSON.parse(localStorage.getItem('agemob_auditoria')||'[]');
+       all.push(Object.assign({code: AG.code||'—'}, ev));
+       localStorage.setItem('agemob_auditoria', JSON.stringify(all.slice(-800))); }catch(e){}
+}
+
+/* ════════════ 12. HASH CRIPTOGRÁFICO SHA-256 ════════════ */
+async function v2SHA256(texto){
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(texto));
+  return [...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+
+/* ════════════ 5 + 6 + 10. SISTEMA DE ETAPAS CONFIGURÁVEIS ════════════ */
+const V2_CATALOGO = [
+  { id:'conf_email',    nome:'Confirmação por e-mail (OTP)',      icone:'✉️' },
+  { id:'conf_sms',      nome:'Confirmação por SMS (OTP)',         icone:'📲' },
+  { id:'conf_whatsapp', nome:'Confirmação por WhatsApp (OTP)',    icone:'💬' },
+  { id:'up_rg',         nome:'Upload de RG',                      icone:'🪪' },
+  { id:'up_cnh',        nome:'Upload de CNH',                     icone:'🚗' },
+  { id:'up_cpf',        nome:'Upload de CPF',                     icone:'📇' },
+  { id:'up_resid',      nome:'Upload de Comprovante de Residência', icone:'🏠' },
+  { id:'up_matricula',  nome:'Upload de Matrícula do Imóvel',     icone:'📑' },
+  { id:'up_iptu',       nome:'Upload de IPTU',                    icone:'🧾' },
+  { id:'up_escritura',  nome:'Upload de Escritura',               icone:'📜' },
+  { id:'up_procuracao', nome:'Upload de Procuração',              icone:'🖋' },
+  { id:'selfie',        nome:'Selfie do proprietário',            icone:'🤳' },
+  { id:'facial',        nome:'Reconhecimento facial',             icone:'🧠' },
+  { id:'liveness',      nome:'Prova de vida (liveness)',          icone:'👁' },
+  { id:'aceite',        nome:'Aceite dos termos',                 icone:'✅', fixo:true },
+  { id:'assinatura',    nome:'Assinatura eletrônica',             icone:'✍️', fixo:true },
+  { id:'sig_conjuge',   nome:'Assinatura do cônjuge',             icone:'💍' },
+  { id:'sig_coprop',    nome:'Assinatura dos coproprietários',    icone:'👥' },
+  { id:'sig_testemunhas',nome:'Assinatura de testemunhas',        icone:'🧑‍⚖️' },
+];
+const V2_PRESETS = {
+  basico:        { nome:'Básico',        sub:'E-mail · Aceite · Assinatura', etapas:['conf_email'] },
+  intermediario: { nome:'Intermediário', sub:'E-mail · OTP · Aceite · Assinatura', etapas:['conf_email','conf_whatsapp'] },
+  avancado:      { nome:'Avançado',      sub:'Doc · Selfie · Facial · OTP', etapas:['up_rg','selfie','facial','conf_whatsapp'] },
+  maximo:        { nome:'Máximo',        sub:'Doc · Facial · Liveness · OTP · Testemunhas', etapas:['up_rg','facial','liveness','conf_whatsapp','sig_testemunhas'] },
+};
+function v2ConfigPadrao(){
+  return { ordem: V2_CATALOGO.map(s=>s.id),
+           ativos: Object.fromEntries(V2_CATALOGO.map(s=>[s.id, !!s.fixo])),
+           facialObrigatorio: false, preset: null };
+}
+function v2GetConfig(){
+  try{ const c = JSON.parse(localStorage.getItem('agemob_fluxo'));
+       if(c && c.ordem && c.ativos) return c; }catch(e){}
+  return v2ConfigPadrao();
+}
+let v2Cfg = v2GetConfig();
+let v2CfgTmp = null;
+
+function v2AbrirFluxo(){
+  v2CfgTmp = JSON.parse(JSON.stringify(v2Cfg));
+  v2RenderPresets(); v2RenderStepList();
+  document.getElementById('v2ModalFluxo').classList.add('open');
+}
+function v2CloseFluxo(){ document.getElementById('v2ModalFluxo').classList.remove('open'); }
+function v2RenderPresets(){
+  document.getElementById('v2Presets').innerHTML = Object.entries(V2_PRESETS).map(([k,p])=>
+    `<div class="v2-preset ${v2CfgTmp.preset===k?'sel':''}" onclick="v2AplicarPreset('${k}')"><b>${p.nome}</b><span>${p.sub}</span></div>`).join('');
+}
+function v2AplicarPreset(k){
+  const p = V2_PRESETS[k];
+  V2_CATALOGO.forEach(s=>{ v2CfgTmp.ativos[s.id] = !!s.fixo || p.etapas.includes(s.id); });
+  v2CfgTmp.ordem = [...p.etapas.filter(id=>!['sig_testemunhas','sig_conjuge','sig_coprop'].includes(id)),
+                    'aceite','assinatura',
+                    ...p.etapas.filter(id=>['sig_conjuge','sig_coprop','sig_testemunhas'].includes(id)),
+                    ...V2_CATALOGO.map(s=>s.id).filter(id=>!p.etapas.includes(id)&&id!=='aceite'&&id!=='assinatura')];
+  v2CfgTmp.preset = k;
+  if(k==='maximo'||k==='avancado') v2CfgTmp.facialObrigatorio = p.etapas.includes('facial');
+  v2RenderPresets(); v2RenderStepList();
+}
+function v2RenderStepList(){
+  const el = document.getElementById('v2StepList');
+  el.innerHTML = v2CfgTmp.ordem.map((id,i)=>{
+    const s = V2_CATALOGO.find(x=>x.id===id); if(!s) return '';
+    const on = v2CfgTmp.ativos[id];
+    return `<div class="v2-step-item ${on?'':'off'}">
+      <span>${s.icone}</span><b>${s.nome}${s.fixo?' <span class="badge b-gold" style="font-size:10px">sempre ativa</span>':''}</b>
+      <div class="v2-ord">
+        <button onclick="v2Mover(${i},-1)" title="Subir">↑</button>
+        <button onclick="v2Mover(${i},1)" title="Descer">↓</button>
+      </div>
+      ${s.fixo?'<div class="v2-switch on" style="opacity:.45;pointer-events:none"></div>'
+              :`<div class="v2-switch ${on?'on':''}" onclick="v2ToggleStep('${id}')"></div>`}
+    </div>`;
+  }).join('');
+  document.getElementById('v2FacialObrig').classList.toggle('on', !!v2CfgTmp.facialObrigatorio);
+}
+function v2Mover(i,dir){
+  const j=i+dir; if(j<0||j>=v2CfgTmp.ordem.length) return;
+  [v2CfgTmp.ordem[i],v2CfgTmp.ordem[j]]=[v2CfgTmp.ordem[j],v2CfgTmp.ordem[i]];
+  v2CfgTmp.preset=null; v2RenderPresets(); v2RenderStepList();
+}
+function v2ToggleStep(id){ v2CfgTmp.ativos[id]=!v2CfgTmp.ativos[id]; v2CfgTmp.preset=null; v2RenderPresets(); v2RenderStepList(); }
+function v2ToggleFacialObrig(){ v2CfgTmp.facialObrigatorio=!v2CfgTmp.facialObrigatorio; v2RenderStepList(); }
+function v2SalvarFluxo(){
+  v2Cfg = v2CfgTmp;
+  localStorage.setItem('agemob_fluxo', JSON.stringify(v2Cfg));
+  v2Evento('Configuração de fluxo alterada', 'Etapas ativas: '+v2Cfg.ordem.filter(id=>v2Cfg.ativos[id]).join(', '));
+  showToast('Fluxo de assinatura salvo com sucesso.', 'success');
+  v2CloseFluxo();
+}
+/* botão no painel admin — injetado sem alterar o HTML existente */
+(function(){
+  const head = document.querySelector('#viewAdmin .page-head');
+  if(!head) return;
+  const b = document.createElement('button');
+  b.className='btn btn-ghost btn-lg'; b.id='v2ConfigBtn';
+  b.innerHTML='⚙ Fluxo de assinatura'; b.onclick=v2AbrirFluxo;
+  head.insertBefore(b, head.querySelector('button'));
+})();
+
+/* ════════════ MOTOR DE ETAPAS DINÂMICAS (FLUXO DO PROPRIETÁRIO) ════════════ */
+let v2Fila = [];        // etapas de validação antes da assinatura
+let v2Idx = -1;         // índice atual na fila (-1 = fora da fase dinâmica)
+let v2FilaPos = [];     // assinantes adicionais (após a assinatura principal)
+const V2D = { uploads:{}, selfie:null, otp:{}, facial:null, liveness:null, aceite:null, assinantes:[], hash:null, evidAssinatura:null };
+
+function v2MontarFila(){
+  const pre = ['conf_email','conf_sms','conf_whatsapp','up_rg','up_cnh','up_cpf','up_resid','up_matricula','up_iptu','up_escritura','up_procuracao','selfie','facial','liveness'];
+  const pos = ['sig_conjuge','sig_coprop','sig_testemunhas'];
+  v2Fila    = v2Cfg.ordem.filter(id=>pre.includes(id) && v2Cfg.ativos[id]);
+  v2FilaPos = v2Cfg.ordem.filter(id=>pos.includes(id) && v2Cfg.ativos[id]);
+}
+
+/* guarda referências originais e sobrescreve apenas o roteamento */
+const _v1_nextStep = nextStep, _v1_prevStep = prevStep, _v1_showStep = showStep, _v1_openOwner = openOwner, _v1_assinar = assinar, _v1_gerarPDF = gerarPDF;
+
+openOwner = function(){
+  _v1_openOwner();
+  v2MontarFila(); v2Idx=-1;
+  Object.assign(V2D,{uploads:{},selfie:null,otp:{},facial:null,liveness:null,aceite:null,assinantes:[],hash:null,evidAssinatura:null});
+  v2Evento('Abertura do link de autorização', 'Código '+AG.code);
+  v2PedirGeo();
+};
+
+nextStep = function(s){
+  if(s===4){
+    // valida resumo e entra na fase de validação configurável
+    buildResumo();
+    if(v2Fila.length){ v2Idx=0; v2MostrarDyn(); return; }
+    step=5; showStep(); return;
+  }
+  _v1_nextStep(s);
+};
+prevStep = function(s){
+  if(s===5 && v2Fila.length){ v2Idx=v2Fila.length-1; v2MostrarDyn(); return; }
+  _v1_prevStep(s);
+};
+showStep = function(){
+  document.getElementById('v2DynStep').classList.add('hidden');
+  _v1_showStep();
+  // barra de progresso considera as etapas dinâmicas
+  const total = 5 + v2Fila.length;
+  const atual = step<=4 ? step : step-1+1+v2Fila.length; // 5→após fila
+  const prog = Array.from({length:total},(_,i)=>`<i class="${i< (step<=4?step:4+v2Fila.length+(step>=5?1:0)) ?'on':''}"></i>`).join('');
+  document.getElementById('prog').innerHTML = prog;
+  if(step<=4) document.getElementById('stepLabel').textContent = `Etapa ${step} de ${total} · ${stepNames[step-1]}`;
+  else if(step===5) document.getElementById('stepLabel').textContent = `Etapa ${total} de ${total} · Assinatura digital`;
+  else document.getElementById('stepLabel').textContent = 'Concluído';
+  if(step===5) v2InjetarAceite();
+  if(step>=2) v2Evento('Avanço de etapa', 'Etapa '+(step<=5?step:'final'));
+};
+
+function v2DynVoltar(){
+  if(v2Idx===0){ v2Idx=-1; step=4; showStep(); return; }
+  v2Idx--; v2MostrarDyn();
+}
+function v2DynAvancar(){
+  const id = v2Fila[v2Idx];
+  if(!v2ValidarDyn(id)) return;
+  if(v2Idx===v2Fila.length-1){ v2Idx=-1; step=5; showStep(); return; }
+  v2Idx++; v2MostrarDyn();
+}
+function v2MostrarDyn(){
+  document.querySelectorAll('[data-step]').forEach(s=>s.classList.add('hidden'));
+  const sec = document.getElementById('v2DynStep');
+  sec.classList.remove('hidden');
+  const total = 5 + v2Fila.length;
+  const atual = 4 + v2Idx + 1;
+  document.getElementById('prog').innerHTML = Array.from({length:total},(_,i)=>`<i class="${i<atual?'on':''}"></i>`).join('');
+  const nome = V2_CATALOGO.find(s=>s.id===v2Fila[v2Idx]).nome;
+  document.getElementById('stepLabel').textContent = `Etapa ${atual} de ${total} · ${nome}`;
+  sec.innerHTML = v2RenderDyn(v2Fila[v2Idx]);
+  v2PosRenderDyn(v2Fila[v2Idx]);
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+function v2NavRow(){
+  return `<div class="nav-row"><button class="btn btn-ghost" onclick="v2DynVoltar()">← Voltar</button>
+          <button class="btn btn-primary" onclick="v2DynAvancar()">Continuar →</button></div>`;
+}
+
+/* ---------- renderização de cada tipo de etapa ---------- */
+function v2RenderDyn(id){
+  if(id.startsWith('conf_')) return v2RenderOTP(id);
+  if(id.startsWith('up_'))   return v2RenderUpload(id);
+  if(id==='selfie')          return v2RenderSelfie();
+  if(id==='facial')          return v2RenderFacial();
+  if(id==='liveness')        return v2RenderLiveness();
+  return '<p>Etapa não reconhecida.</p>'+v2NavRow();
+}
+
+/* ════════════ 2. CÓDIGO OTP (WhatsApp · SMS · E-mail) ════════════ */
+const V2_CANAL = { conf_email:['E-mail','✉️'], conf_sms:['SMS','📲'], conf_whatsapp:['WhatsApp','💬'] };
+function v2RenderOTP(id){
+  const [canal,ic] = V2_CANAL[id];
+  const destino = id==='conf_email' ? V('p_email') : V('p_zap');
+  const st = V2D.otp[id];
+  return `<h1>${ic} Confirmação por ${canal}</h1>
+    <p class="lead">Para garantir a segurança jurídica da sua assinatura, enviaremos um código de verificação para <b>${destino}</b>.</p>
+    ${st&&st.validado ? `<div style="text-align:center;margin:20px 0"><span class="v2-chip ok">✓ Código validado em ${st.dataValidacao}</span></div>` : `
+    <div style="text-align:center;margin:18px 0">
+      <button class="btn btn-primary" id="v2BtnEnviarOTP" onclick="v2EnviarOTP('${id}')">Enviar código por ${canal}</button>
+    </div>
+    <div id="v2OTPArea" class="hidden">
+      ${AGEMOB_V2.demo?'<div class="v2-demo-note" id="v2DemoOTP"></div>':''}
+      <p style="text-align:center;font-size:13.5px;color:var(--ink-2)">Digite o código de 6 dígitos recebido:</p>
+      <div class="v2-otp-box">${[0,1,2,3,4,5].map(i=>`<input maxlength="1" inputmode="numeric" id="v2otp${i}" oninput="v2OTPInput(this,${i})" onkeydown="v2OTPKey(event,${i})">`).join('')}</div>
+      <div style="text-align:center">
+        <button class="btn btn-primary" onclick="v2ValidarOTP('${id}')">Validar código ✓</button>
+        <div class="hint" style="margin-top:8px"><a href="#" onclick="v2EnviarOTP('${id}');return false" style="color:var(--brand)">Reenviar código</a></div>
+      </div>
+    </div>`}
+    ${v2NavRow()}`;
+}
+function v2OTPInput(el,i){ el.value=el.value.replace(/\D/g,''); if(el.value && i<5) document.getElementById('v2otp'+(i+1)).focus(); }
+function v2OTPKey(e,i){ if(e.key==='Backspace' && !e.target.value && i>0) document.getElementById('v2otp'+(i-1)).focus(); }
+async function v2EnviarOTP(id){
+  const [canal] = V2_CANAL[id];
+  const destino = id==='conf_email' ? V('p_email') : V('p_zap');
+  const codigo = String(Math.floor(100000+Math.random()*900000));
+  V2D.otp[id] = { codigo, canal, destino, enviadoEm: new Date().toLocaleString('pt-BR'), tentativas:0, validado:false };
+  /* PRODUÇÃO: substituir pelo driver real em AGEMOB_PROVIDERS.otp (Twilio/Z-API/SMTP).
+     Em modo demonstração o código é exibido na tela para permitir o teste do fluxo. */
+  document.getElementById('v2OTPArea').classList.remove('hidden');
+  if(AGEMOB_V2.demo){ const d=document.getElementById('v2DemoOTP'); if(d) d.textContent='🔧 Modo demonstração — código gerado: '+codigo; }
+  v2Evento('OTP enviado', canal+' → '+destino);
+  showToast('Código enviado por '+canal+'.', 'success');
+  const i0=document.getElementById('v2otp0'); if(i0) i0.focus();
+}
+function v2ValidarOTP(id){
+  const st = V2D.otp[id]; if(!st){ showToast('Envie o código primeiro.','error'); return; }
+  const digitado = [0,1,2,3,4,5].map(i=>document.getElementById('v2otp'+i).value).join('');
+  st.tentativas++;
+  if(digitado===st.codigo){
+    st.validado=true;
+    st.dataValidacao=new Date().toLocaleString('pt-BR');
+    st.ipValidacao=V2E.ip||'—';
+    v2Evento('OTP validado', st.canal+' · '+st.destino+' · IP '+st.ipValidacao);
+    showToast('Código validado com sucesso! ✓','success');
+    v2MostrarDyn();
+  } else {
+    v2Evento('OTP incorreto', st.canal+' · tentativa '+st.tentativas);
+    showToast('Código incorreto. Verifique e tente novamente.','error');
+  }
+}
+
+/* ════════════ 6. UPLOADS DE DOCUMENTOS ════════════ */
+const V2_UPLOADS = { up_rg:'RG', up_cnh:'CNH', up_cpf:'CPF', up_resid:'Comprovante de Residência',
+  up_matricula:'Matrícula do Imóvel', up_iptu:'IPTU', up_escritura:'Escritura', up_procuracao:'Procuração' };
+function v2RenderUpload(id){
+  const nome = V2_UPLOADS[id];
+  const up = V2D.uploads[id];
+  /* CNH: além do upload de arquivo, permite fotografar o documento na hora */
+  if(id==='up_cnh' && !up && v2CnhCamAberta){
+    return `<h1>📷 Fotografar CNH</h1>
+      <p class="lead">Posicione a CNH dentro do quadro, com boa iluminação e sem reflexos, e capture a foto.</p>
+      <div class="v2-cam-wrap" style="max-width:520px"><video id="v2VidCnh" playsinline muted style="transform:none"></video>
+        <div class="v2-cam-oval"><i style="width:86%;height:62%;border-radius:14px"></i></div></div>
+      <div style="text-align:center;margin-top:14px">
+        <button class="btn btn-primary" onclick="v2FotografarCNH()">📸 Capturar foto da CNH</button>
+        <div class="hint" style="margin-top:8px"><a href="#" style="color:var(--brand)" onclick="v2CnhCamAberta=false;v2DesligarCamera();v2MostrarDyn();return false">← Voltar para as opções de envio</a></div>
+      </div>
+      ${v2NavRow()}`;
+  }
+  const extraCnh = (id==='up_cnh' && !up) ? `
+    <div style="height:10px"></div>
+    <div class="v2-up-tile" onclick="v2AbrirCamCNH()">
+      <div class="v2-up-ic">📷</div>
+      <p>Tirar foto da CNH agora</p>
+      <span>usa a câmera do dispositivo neste momento</span>
+    </div>` : '';
+  return `<h1>📎 Upload de ${nome}</h1>
+    <p class="lead">Envie uma foto ou arquivo PDF do documento. Ele será vinculado de forma permanente à autorização.</p>
+    <div class="v2-up-tile ${up?'ok':''}" onclick="document.getElementById('v2File').click()">
+      <div class="v2-up-ic">${up?'✅':'📤'}</div>
+      <p>${up?up.nome:'Carregar arquivo de '+nome}</p>
+      <span>${up?'Hash SHA-256: '+up.hash.slice(0,16)+'… · '+up.quando:'JPG, PNG ou PDF · máx. 10 MB'}</span>
+    </div>${extraCnh}
+    <input type="file" id="v2File" accept="image/*,.pdf" class="hidden" style="display:none" onchange="v2Upload('${id}',this)">
+    ${v2NavRow()}`;
+}
+/* ---- captura da CNH pela câmera (traseira quando disponível) ---- */
+let v2CnhCamAberta = false;
+async function v2AbrirCamCNH(){
+  v2CnhCamAberta = true;
+  v2MostrarDyn();
+  try{
+    v2Stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}, width:{ideal:1280}}, audio:false});
+    const v=document.getElementById('v2VidCnh'); v.srcObject=v2Stream; await v.play();
+  }catch(e){
+    v2CnhCamAberta=false;
+    showToast('Não foi possível acessar a câmera. Use o carregamento de arquivo.','error');
+    v2MostrarDyn();
+  }
+}
+async function v2FotografarCNH(){
+  const v=document.getElementById('v2VidCnh');
+  const c=document.createElement('canvas'); c.width=v.videoWidth||1280; c.height=v.videoHeight||720;
+  c.getContext('2d').drawImage(v,0,0); // sem espelhamento: documento legível
+  const b64=c.toDataURL('image/jpeg',.92);
+  const hash=await v2SHA256(b64);
+  V2D.uploads.up_cnh = { nome:'CNH_foto_'+new Date().toLocaleTimeString('pt-BR').replace(/:/g,'')+'.jpg',
+    tipo:'CNH', mime:'image/jpeg', b64, hash, quando:new Date().toLocaleString('pt-BR'), origem:'foto capturada na hora' };
+  v2CnhCamAberta=false; v2DesligarCamera();
+  v2Evento('Upload de documento','CNH (foto capturada pela câmera) · SHA-256 '+hash.slice(0,16)+'…');
+  showToast('Foto da CNH capturada com sucesso. ✓','success');
+  v2MostrarDyn();
+}
+async function v2Upload(id, input){
+  const f = input.files[0]; if(!f) return;
+  if(f.size > 10*1024*1024){ showToast('Arquivo acima de 10 MB.','error'); return; }
+  const b64 = await new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=rej; r.readAsDataURL(f); });
+  const hash = await v2SHA256(b64);
+  V2D.uploads[id] = { nome:f.name, tipo:V2_UPLOADS[id], mime:f.type, b64, hash, quando:new Date().toLocaleString('pt-BR') };
+  v2Evento('Upload de documento', V2_UPLOADS[id]+' · '+f.name+' · SHA-256 '+hash.slice(0,16)+'…');
+  showToast(V2_UPLOADS[id]+' recebido com sucesso. ✓','success');
+  v2MostrarDyn();
+}
+
+/* ════════════ CÂMERA (selfie, facial e liveness) ════════════ */
+let v2Stream = null;
+async function v2LigarCamera(videoId){
+  try{
+    v2Stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:'user', width:{ideal:640}}, audio:false});
+    const v = document.getElementById(videoId); v.srcObject = v2Stream; await v.play();
+    return true;
+  }catch(e){ return false; }
+}
+function v2DesligarCamera(){ if(v2Stream){ v2Stream.getTracks().forEach(t=>t.stop()); v2Stream=null; } }
+function v2Frame(videoId){
+  const v = document.getElementById(videoId);
+  const c = document.createElement('canvas'); c.width=v.videoWidth||640; c.height=v.videoHeight||480;
+  const x = c.getContext('2d'); x.translate(c.width,0); x.scale(-1,1); x.drawImage(v,0,0);
+  return c;
+}
+
+/* ════════════ SELFIE DO PROPRIETÁRIO ════════════ */
+function v2RenderSelfie(){
+  return `<h1>🤳 Selfie do proprietário</h1>
+    <p class="lead">Posicione o rosto dentro da marcação e capture a selfie. Ela ficará vinculada às evidências da assinatura.</p>
+    ${V2D.selfie ? `<div style="max-width:320px;margin:0 auto"><img src="${V2D.selfie.img}" style="width:100%;border-radius:14px;border:2px solid #12B76A"></div>
+      <div style="text-align:center;margin-top:12px"><span class="v2-chip ok">✓ Selfie capturada em ${V2D.selfie.quando}</span><br><br>
+      <button class="btn btn-ghost" onclick="V2D.selfie=null;v2MostrarDyn()">Refazer selfie</button></div>` : `
+    <div class="v2-cam-wrap"><video id="v2VidSelfie" playsinline muted></video><div class="v2-cam-oval"><i></i></div></div>
+    <div style="text-align:center;margin-top:14px">
+      <button class="btn btn-primary" onclick="v2CapturarSelfie()">📸 Capturar selfie</button>
+      <div class="hint" style="margin-top:8px">Sem câmera? <a href="#" style="color:var(--brand)" onclick="document.getElementById('v2SelfieFile').click();return false">Enviar foto do dispositivo</a></div>
+      <input type="file" id="v2SelfieFile" accept="image/*" capture="user" style="display:none" onchange="v2SelfieArquivo(this)">
+    </div>`}
+    ${v2NavRow()}`;
+}
+async function v2PosRenderDyn(id){
+  v2DesligarCamera();
+  if(id==='selfie' && !V2D.selfie) {
+    const ok = await v2LigarCamera('v2VidSelfie');
+    if(!ok) showToast('Não foi possível acessar a câmera. Use o envio de foto.','info');
+  }
+  if(id==='liveness' && !V2D.liveness) v2LigarCamera('v2VidLive');
+  if(id==='facial') v2PrepararFacial();
+}
+async function v2CapturarSelfie(){
+  const c = v2Frame('v2VidSelfie');
+  const img = c.toDataURL('image/jpeg',.92);
+  V2D.selfie = { img, quando:new Date().toLocaleString('pt-BR'), hash:await v2SHA256(img), origem:'câmera em tempo real' };
+  v2DesligarCamera();
+  v2Evento('Selfie capturada','Câmera em tempo real · SHA-256 '+V2D.selfie.hash.slice(0,16)+'…');
+  v2MostrarDyn();
+}
+async function v2SelfieArquivo(input){
+  const f=input.files[0]; if(!f) return;
+  const img = await new Promise(res=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.readAsDataURL(f); });
+  V2D.selfie = { img, quando:new Date().toLocaleString('pt-BR'), hash:await v2SHA256(img), origem:'arquivo enviado' };
+  v2Evento('Selfie enviada (arquivo)','SHA-256 '+V2D.selfie.hash.slice(0,16)+'…');
+  v2MostrarDyn();
+}
+
+/* ════════════ 7. RECONHECIMENTO FACIAL ════════════ */
+/* Comparação local via face-api (carregada sob demanda). Caso a biblioteca
+   não carregue, o sistema registra as imagens e marca a análise como
+   "pendente de verificação manual" — sem inventar percentuais. */
+let v2FaceAPI = null;
+async function v2CarregarFaceAPI(){
+  if(v2FaceAPI) return v2FaceAPI;
+  try{
+    await new Promise((res,rej)=>{ const s=document.createElement('script');
+      s.src='https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.js';
+      s.onload=res; s.onerror=rej; document.head.appendChild(s);
+      setTimeout(rej, 20000); });
+    const M='https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/';
+    await faceapi.nets.ssdMobilenetv1.loadFromUri(M);
+    await faceapi.nets.faceLandmark68Net.loadFromUri(M);
+    await faceapi.nets.faceRecognitionNet.loadFromUri(M);
+    await faceapi.nets.faceExpressionNet.loadFromUri(M);
+    v2FaceAPI = faceapi; return v2FaceAPI;
+  }catch(e){ return null; }
+}
+function v2DocComFoto(){
+  return V2D.uploads.up_cnh || V2D.uploads.up_rg || null;
+}
+function v2RenderFacial(){
+  const doc = v2DocComFoto();
+  if(V2D.facial){
+    const f=V2D.facial;
+    return `<h1>🧠 Reconhecimento facial</h1>
+      <div class="v2-facial-cols"><img src="${f.imgDoc}" alt="Documento"><img src="${f.imgSelfie}" alt="Selfie"></div>
+      <div class="v2-pct" style="color:${f.aprovado?'#067647':f.pendente?'var(--gold)':'var(--red)'}">${f.pendente?'⏳':f.compatibilidade+'%'}</div>
+      <div style="text-align:center;margin-top:6px">
+        <span class="v2-chip ${f.aprovado?'ok':f.pendente?'warn':'err'}">${f.aprovado?'✓ Compatibilidade aprovada':f.pendente?'Análise manual pendente':'✗ Abaixo do limiar de '+AGEMOB_V2.limiarFacial+'%'}</span>
+        <br><br><button class="btn btn-ghost" onclick="V2D.facial=null;v2MostrarDyn()">Refazer verificação</button>
+      </div>${v2NavRow()}`;
+  }
+  return `<h1>🧠 Reconhecimento facial</h1>
+    <p class="lead">Vamos comparar a foto do seu documento oficial com uma selfie capturada agora, em tempo real.</p>
+    ${doc? `<div class="v2-up-tile ok"><div class="v2-up-ic">🪪</div><p>Documento: ${doc.tipo} (${doc.nome})</p><span>já enviado nesta sessão</span></div>`
+         : `<div class="v2-up-tile" onclick="document.getElementById('v2FileFacialDoc').click()"><div class="v2-up-ic">🪪</div><p>1º passo — Enviar RG ou CNH (com foto)</p><span>JPG ou PNG</span></div>
+            <input type="file" id="v2FileFacialDoc" accept="image/*" style="display:none" onchange="v2Upload('up_rg',this)">`}
+    <div style="height:12px"></div>
+    <div class="v2-cam-wrap"><video id="v2VidFacial" playsinline muted></video><div class="v2-cam-oval"><i></i></div></div>
+    <div style="text-align:center;margin-top:14px">
+      <div id="v2FacialStatus" class="hint" style="margin-bottom:8px">Carregando motor de comparação facial…</div>
+      <button class="btn btn-primary" id="v2BtnFacial" onclick="v2ExecutarFacial()" disabled>🔍 Verificar identidade</button>
+    </div>
+    ${v2NavRow()}`;
+}
+async function v2PrepararFacial(){
+  if(V2D.facial) return;
+  v2LigarCamera('v2VidFacial');
+  const eng = await v2CarregarFaceAPI();
+  const st = document.getElementById('v2FacialStatus'); const btn = document.getElementById('v2BtnFacial');
+  if(!st||!btn) return;
+  if(eng){ st.textContent='Motor pronto. Posicione o rosto e clique em verificar.'; }
+  else   { st.textContent='Motor de comparação indisponível — a verificação será registrada para análise manual.'; }
+  btn.disabled=false;
+}
+async function v2ExecutarFacial(){
+  const doc = v2DocComFoto();
+  if(!doc){ showToast('Envie primeiro o RG ou CNH com foto.','error'); return; }
+  if(!doc.mime.startsWith('image')){ showToast('Para a comparação facial, o documento precisa ser uma imagem (foto).','error'); return; }
+  const btn=document.getElementById('v2BtnFacial'); btn.disabled=true; btn.textContent='Analisando…';
+  const selfieCanvas = v2Frame('v2VidFacial');
+  const imgSelfie = selfieCanvas.toDataURL('image/jpeg',.92);
+  let resultado;
+  if(v2FaceAPI){
+    try{
+      const imgDocEl = await new Promise(res=>{ const i=new Image(); i.onload=()=>res(i); i.src=doc.b64; });
+      const d1 = await v2FaceAPI.detectSingleFace(imgDocEl).withFaceLandmarks().withFaceDescriptor();
+      const d2 = await v2FaceAPI.detectSingleFace(selfieCanvas).withFaceLandmarks().withFaceDescriptor();
+      if(!d1){ showToast('Não foi possível localizar um rosto na foto do documento.','error'); btn.disabled=false; btn.textContent='🔍 Verificar identidade'; return; }
+      if(!d2){ showToast('Não foi possível localizar seu rosto. Melhore a iluminação e tente de novo.','error'); btn.disabled=false; btn.textContent='🔍 Verificar identidade'; return; }
+      const dist = v2FaceAPI.euclideanDistance(d1.descriptor, d2.descriptor);
+      const pct = Math.max(0, Math.min(100, Math.round((1-dist)*100)));
+      resultado = { compatibilidade:pct, aprovado:pct>=AGEMOB_V2.limiarFacial, pendente:false, metodo:'Comparação biométrica local (descritores faciais, distância euclidiana)' };
+    }catch(e){ resultado = { compatibilidade:null, aprovado:false, pendente:true, metodo:'Falha no motor — imagens registradas para análise manual' }; }
+  } else {
+    resultado = { compatibilidade:null, aprovado:false, pendente:true, metodo:'Motor indisponível — imagens registradas para análise manual' };
+  }
+  V2D.facial = Object.assign({ imgDoc:doc.b64, imgSelfie, quando:new Date().toLocaleString('pt-BR'), ip:V2E.ip||'—' }, resultado);
+  v2DesligarCamera();
+  v2Evento('Reconhecimento facial', resultado.pendente?'Pendente (análise manual)':'Compatibilidade '+resultado.compatibilidade+'% · '+(resultado.aprovado?'APROVADO':'REPROVADO'));
+  v2MostrarDyn();
+}
+
+/* ════════════ 8. PROVA DE VIDA (LIVENESS) ════════════ */
+const V2_DESAFIOS = [ {id:'sorrir', txt:'😀 Sorria para a câmera'}, {id:'piscar', txt:'👁 Pisque os olhos duas vezes'}, {id:'virar', txt:'↔️ Vire levemente a cabeça para o lado'} ];
+function v2RenderLiveness(){
+  if(V2D.liveness){
+    const l=V2D.liveness;
+    return `<h1>👁 Prova de vida</h1>
+      <div style="text-align:center;margin:24px 0">
+        <span class="v2-chip ${l.aprovado?'ok':'warn'}">${l.aprovado?'✓ Prova de vida confirmada':'Registrada para análise manual'}</span>
+        <p class="hint" style="margin-top:10px">${l.detalhe} · ${l.quando}</p>
+        <br><button class="btn btn-ghost" onclick="V2D.liveness=null;v2MostrarDyn()">Refazer</button>
+      </div>${v2NavRow()}`;
+  }
+  return `<h1>👁 Prova de vida</h1>
+    <p class="lead">Para evitar fraudes com fotos ou imagens estáticas, siga as instruções na tela durante a captura.</p>
+    <div class="v2-cam-wrap"><video id="v2VidLive" playsinline muted></video><div class="v2-cam-oval"><i></i></div></div>
+    <div style="text-align:center;margin-top:14px">
+      <div id="v2LiveDesafio" style="font-size:17px;font-weight:700;font-family:'Sora',sans-serif;min-height:26px"></div>
+      <div class="hint" id="v2LiveStatus" style="margin:6px 0 10px">Clique em iniciar e siga as instruções.</div>
+      <button class="btn btn-primary" id="v2BtnLive" onclick="v2ExecutarLiveness()">▶ Iniciar prova de vida</button>
+    </div>
+    ${v2NavRow()}`;
+}
+async function v2ExecutarLiveness(){
+  const btn=document.getElementById('v2BtnLive'); btn.disabled=true;
+  const stEl=document.getElementById('v2LiveStatus'), dEl=document.getElementById('v2LiveDesafio');
+  const desafio = V2_DESAFIOS[Math.floor(Math.random()*V2_DESAFIOS.length)];
+  dEl.textContent = desafio.txt;
+  const eng = await v2CarregarFaceAPI();
+  const frames=[]; const exprs=[]; const noses=[];
+  const t0=Date.now();
+  stEl.textContent='Analisando… mantenha o rosto na marcação (5 segundos).';
+  while(Date.now()-t0 < 5200){
+    const c = v2Frame('v2VidLive'); frames.push(c);
+    if(eng){
+      try{
+        const det = await eng.detectSingleFace(c).withFaceLandmarks().withFaceExpressions();
+        if(det){ exprs.push(det.expressions); noses.push(det.landmarks.getNose()[3].x / c.width); }
+      }catch(e){}
+    }
+    await new Promise(r=>setTimeout(r, 420));
+  }
+  let aprovado=false, detalhe='';
+  if(eng && exprs.length>=3){
+    if(desafio.id==='sorrir'){ aprovado = exprs.some(e=>e.happy>0.7); detalhe='Desafio: sorriso · expressão facial detectada em tempo real'; }
+    else if(desafio.id==='virar'){ const min=Math.min(...noses), max=Math.max(...noses); aprovado = (max-min)>0.06; detalhe='Desafio: movimento de cabeça · variação de pose detectada'; }
+    else { // piscar: variação de expressões/landmarks entre frames como proxy de vivacidade
+      const happyVar = Math.max(...exprs.map(e=>e.neutral)) - Math.min(...exprs.map(e=>e.neutral));
+      const noseVar  = noses.length?Math.max(...noses)-Math.min(...noses):0;
+      aprovado = happyVar>0.08 || noseVar>0.02; detalhe='Desafio: piscar · micro-variações faciais detectadas entre quadros';
+    }
+    if(!aprovado) detalhe += ' · variação insuficiente — registrado para análise manual';
+  } else {
+    // fallback: diferença de pixels entre primeiro e último quadro (movimento real vs. imagem estática)
+    const a=frames[0].getContext('2d').getImageData(0,0,80,60); // amostra reduzida
+    const c2=document.createElement('canvas'); c2.width=80; c2.height=60;
+    c2.getContext('2d').drawImage(frames[frames.length-1],0,0,80,60);
+    const b=c2.getContext('2d').getImageData(0,0,80,60);
+    let diff=0; for(let i=0;i<a.data.length;i+=16) diff+=Math.abs(a.data[i]-b.data[i]);
+    aprovado = diff > 6000;
+    detalhe = 'Análise de movimento entre quadros (motor facial indisponível)';
+  }
+  V2D.liveness = { aprovado: !!aprovado, pendenteManual: !aprovado, desafio: desafio.txt, detalhe, quando:new Date().toLocaleString('pt-BR'), ip:V2E.ip||'—' };
+  v2DesligarCamera();
+  v2Evento('Prova de vida', (aprovado?'CONFIRMADA':'Pendente de análise manual')+' · '+desafio.txt);
+  v2MostrarDyn();
+}
+
+/* ---------- validação de conclusão de cada etapa dinâmica ---------- */
+function v2ValidarDyn(id){
+  if(id.startsWith('conf_')){
+    if(!V2D.otp[id] || !V2D.otp[id].validado){ showToast('Valide o código antes de continuar.','error'); return false; }
+  }
+  if(id.startsWith('up_') && !V2D.uploads[id]){ showToast('Envie o documento para continuar.','error'); return false; }
+  if(id==='selfie' && !V2D.selfie){ showToast('Capture a selfie para continuar.','error'); return false; }
+  if(id==='facial'){
+    if(!V2D.facial){ showToast('Conclua a verificação facial para continuar.','error'); return false; }
+    if(v2Cfg.facialObrigatorio && !V2D.facial.aprovado){ showToast('Reconhecimento facial obrigatório: a verificação precisa ser aprovada para prosseguir.','error'); return false; }
+  }
+  if(id==='liveness' && !V2D.liveness){ showToast('Conclua a prova de vida para continuar.','error'); return false; }
+  return true;
+}
+
+/* ════════════ 3. TERMO DE ACEITE EXPRESSO (injetado na etapa de assinatura) ════════════ */
+const V2_TEXTO_ACEITE = 'Declaro que li integralmente este documento, compreendi seu conteúdo e realizo esta assinatura eletrônica por minha livre manifestação de vontade.';
+function v2InjetarAceite(){
+  const sec = document.querySelector('[data-step="5"]');
+  if(!sec || document.getElementById('v2AceiteBox')) {
+    const cb = document.getElementById('v2AceiteChk'); if(cb){ cb.checked=false; V2D.aceite=null; }
+    return;
+  }
+  const box = document.createElement('label');
+  box.className='v2-aceite'; box.id='v2AceiteBox';
+  box.innerHTML = `<input type="checkbox" id="v2AceiteChk" onchange="v2RegistrarAceite(this)">
+    <p><b>Aceite expresso · </b>${V2_TEXTO_ACEITE}</p>`;
+  sec.querySelector('.nav-row').before(box);
+}
+function v2RegistrarAceite(chk){
+  if(chk.checked){
+    V2D.aceite = { texto:V2_TEXTO_ACEITE, data:new Date().toLocaleDateString('pt-BR'), hora:new Date().toLocaleTimeString('pt-BR'), ip:V2E.ip||'—', sessao:V2E.sessao };
+    v2Evento('Aceite expresso registrado','IP '+V2D.aceite.ip);
+  } else { V2D.aceite=null; v2Evento('Aceite expresso desmarcado',''); }
+}
+
+/* ════════════ 4 + 11 + 12. ASSINATURA (mantida) + HASH + ASSINANTES ADICIONAIS ════════════ */
+assinar = async function(){
+  /* bloqueios jurídicos antes da assinatura */
+  if(!V2D.aceite){ showToast('Marque o aceite expresso para concluir a assinatura.','error'); return; }
+  if(v2Cfg.facialObrigatorio && v2Fila.includes('facial') && !(V2D.facial&&V2D.facial.aprovado)){
+    showToast('Reconhecimento facial obrigatório não aprovado. A assinatura está bloqueada.','error'); return;
+  }
+  /* captura a assinatura exatamente como no fluxo original (desenhada mantida integralmente) */
+  if(AG.sigModeNow==='draw'){
+    if(!hasInk){ alert('Desenhe sua assinatura para continuar.'); return; }
+    AG.sigImg=canvas.toDataURL('image/png');
+  } else {
+    const n=document.getElementById('sigTyped').value.trim();
+    if(!n){ alert('Digite seu nome para assinar.'); return; }
+    AG.sigImg=typedToImage(n);
+  }
+  /* evidências do exato momento da assinatura + hash SHA-256 do documento */
+  V2D.evidAssinatura = V2E.snapshot();
+  const payload = JSON.stringify({
+    codigo:AG.code, tipo:AG.tipo, proprietario:{nome:V('p_nome'),cpf:V('p_cpf'),email:V('p_email'),zap:V('p_zap')},
+    imovel:{tipo:V('i_tipo'),end:V('i_end'),num:V('i_num'),bairro:V('i_bairro'),cidade:V('i_cidade'),valor:moneyVal()},
+    assinatura:AG.sigImg, aceite:V2D.aceite, evidencias:V2D.evidAssinatura,
+    uploads:Object.values(V2D.uploads).map(u=>({tipo:u.tipo,hash:u.hash})),
+    otp:Object.values(V2D.otp).filter(o=>o.validado).map(o=>({canal:o.canal,destino:o.destino,validadoEm:o.dataValidacao})),
+    facial:V2D.facial?{compatibilidade:V2D.facial.compatibilidade,aprovado:V2D.facial.aprovado}:null,
+    liveness:V2D.liveness?{aprovado:V2D.liveness.aprovado}:null
+  });
+  V2D.hash = await v2SHA256(payload);
+  v2Evento('Assinatura eletrônica concluída','SHA-256 '+V2D.hash.slice(0,20)+'… · IP '+(V2E.ip||'—'));
+
+  /* registro no painel — idêntico ao comportamento original */
+  const valor=moneyVal();
+  const venc=new Date(); venc.setDate(venc.getDate()+365);
+  AG.autorizacoes.unshift({ prop:V('p_nome'), imovel:`${V('i_tipo')} · ${V('i_bairro')}`,
+    valor:valor||0, tipo:AG.tipo, status:'ativa', venc:venc.toLocaleDateString('pt-BR'),
+    corretor:'Lucas Siqueira', code:AG.code, hash:V2D.hash });
+  notificarMudancaStatus();
+
+  /* registro permanente para validação por QR Code */
+  try{
+    const reg = JSON.parse(localStorage.getItem('agemob_validacao')||'{}');
+    reg[AG.code] = { status:'Documento válido · assinatura concluída', nome:V('p_nome'),
+      data:new Date().toLocaleString('pt-BR'), hash:V2D.hash, tipo:AG.tipo,
+      facial:V2D.facial?(V2D.facial.pendente?'análise manual':(V2D.facial.compatibilidade+'% '+(V2D.facial.aprovado?'aprovado':'reprovado'))):'não exigido',
+      liveness:V2D.liveness?(V2D.liveness.aprovado?'confirmada':'análise manual'):'não exigida' };
+    localStorage.setItem('agemob_validacao', JSON.stringify(reg));
+  }catch(e){}
+
+  /* assinantes adicionais (cônjuge, coproprietários, testemunhas) */
+  if(v2FilaPos.length){ v2RenderAssinantes(); return; }
+  v2Concluir();
+};
+function v2Concluir(){
+  document.getElementById('finalCode').textContent='Código: '+AG.code+'  ·  Hash: '+V2D.hash.slice(0,20)+'…';
+  const qh=document.getElementById('qrHolder'); qh.innerHTML='';
+  new QRCode(qh,{text:`https://agemob.com/validar/${AG.code}`,width:110,height:110,colorDark:'#04273B'});
+  /* link de validação (aditivo) abaixo do QR */
+  let lk=document.getElementById('v2LinkValidar');
+  if(!lk){ lk=document.createElement('div'); lk.id='v2LinkValidar'; lk.style.cssText='text-align:center;margin-top:10px'; }
+  lk.innerHTML=`<a href="#" style="color:var(--brand);font-weight:700;font-size:13.5px" onclick="v2AbrirValidacao('${AG.code}');return false">🛡 Verificar autenticidade deste documento</a>`;
+  qh.after(lk);
+  step=6; showStep();
+}
+
+/* ---- assinantes adicionais: fluxo, OTP, evidências e registro individuais ---- */
+const V2_SIGNERS = { sig_conjuge:['Cônjuge',1], sig_coprop:['Coproprietário',2], sig_testemunhas:['Testemunha',2] };
+let v2SigCanvases = {};
+function v2RenderAssinantes(){
+  document.querySelectorAll('[data-step]').forEach(s=>s.classList.add('hidden'));
+  const sec=document.getElementById('v2DynStep'); sec.classList.remove('hidden');
+  document.getElementById('stepLabel').textContent='Assinaturas adicionais';
+  let html = `<h1>✍️ Assinaturas adicionais</h1>
+    <p class="lead">Esta autorização exige as assinaturas abaixo. Cada assinante possui evidências e registro individuais.</p>`;
+  let n=0;
+  v2FilaPos.forEach(id=>{
+    const [rotulo,qtd]=V2_SIGNERS[id];
+    for(let i=1;i<=qtd;i++){
+      const key=id+'_'+i; n++;
+      html+=`<div class="v2-signer-card">
+        <h3>${rotulo}${qtd>1?' '+i:''} ${id==='sig_coprop'&&i>1?'<span class="badge b-gray">opcional</span>':''}</h3>
+        <div class="grid2">
+          <div class="field"><label>Nome completo ${id==='sig_coprop'&&i>1?'':'*'}</label><input id="v2sn_${key}" placeholder="Nome do assinante"></div>
+          <div class="field"><label>CPF</label><input id="v2sc_${key}" placeholder="000.000.000-00" oninput="maskCPF(this)" maxlength="14"></div>
+        </div>
+        <label>Assinatura</label>
+        <canvas id="v2sg_${key}"></canvas>
+        <button class="btn btn-ghost" style="margin-top:8px" onclick="v2LimparSig('${key}')">Limpar</button>
+      </div>`;
+    }
+  });
+  html+=`<div class="nav-row"><span></span><button class="btn btn-primary btn-lg" onclick="v2ConcluirAssinantes()">Concluir todas as assinaturas ✓</button></div>`;
+  sec.innerHTML=html;
+  v2SigCanvases={};
+  sec.querySelectorAll('canvas').forEach(c=>{
+    const r=c.getBoundingClientRect(); c.width=r.width*2; c.height=300;
+    const x=c.getContext('2d'); x.lineWidth=3; x.lineCap='round'; x.strokeStyle='#101828';
+    let dw=false, ink=false;
+    const pos=e=>{ const rect=c.getBoundingClientRect(); const p=e.touches?e.touches[0]:e;
+      return [(p.clientX-rect.left)*(c.width/rect.width),(p.clientY-rect.top)*(c.height/rect.height)]; };
+    c.onpointerdown=e=>{dw=true;ink=true;const[a,b]=pos(e);x.beginPath();x.moveTo(a,b);};
+    c.onpointermove=e=>{if(!dw)return;const[a,b]=pos(e);x.lineTo(a,b);x.stroke();};
+    c.onpointerup=c.onpointerleave=()=>dw=false;
+    v2SigCanvases[c.id.replace('v2sg_','')]={canvas:c, temTinta:()=>ink};
+  });
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+function v2LimparSig(key){ const o=v2SigCanvases[key]; o.canvas.getContext('2d').clearRect(0,0,o.canvas.width,o.canvas.height); }
+async function v2ConcluirAssinantes(){
+  V2D.assinantes=[];
+  for(const id of v2FilaPos){
+    const [rotulo,qtd]=V2_SIGNERS[id];
+    for(let i=1;i<=qtd;i++){
+      const key=id+'_'+i;
+      const nome=document.getElementById('v2sn_'+key).value.trim();
+      const cpf =document.getElementById('v2sc_'+key).value.trim();
+      const obrig = !(id==='sig_coprop'&&i>1);
+      const o=v2SigCanvases[key];
+      if(!nome && !obrig) continue;
+      if(!nome){ showToast(rotulo+(qtd>1?' '+i:'')+': informe o nome.','error'); return; }
+      if(!o.temTinta()){ showToast(rotulo+(qtd>1?' '+i:'')+': desenhe a assinatura.','error'); return; }
+      const img=o.canvas.toDataURL('image/png');
+      const cert='AGM-'+Math.random().toString(36).substr(2,8).toUpperCase();
+      V2D.assinantes.push({ papel:rotulo+(qtd>1?' '+i:''), nome, cpf, img,
+        certificado:cert, evidencias:V2E.snapshot(), hash:await v2SHA256(img+nome+cpf) });
+      v2Evento('Assinatura adicional registrada', rotulo+' · '+nome+' · certificado '+cert);
+    }
+  }
+  v2Concluir();
+}
+
+/* ════════════ 13 + 14 + 16. CERTIFICADO PDF + QR + PDF PROTEGIDO ════════════ */
+gerarPDF = function(){
+  const {jsPDF}=window.jspdf;
+  /* PDF protegido contra edição posterior (criptografia com permissões restritas) */
+  let doc;
+  try{ doc=new jsPDF({unit:'mm',format:'a4',encryption:{ownerPassword:'AGM-'+V2D.hash?.slice(0,12), userPermissions:['print']}}); }
+  catch(e){ doc=new jsPDF({unit:'mm',format:'a4'}); }
+  const W=210, M=18; let y=20;
+  const tipoTxt = AG.tipo==='exclusiva' ? 'COM EXCLUSIVIDADE' : 'SEM EXCLUSIVIDADE';
+  const valor=moneyVal(); const d=new Date();
+  const venc=new Date(); venc.setDate(venc.getDate()+365);
+  const h=(t,size=11)=>{doc.setFont('helvetica','bold');doc.setFontSize(size);doc.text(t,M,y);y+=6;};
+  const p=(t,size=9.5)=>{doc.setFont('helvetica','normal');doc.setFontSize(size);const lines=doc.splitTextToSize(t,W-M*2);doc.text(lines,M,y);y+=lines.length*4.4+2;};
+  const row=(k,v)=>{doc.setFont('helvetica','bold');doc.setFontSize(9.5);doc.text(k,M,y);doc.setFont('helvetica','normal');const lv=doc.splitTextToSize(String(v),W-M*2-52);doc.text(lv,M+52,y);y+=Math.max(5.4,lv.length*4.6);};
+  const line=()=>{doc.setDrawColor(200);doc.line(M,y,W-M,y);y+=6;};
+  const quebra=(lim=255)=>{ if(y>lim){ doc.addPage(); y=20; } };
+
+  /* ── PÁGINA(S) 1..n: DOCUMENTO ASSINADO — idêntico ao layout original ── */
+  doc.setFillColor(4,39,59); doc.rect(0,0,W,14,'F');
+  doc.setTextColor(255); doc.setFont('helvetica','bold'); doc.setFontSize(12);
+  doc.text('AGEMOB · AUTORIZAÇÃO DE VENDA '+tipoTxt, M, 9.5);
+  doc.setTextColor(16,24,40); y=24;
+  h('AUTORIZAÇÃO DE VENDA DE IMÓVEL '+tipoTxt, 13); y+=2;
+  doc.setFontSize(9); doc.setFont('helvetica','normal');
+  doc.text('Código da autorização: '+AG.code+'  ·  Emitida em '+d.toLocaleDateString('pt-BR')+' às '+d.toLocaleTimeString('pt-BR'),M,y); y+=8;
+  line();
+  h('1. IMOBILIÁRIA AUTORIZADA');
+  row('Razão social:',AG.imob.razao); row('CNPJ:',AG.imob.cnpj); row('Endereço:',AG.imob.end); y+=2;
+  h('2. PROPRIETÁRIO');
+  row('Nome:',V('p_nome')); row('CPF:',V('p_cpf')); if(V('p_rg')!=='—') row('RG:',V('p_rg'));
+  row('Estado civil:',V('p_civil')); row('Profissão:',V('p_prof'));
+  row('Contato:',V('p_zap')+' · '+V('p_email'));
+  row('Endereço:',`${V('p_end')}, ${V('p_num')} ${V('p_comp')!=='—'?V('p_comp'):''} - ${V('p_bairro')}, ${V('p_cidade')}`); y+=2;
+  h('3. IMÓVEL');
+  row('Tipo:',V('i_tipo'));
+  row('Endereço:',`${V('i_end')}, ${V('i_num')} - ${V('i_bairro')}, ${V('i_cidade')}`);
+  row('Valor de venda:', valor?BRL(valor):'—'); y+=2;
+  h('4. CONDIÇÕES');
+  p('PRAZO E RENOVAÇÃO — A presente autorização terá validade inicial de 365 (trezentos e sessenta e cinco) dias, contados da data de assinatura, com vencimento em '+venc.toLocaleDateString('pt-BR')+'. Ao término do prazo, será renovada automaticamente por períodos iguais e sucessivos, até manifestação contrária de qualquer das partes, comunicada formalmente com antecedência mínima de 30 (trinta) dias do vencimento.');
+  p('COMISSÃO DE CORRETAGEM — Será devida comissão de 6% (seis por cento) sobre o valor total da venda efetivamente realizada. A comissão permanecerá integralmente devida caso o imóvel seja vendido, durante a vigência desta autorização, a cliente apresentado pela imobiliária, originado de suas campanhas de marketing, cadastrado em seus sistemas ou apresentado por seus parceiros.');
+  if(AG.tipo==='exclusiva'){ p('EXCLUSIVIDADE — Toda negociação do imóvel deverá ser conduzida exclusivamente pela imobiliária autorizada. Caso o proprietário realize a venda diretamente ou por intermédio de terceiros durante o prazo de exclusividade, a comissão contratada permanecerá devida.'); }
+  else { p('MODALIDADE SEM EXCLUSIVIDADE — O proprietário poderá anunciar ou negociar o imóvel por meio de outras imobiliárias, sendo a comissão devida apenas à imobiliária que efetivamente intermediar a venda.'); }
+  p('ASSINATURA ELETRÔNICA — As partes reconhecem a validade jurídica da assinatura eletrônica aposta neste documento, nos termos do art. 10, §2º, da MP 2.200-2/2001 e da Lei nº 14.063/2020, acompanhada do conjunto probatório descrito no Certificado de Assinatura anexo.');
+  quebra(225);
+  h('5. ASSINATURA');
+  p('Assinado eletronicamente em '+d.toLocaleDateString('pt-BR')+' às '+d.toLocaleTimeString('pt-BR')+' · Dispositivo: '+(navigator.platform||'web')+' · Validação: agemob.com/validar/'+AG.code);
+  if(AG.sigImg){ doc.addImage(AG.sigImg,'PNG',M,y,70,22); }
+  y+=26; doc.setDrawColor(120); doc.line(M,y,M+80,y); y+=5;
+  doc.setFontSize(9); doc.text(V('p_nome')+' · CPF '+V('p_cpf'),M,y);
+  const qrCanvas=document.querySelector('#qrHolder canvas');
+  if(qrCanvas){ doc.addImage(qrCanvas.toDataURL('image/png'),'PNG',W-M-30,y-26,30,30); }
+  /* assinaturas adicionais no corpo do documento */
+  V2D.assinantes.forEach(a=>{
+    y+=14; quebra(245);
+    doc.addImage(a.img,'PNG',M,y,60,18); y+=22;
+    doc.setDrawColor(120); doc.line(M,y,M+80,y); y+=5;
+    doc.setFontSize(9); doc.text(a.papel+': '+a.nome+(a.cpf?' · CPF '+a.cpf:''),M,y);
+  });
+  doc.setFontSize(8); doc.setTextColor(130);
+  doc.text('Documento gerado eletronicamente pela plataforma AGEMOB · Autorizações Imobiliárias Inteligentes · Código '+AG.code, M, 290);
+  doc.setTextColor(16,24,40);
+
+  /* ── CERTIFICADO DE ASSINATURA ELETRÔNICA (página dedicada) ── */
+  doc.addPage(); y=24;
+  doc.setFillColor(184,134,11); doc.rect(0,0,W,14,'F');
+  doc.setTextColor(255); doc.setFont('helvetica','bold'); doc.setFontSize(12);
+  doc.text('AGEMOB · CERTIFICADO DE ASSINATURA ELETRÔNICA', M, 9.5);
+  doc.setTextColor(16,24,40);
+  const ev = V2D.evidAssinatura || V2E.snapshot();
+  h('CERTIFICADO DE ASSINATURA E CONJUNTO PROBATÓRIO', 13); y+=1;
+  p('Este certificado integra de forma inseparável o documento "Autorização de Venda '+tipoTxt+'", código '+AG.code+', e reúne as evidências técnicas e jurídicas coletadas no momento da assinatura, nos termos da MP 2.200-2/2001, art. 10, §2º, e da Lei nº 14.063/2020.', 9);
+  line();
+  h('SIGNATÁRIO PRINCIPAL');
+  row('Nome completo:',V('p_nome')); row('CPF:',V('p_cpf'));
+  row('Telefone:',V('p_zap')); row('E-mail:',V('p_email')); y+=2;
+  h('IMÓVEL OBJETO');
+  row('Imóvel:',V('i_tipo')+' · '+V('i_end')+', '+V('i_num')+' · '+V('i_bairro')+' · '+V('i_cidade'));
+  row('Valor:',valor?BRL(valor):'—'); y+=2;
+  h('EVIDÊNCIAS DA ASSINATURA');
+  row('Data da assinatura:',ev.dataHoraLocal.split(' ')[0]||ev.dataHoraLocal);
+  row('Hora da assinatura:',ev.dataHoraLocal.split(' ').slice(1).join(' '));
+  row('Endereço IP:',ev.ip);
+  row('Geolocalização:',ev.geolocalizacao);
+  row('Navegador:',ev.navegador+' · '+ev.sistemaOperacional);
+  row('Dispositivo:',ev.dispositivo);
+  row('Resolução de tela:',ev.resolucao);
+  row('Fuso horário:',ev.fusoHorario);
+  row('Sessão:',ev.sessao);
+  row('User Agent:',ev.userAgent); y+=2;
+  quebra(210);
+  h('VALIDAÇÕES REALIZADAS');
+  row('Aceite expresso:', V2D.aceite ? 'Registrado em '+V2D.aceite.data+' '+V2D.aceite.hora+' · IP '+V2D.aceite.ip : '—');
+  const otps=Object.values(V2D.otp).filter(o=>o.validado);
+  row('OTP:', otps.length?otps.map(o=>o.canal+' ('+o.destino+') validado em '+o.dataValidacao+' · IP '+o.ipValidacao).join(' | '):'não exigido');
+  row('Reconhecimento facial:', V2D.facial?(V2D.facial.pendente?'imagens registradas — análise manual pendente':'compatibilidade de '+V2D.facial.compatibilidade+'% · '+(V2D.facial.aprovado?'APROVADO':'reprovado')+' · '+V2D.facial.quando):'não exigido');
+  row('Prova de vida:', V2D.liveness?((V2D.liveness.aprovado?'CONFIRMADA':'análise manual')+' · '+V2D.liveness.desafio+' · '+V2D.liveness.quando):'não exigida');
+  const ups=Object.values(V2D.uploads);
+  if(ups.length){
+    row('Documentos anexos:', ups.length+' documento(s) vinculado(s) ao certificado');
+    ups.forEach(u=>{
+      quebra(245);
+      row('· '+u.tipo+':', u.nome+(u.origem?' ('+u.origem+')':'')+' · '+u.quando+' · SHA-256 '+u.hash.slice(0,24)+'…');
+    });
+  } else {
+    row('Documentos anexos:','nenhum');
+  } y+=2;
+  quebra(225);
+  h('INTEGRIDADE DO DOCUMENTO');
+  row('Código de validação:','agemob.com/validar/'+AG.code);
+  doc.setFont('helvetica','bold'); doc.setFontSize(9.5); doc.text('Hash SHA-256:',M,y); y+=5;
+  doc.setFont('courier','normal'); doc.setFontSize(8.5);
+  doc.text(doc.splitTextToSize(V2D.hash||'—', W-M*2),M,y); y+=10;
+  doc.setFont('helvetica','normal'); doc.setFontSize(9);
+  p('Qualquer alteração posterior no conteúdo deste documento invalida a verificação do hash acima. A autenticidade pode ser conferida pelo QR Code ou pelo código de validação.');
+  quebra(240);
+  if(qrCanvas){ doc.addImage(qrCanvas.toDataURL('image/png'),'PNG',W-M-32,y,32,32); }
+  /* imagens das evidências visuais: selfie + documentos enviados como foto (CNH, RG etc.) */
+  let imgX=M;
+  const addEvidImg=(src,rotulo)=>{
+    try{
+      const fmt = src.startsWith('data:image/png')?'PNG':'JPEG';
+      doc.addImage(src,fmt,imgX,y,40,28);
+      doc.setFontSize(7.5); doc.setTextColor(120);
+      doc.text(rotulo,imgX,y+32); doc.setTextColor(16,24,40);
+      imgX+=46;
+    }catch(e){}
+  };
+  if(V2D.selfie) addEvidImg(V2D.selfie.img,'Selfie do signatário');
+  ups.filter(u=>u.mime && u.mime.startsWith('image')).forEach(u=>{
+    if(imgX+40 > W-M-34) return; // não sobrepor o QR Code
+    addEvidImg(u.b64, u.tipo+(u.origem==='foto capturada na hora'?' (foto na hora)':''));
+  });
+  y+=38;
+  /* certificados individuais dos assinantes adicionais */
+  if(V2D.assinantes.length){
+    quebra(200);
+    h('ASSINANTES ADICIONAIS — CERTIFICADOS INDIVIDUAIS');
+    V2D.assinantes.forEach(a=>{
+      quebra(240);
+      row(a.papel+':', a.nome+(a.cpf?' · CPF '+a.cpf:''));
+      row('Certificado:', a.certificado+' · '+a.evidencias.dataHoraLocal+' · IP '+a.evidencias.ip);
+      row('Hash da assinatura:', a.hash.slice(0,40)+'…'); y+=1;
+    });
+  }
+
+  /* ── TRILHA DE AUDITORIA (página dedicada) ── */
+  doc.addPage(); y=24;
+  doc.setFillColor(4,39,59); doc.rect(0,0,W,14,'F');
+  doc.setTextColor(255); doc.setFont('helvetica','bold'); doc.setFontSize(12);
+  doc.text('AGEMOB · TRILHA DE AUDITORIA · '+AG.code, M, 9.5);
+  doc.setTextColor(16,24,40);
+  h('REGISTRO CRONOLÓGICO DE EVENTOS', 12); y+=2;
+  doc.setFontSize(8.5);
+  V2E.eventos.forEach(e=>{
+    quebra(275);
+    doc.setFont('helvetica','bold'); doc.text(e.dataHoraLocal, M, y);
+    doc.setFont('helvetica','normal');
+    const txt = doc.splitTextToSize(e.tipo+(e.detalhe?' — '+e.detalhe:'')+' · IP '+e.ip+' · sessão '+e.sessao.slice(0,8), W-M*2-42);
+    doc.text(txt, M+42, y); y+=Math.max(4.8, txt.length*4.2)+1.5;
+  });
+  doc.setFontSize(8); doc.setTextColor(130);
+  doc.text('Certificado e trilha gerados eletronicamente pela plataforma AGEMOB · Hash '+ (V2D.hash||'').slice(0,32)+'…', M, 290);
+
+  v2Evento('Download do PDF assinado','Código '+AG.code);
+  doc.save('AGEMOB_Autorizacao_'+AG.code+'.pdf');
+};
+
+/* ════════════ 14. PÁGINA DE VALIDAÇÃO (QR CODE / CÓDIGO) ════════════ */
+function v2AbrirValidacao(code){
+  let reg=null;
+  try{ reg = JSON.parse(localStorage.getItem('agemob_validacao')||'{}')[code]; }catch(e){}
+  const body=document.getElementById('v2ValidarBody');
+  if(reg){
+    body.innerHTML=`<div class="v2-validation-ok">
+      <div class="seal-big" style="background:#067647">✓</div>
+      <h3 style="font-family:'Sora',sans-serif">Documento válido</h3>
+      <p class="hint">Assinatura eletrônica concluída e íntegra.</p></div>
+      <div class="v2-evid">
+        <div class="sum-row"><span>Status</span><b style="color:#067647">${reg.status}</b></div>
+        <div class="sum-row"><span>Signatário</span><b>${reg.nome}</b></div>
+        <div class="sum-row"><span>Data da assinatura</span><b>${reg.data}</b></div>
+        <div class="sum-row"><span>Código de validação</span><b>${code}</b></div>
+        <div class="sum-row"><span>Reconhecimento facial</span><b>${reg.facial}</b></div>
+        <div class="sum-row"><span>Prova de vida</span><b>${reg.liveness}</b></div>
+      </div>
+      <h4 style="font-size:12px;color:var(--ink-3);margin:12px 0 6px">HASH SHA-256 DO DOCUMENTO</h4>
+      <div class="v2-hashbox">${reg.hash}</div>`;
+  } else {
+    body.innerHTML=`<div class="v2-validation-ok">
+      <div class="seal-big" style="background:var(--red)">✕</div>
+      <h3 style="font-family:'Sora',sans-serif">Registro não encontrado</h3>
+      <p class="hint">Nenhum documento assinado com o código <b>${code}</b> foi localizado neste ambiente.</p></div>`;
+  }
+  document.getElementById('v2ModalValidar').classList.add('open');
+}
+/* abre validação automaticamente via URL: ...#validar=CODIGO */
+(function(){
+  const m = location.hash.match(/#validar=([A-Z0-9-]+)/i);
+  if(m) setTimeout(()=>v2AbrirValidacao(m[1].toUpperCase()), 400);
+})();
+
+/* evento inicial da sessão */
+v2Evento('Sessão iniciada', V2E.navegador()+' · '+V2E.so());
+
+/* ════════════════════════════════════════════════════════════════════
+   AGEMOB · STORAGE MODULE — Upload automático do PDF assinado
+   Firebase Storage + Firestore · Projeto: agemob-prod
+   Implementação 100% aditiva — nenhuma funcionalidade existente alterada.
+   ════════════════════════════════════════════════════════════════════ */
+
+/* ── Configuração Firebase (projeto agemob-prod já existente) ── */
+const AGEMOB_FB_CONFIG = {
+  apiKey:            "AIzaSyCZj9n20AautGaoJVsbtj7kBAd2KQifFv4",
+  authDomain:        "agemob-prod.firebaseapp.com",
+  projectId:         "agemob-prod",
+  storageBucket:     "agemob-prod.firebasestorage.app",
+  messagingSenderId: "822406821771",
+  appId:             "1:822406821771:web:0b37238f6a9ff50804e18e"
+};
+
+/* Inicializa Firebase apenas uma vez */
+let _fbApp = null, _fbStorage = null, _fbFirestore = null;
+function fbInit(){
+  if(_fbApp) return;
+  try{
+    _fbApp       = firebase.initializeApp(AGEMOB_FB_CONFIG, 'agemob-storage');
+    _fbStorage   = firebase.storage(_fbApp);
+    _fbFirestore = firebase.firestore(_fbApp);
+  }catch(e){ console.error('[AGEMOB Storage] Falha ao inicializar Firebase:', e); }
+}
+
+/* ── Gera o blob do PDF sem disparar o download ── */
+async function v2GerarPDFBlob(){
+  const {jsPDF}=window.jspdf;
+  let doc;
+  try{ doc=new jsPDF({unit:'mm',format:'a4',encryption:{ownerPassword:'AGM-'+(V2D.hash||'').slice(0,12), userPermissions:['print']}}); }
+  catch(e){ doc=new jsPDF({unit:'mm',format:'a4'}); }
+
+  const W=210, M=18; let y=20;
+  const tipoTxt = AG.tipo==='exclusiva' ? 'COM EXCLUSIVIDADE' : 'SEM EXCLUSIVIDADE';
+  const valor=moneyVal(); const d=new Date();
+  const venc=new Date(); venc.setDate(venc.getDate()+365);
+  const h=(t,size=11)=>{doc.setFont('helvetica','bold');doc.setFontSize(size);doc.text(t,M,y);y+=6;};
+  const p=(t,size=9.5)=>{doc.setFont('helvetica','normal');doc.setFontSize(size);const lines=doc.splitTextToSize(t,W-M*2);doc.text(lines,M,y);y+=lines.length*4.4+2;};
+  const row=(k,v)=>{doc.setFont('helvetica','bold');doc.setFontSize(9.5);doc.text(k,M,y);doc.setFont('helvetica','normal');const lv=doc.splitTextToSize(String(v),W-M*2-52);doc.text(lv,M+52,y);y+=Math.max(5.4,lv.length*4.6);};
+  const line=()=>{doc.setDrawColor(200);doc.line(M,y,W-M,y);y+=6;};
+  const quebra=(lim=255)=>{ if(y>lim){ doc.addPage(); y=20; } };
+
+  doc.setFillColor(4,39,59); doc.rect(0,0,W,14,'F');
+  doc.setTextColor(255); doc.setFont('helvetica','bold'); doc.setFontSize(12);
+  doc.text('AGEMOB · AUTORIZAÇÃO DE VENDA '+tipoTxt, M, 9.5);
+  doc.setTextColor(16,24,40); y=24;
+  h('AUTORIZAÇÃO DE VENDA DE IMÓVEL '+tipoTxt, 13); y+=2;
+  doc.setFontSize(9); doc.setFont('helvetica','normal');
+  doc.text('Código da autorização: '+AG.code+'  ·  Emitida em '+d.toLocaleDateString('pt-BR')+' às '+d.toLocaleTimeString('pt-BR'),M,y); y+=8;
+  line();
+  h('1. IMOBILIÁRIA AUTORIZADA');
+  row('Razão social:',AG.imob.razao); row('CNPJ:',AG.imob.cnpj); row('Endereço:',AG.imob.end); y+=2;
+  h('2. PROPRIETÁRIO');
+  row('Nome:',V('p_nome')); row('CPF:',V('p_cpf')); if(V('p_rg')!=='—') row('RG:',V('p_rg'));
+  row('Estado civil:',V('p_civil')); row('Profissão:',V('p_prof'));
+  row('Contato:',V('p_zap')+' · '+V('p_email'));
+  row('Endereço:',`${V('p_end')}, ${V('p_num')} ${V('p_comp')!=='—'?V('p_comp'):''} - ${V('p_bairro')}, ${V('p_cidade')}`); y+=2;
+  h('3. IMÓVEL');
+  row('Tipo:',V('i_tipo'));
+  row('Endereço:',`${V('i_end')}, ${V('i_num')} - ${V('i_bairro')}, ${V('i_cidade')}`);
+  row('Valor de venda:', valor?BRL(valor):'—'); y+=2;
+  h('4. CONDIÇÕES');
+  p('PRAZO E RENOVAÇÃO — A presente autorização terá validade inicial de 365 (trezentos e sessenta e cinco) dias, contados da data de assinatura, com vencimento em '+venc.toLocaleDateString('pt-BR')+'. Ao término do prazo, será renovada automaticamente por períodos iguais e sucessivos, até manifestação contrária de qualquer das partes, comunicada formalmente com antecedência mínima de 30 (trinta) dias do vencimento.');
+  p('COMISSÃO DE CORRETAGEM — Será devida comissão de 6% (seis por cento) sobre o valor total da venda efetivamente realizada. A comissão permanecerá integralmente devida caso o imóvel seja vendido, durante a vigência desta autorização, a cliente apresentado pela imobiliária, originado de suas campanhas de marketing, cadastrado em seus sistemas ou apresentado por seus parceiros.');
+  if(AG.tipo==='exclusiva'){ p('EXCLUSIVIDADE — Toda negociação do imóvel deverá ser conduzida exclusivamente pela imobiliária autorizada. Caso o proprietário realize a venda diretamente ou por intermédio de terceiros durante o prazo de exclusividade, a comissão contratada permanecerá devida.'); }
+  else { p('MODALIDADE SEM EXCLUSIVIDADE — O proprietário poderá anunciar ou negociar o imóvel por meio de outras imobiliárias, sendo a comissão devida apenas à imobiliária que efetivamente intermediar a venda.'); }
+  p('ASSINATURA ELETRÔNICA — As partes reconhecem a validade jurídica da assinatura eletrônica aposta neste documento, nos termos do art. 10, §2º, da MP 2.200-2/2001 e da Lei nº 14.063/2020, acompanhada do conjunto probatório descrito no Certificado de Assinatura anexo.');
+  quebra(225);
+  h('5. ASSINATURA');
+  p('Assinado eletronicamente em '+d.toLocaleDateString('pt-BR')+' às '+d.toLocaleTimeString('pt-BR')+' · Dispositivo: '+(navigator.platform||'web')+' · Validação: agemob.com/validar/'+AG.code);
+  if(AG.sigImg){ doc.addImage(AG.sigImg,'PNG',M,y,70,22); }
+  y+=26; doc.setDrawColor(120); doc.line(M,y,M+80,y); y+=5;
+  doc.setFontSize(9); doc.text(V('p_nome')+' · CPF '+V('p_cpf'),M,y);
+  const qrCanvas=document.querySelector('#qrHolder canvas');
+  if(qrCanvas){ doc.addImage(qrCanvas.toDataURL('image/png'),'PNG',W-M-30,y-26,30,30); }
+  V2D.assinantes && V2D.assinantes.forEach(a=>{
+    y+=14; quebra(245);
+    doc.addImage(a.img,'PNG',M,y,60,18); y+=22;
+    doc.setDrawColor(120); doc.line(M,y,M+80,y); y+=5;
+    doc.setFontSize(9); doc.text(a.papel+': '+a.nome+(a.cpf?' · CPF '+a.cpf:''),M,y);
+  });
+  doc.setFontSize(8); doc.setTextColor(130);
+  doc.text('Documento gerado eletronicamente pela plataforma AGEMOB · Autorizações Imobiliárias Inteligentes · Código '+AG.code, M, 290);
+  doc.setTextColor(16,24,40);
+
+  /* Certificado */
+  doc.addPage(); y=24;
+  doc.setFillColor(184,134,11); doc.rect(0,0,W,14,'F');
+  doc.setTextColor(255); doc.setFont('helvetica','bold'); doc.setFontSize(12);
+  doc.text('AGEMOB · CERTIFICADO DE ASSINATURA ELETRÔNICA', M, 9.5);
+  doc.setTextColor(16,24,40);
+  const ev = V2D.evidAssinatura || V2E.snapshot();
+  h('CERTIFICADO DE ASSINATURA E CONJUNTO PROBATÓRIO', 13); y+=1;
+  p('Este certificado integra de forma inseparável o documento "Autorização de Venda '+tipoTxt+'", código '+AG.code+', e reúne as evidências técnicas e jurídicas coletadas no momento da assinatura.', 9);
+  line();
+  h('SIGNATÁRIO PRINCIPAL');
+  row('Nome completo:',V('p_nome')); row('CPF:',V('p_cpf'));
+  row('Telefone:',V('p_zap')); row('E-mail:',V('p_email')); y+=2;
+  h('IMÓVEL OBJETO');
+  row('Imóvel:',V('i_tipo')+' · '+V('i_end')+', '+V('i_num')+' · '+V('i_bairro')+' · '+V('i_cidade'));
+  row('Valor:',valor?BRL(valor):'—'); y+=2;
+  h('EVIDÊNCIAS DA ASSINATURA');
+  row('Data:',ev.dataHoraLocal); row('IP:',ev.ip); row('Geolocalização:',ev.geolocalizacao);
+  row('Navegador:',ev.navegador+' · '+ev.sistemaOperacional); row('Dispositivo:',ev.dispositivo);
+  row('Sessão:',ev.sessao); y+=2;
+  quebra(210);
+  h('VALIDAÇÕES REALIZADAS');
+  row('Aceite expresso:', V2D.aceite ? 'Registrado em '+V2D.aceite.data+' '+V2D.aceite.hora : '—');
+  const otps=(V2D.otp?Object.values(V2D.otp).filter(o=>o.validado):[]);
+  row('OTP:', otps.length?otps.map(o=>o.canal+' ('+o.destino+') · '+o.dataValidacao).join(' | '):'não exigido');
+  row('Reconhecimento facial:', V2D.facial?(V2D.facial.pendente?'análise manual':(V2D.facial.compatibilidade+'% · '+(V2D.facial.aprovado?'APROVADO':'reprovado'))):'não exigido');
+  row('Prova de vida:', V2D.liveness?((V2D.liveness.aprovado?'CONFIRMADA':'análise manual')+' · '+V2D.liveness.desafio):'não exigida');
+  const ups=Object.values(V2D.uploads||{});
+  if(ups.length){ row('Documentos anexos:',ups.length+' documento(s)'); ups.forEach(u=>row('· '+u.tipo+':',u.nome+' · '+u.quando+' · SHA-256 '+u.hash.slice(0,24)+'…')); }
+  else row('Documentos anexos:','nenhum'); y+=2;
+  quebra(225);
+  h('INTEGRIDADE DO DOCUMENTO');
+  row('Código de validação:','agemob.com/validar/'+AG.code);
+  doc.setFont('helvetica','bold'); doc.setFontSize(9.5); doc.text('Hash SHA-256:',M,y); y+=5;
+  doc.setFont('courier','normal'); doc.setFontSize(8.5);
+  doc.text(doc.splitTextToSize(V2D.hash||'—', W-M*2),M,y); y+=10;
+  doc.setFont('helvetica','normal'); doc.setFontSize(9);
+  p('Qualquer alteração posterior invalida a verificação do hash. Autenticidade verificável pelo QR Code ou código de validação.');
+  quebra(240);
+  if(qrCanvas){ doc.addImage(qrCanvas.toDataURL('image/png'),'PNG',W-M-32,y,32,32); }
+  let imgX=M;
+  const addEvidImg=(src,rotulo)=>{ try{ const fmt=src.startsWith('data:image/png')?'PNG':'JPEG'; doc.addImage(src,fmt,imgX,y,40,28); doc.setFontSize(7.5); doc.setTextColor(120); doc.text(rotulo,imgX,y+32); doc.setTextColor(16,24,40); imgX+=46; }catch(e){} };
+  if(V2D.selfie) addEvidImg(V2D.selfie.img,'Selfie do signatário');
+  ups.filter(u=>u.mime&&u.mime.startsWith('image')).forEach(u=>{ if(imgX+40>W-M-34) return; addEvidImg(u.b64,u.tipo+(u.origem==='foto capturada na hora'?' (foto na hora)':'')); });
+  y+=38;
+  if(V2D.assinantes&&V2D.assinantes.length){
+    quebra(200); h('ASSINANTES ADICIONAIS');
+    V2D.assinantes.forEach(a=>{ quebra(240); row(a.papel+':',a.nome+(a.cpf?' · CPF '+a.cpf:'')); row('Certificado:',a.certificado+' · '+a.evidencias.dataHoraLocal); row('Hash:',a.hash.slice(0,40)+'…'); y+=1; });
+  }
+
+  /* Auditoria */
+  doc.addPage(); y=24;
+  doc.setFillColor(4,39,59); doc.rect(0,0,W,14,'F');
+  doc.setTextColor(255); doc.setFont('helvetica','bold'); doc.setFontSize(12);
+  doc.text('AGEMOB · TRILHA DE AUDITORIA · '+AG.code, M, 9.5);
+  doc.setTextColor(16,24,40);
+  h('REGISTRO CRONOLÓGICO DE EVENTOS', 12); y+=2;
+  doc.setFontSize(8.5);
+  V2E.eventos.forEach(e=>{ quebra(275); doc.setFont('helvetica','bold'); doc.text(e.dataHoraLocal,M,y); doc.setFont('helvetica','normal'); const txt=doc.splitTextToSize(e.tipo+(e.detalhe?' — '+e.detalhe:'')+' · IP '+e.ip,W-M*2-42); doc.text(txt,M+42,y); y+=Math.max(4.8,txt.length*4.2)+1.5; });
+  doc.setFontSize(8); doc.setTextColor(130);
+  doc.text('Certificado gerado eletronicamente pela plataforma AGEMOB · Hash '+(V2D.hash||'').slice(0,32)+'…', M, 290);
+
+  return doc.output('blob');
+}
+
+/* ── Upload para Storage + metadados no Firestore ── */
+const V2Storage = {
+  status: 'idle',   // idle | uploading | ok | error
+  downloadURL: null,
+  storagePath: null,
+  erro: null
+};
+
+async function v2UploadPDF(){
+  fbInit();
+  if(!_fbStorage || !_fbFirestore){
+    console.warn('[AGEMOB Storage] Firebase não inicializado — verifique as credenciais em AGEMOB_FB_CONFIG.');
+    v2StorageUI('warn', 'Firebase não configurado. O PDF foi salvo localmente.');
+    return;
+  }
+
+  V2Storage.status = 'uploading';
+  v2StorageUI('uploading');
+  v2Evento('Upload do PDF iniciado', 'Storage: '+AG.code);
+
+  let blob;
+  try {
+    blob = await Promise.race([
+      v2GerarPDFBlob(),
+      new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout_pdf')), 30000))
+    ]);
+  } catch(e) {
+    v2StorageErro('Falha ao gerar o PDF para upload.', e); return;
+  }
+
+  /* Estrutura: autorizacoes/ANO/MES/CODIGO/autorizacao_assinada.pdf */
+  const agora = new Date();
+  const ano  = agora.getFullYear().toString();
+  const mes  = String(agora.getMonth()+1).padStart(2,'0');
+  const path = `autorizacoes/${ano}/${mes}/${AG.code}/autorizacao_assinada.pdf`;
+  V2Storage.storagePath = path;
+
+  try {
+    const ref = _fbStorage.ref(path);
+    const meta = { contentType:'application/pdf', customMetadata:{
+      autorizacaoId: AG.code, proprietario: V('p_nome'), cpf: V('p_cpf'),
+      dataAssinatura: agora.toISOString(), hash: V2D.hash||'', sistema:'AGEMOB v2'
+    }};
+
+    const snap = await Promise.race([
+      ref.put(blob, meta),
+      new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout_upload')), 60000))
+    ]);
+
+    V2Storage.downloadURL = await snap.ref.getDownloadURL();
+  } catch(e) {
+    if(e.message==='timeout_upload'){ v2StorageErro('Tempo limite excedido no upload. Verifique sua conexão.', e); }
+    else if(e.code==='storage/unauthorized'){ v2StorageErro('Sem permissão no Firebase Storage. Verifique as regras de segurança.', e); }
+    else if(e.code==='storage/canceled'){ v2StorageErro('Upload cancelado.', e); }
+    else { v2StorageErro('Falha no upload: '+e.message, e); }
+    return;
+  }
+
+  /* Metadados no Firestore */
+  try {
+    await _fbFirestore.collection('autorizacoes').doc(AG.code).set({
+      autorizacaoId:    AG.code,
+      nomeProprietario: V('p_nome'),
+      cpf:              V('p_cpf'),
+      telefone:         V('p_zap'),
+      email:            V('p_email'),
+      imovel:           V('i_tipo')+' · '+V('i_end')+', '+V('i_num')+' · '+V('i_bairro'),
+      valor:            moneyVal()||0,
+      tipo:             AG.tipo,
+      dataAssinatura:   agora.toISOString(),
+      dataAssinaturaLocal: agora.toLocaleString('pt-BR'),
+      storagePath:      path,
+      downloadURL:      V2Storage.downloadURL,
+      hash:             V2D.hash||'',
+      status:           'assinado',
+      validacoesOTP:    Object.values(V2D.otp||{}).filter(o=>o.validado).length,
+      reconhecimentoFacial: V2D.facial?(V2D.facial.pendente?'análise_manual':(V2D.facial.aprovado?'aprovado':'reprovado')):'nao_exigido',
+      provaDeVida:      V2D.liveness?(V2D.liveness.aprovado?'confirmada':'analise_manual'):'nao_exigida',
+      documentosAnexos: Object.values(V2D.uploads||{}).map(u=>({tipo:u.tipo,hash:u.hash})),
+      criadoEm:         firebase.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
+  } catch(e) {
+    /* Falha no Firestore não desfaz o upload já concluído */
+    console.warn('[AGEMOB Storage] PDF salvo no Storage mas falha ao gravar metadados no Firestore:', e);
+  }
+
+  V2Storage.status = 'ok';
+  v2Evento('Upload do PDF concluído', 'Storage: '+path+' · URL gerada com sucesso');
+  v2StorageUI('ok');
+}
+
+function v2StorageErro(msg, err){
+  V2Storage.status = 'error';
+  V2Storage.erro   = msg;
+  console.error('[AGEMOB Storage]', msg, err);
+  v2Evento('Erro no upload do PDF', msg);
+  v2StorageUI('error', msg);
+}
+
+/* ── UI de status do upload (injetada na tela de sucesso, não altera nada existente) ── */
+function v2StorageUI(estado, detalhe){
+  let box = document.getElementById('v2StorageBox');
+  if(!box){
+    box = document.createElement('div');
+    box.id = 'v2StorageBox';
+    box.style.cssText = 'margin:14px auto;max-width:480px;border-radius:12px;padding:14px 16px;font-size:13.5px;font-weight:600;text-align:center';
+    const btnPDF = document.querySelector('[data-step="6"] button[onclick="gerarPDF()"]');
+    if(btnPDF) btnPDF.after(box); else { const s=document.querySelector('[data-step="6"] .success'); if(s) s.appendChild(box); }
+  }
+  if(estado==='uploading'){
+    box.style.background='#EFF8FF'; box.style.border='1px solid #175CD3'; box.style.color='#175CD3';
+    box.innerHTML='☁ Salvando PDF assinado na nuvem…';
+  } else if(estado==='ok'){
+    box.style.background='#F0FDF4'; box.style.border='1px solid #ABEFC6'; box.style.color='#067647';
+    box.innerHTML = '✓ PDF salvo na nuvem com sucesso!'
+      + `<div style="margin-top:10px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
+          <a href="${V2Storage.downloadURL}" target="_blank" rel="noopener"
+             style="display:inline-block;padding:8px 16px;background:#067647;color:#fff;border-radius:8px;text-decoration:none;font-size:13px">
+             ⬇ Baixar da nuvem</a>
+          <button onclick="v2ReenviarPDFWhats()" style="padding:8px 16px;background:#25D366;color:#fff;border:none;border-radius:8px;font-size:13px;cursor:pointer;font-weight:600">
+             💬 Enviar link por WhatsApp</button>
+          <button onclick="v2ReenviarPDFEmail()" style="padding:8px 16px;background:var(--brand);color:#fff;border:none;border-radius:8px;font-size:13px;cursor:pointer;font-weight:600">
+             ✉ Enviar por e-mail</button>
+        </div>`;
+  } else if(estado==='error'){
+    box.style.background='#FEF3F2'; box.style.border='1px solid #FECDCA'; box.style.color='#D92D20';
+    box.innerHTML='⚠ '+( detalhe||'Erro ao salvar na nuvem.')+' O PDF está disponível para download local normalmente.';
+  } else if(estado==='warn'){
+    box.style.background='#FFFAEB'; box.style.border='1px solid #FEF0C7'; box.style.color='#B54708';
+    box.innerHTML='⚠ '+(detalhe||'Aviso.');
+  }
+}
+
+/* Reenvio por WhatsApp: envia o link do Storage via Z-API (se configurado) */
+async function v2ReenviarPDFWhats(){
+  if(!V2Storage.downloadURL){ showToast('Link do PDF ainda não disponível.','error'); return; }
+  const tel = V('p_zap');
+  const msg = `AGEMOB · Lux House Imóveis\n\nOlá, ${V('p_nome')}! Segue o link da sua Autorização de Venda assinada eletronicamente:\n\n${V2Storage.downloadURL}\n\nCódigo: ${AG.code}`;
+  let ok = false;
+  if(typeof v2EnviarWhatsReal === 'function') ok = await v2EnviarWhatsReal(tel, msg);
+  if(ok){ showToast('Link enviado por WhatsApp! ✓','success'); v2Evento('PDF reenviado por WhatsApp', tel); }
+  else  { /* fallback: abre o WhatsApp Web com o link pré-preenchido */
+    const fone = String(tel).replace(/\D/g,''); const num = fone.length<=11?'55'+fone:fone;
+    window.open('https://wa.me/'+num+'?text='+encodeURIComponent(msg),'_blank');
+    v2Evento('PDF reenviado por WhatsApp (web)', tel);
+  }
+}
+
+/* Reenvio por e-mail: abre o cliente de e-mail padrão com o link */
+function v2ReenviarPDFEmail(){
+  if(!V2Storage.downloadURL){ showToast('Link do PDF ainda não disponível.','error'); return; }
+  const dest = V('p_email');
+  const sub  = encodeURIComponent('Autorização de Venda assinada — AGEMOB / Lux House · '+AG.code);
+  const body = encodeURIComponent(
+    'Olá, '+V('p_nome')+'!\n\n'+
+    'Segue o link da sua Autorização de Venda assinada eletronicamente:\n\n'+
+    V2Storage.downloadURL+'\n\n'+
+    'Código de validação: '+AG.code+'\n'+
+    'Hash SHA-256: '+(V2D.hash||'')+'\n\n'+
+    'Lux House Imóveis — AGEMOB');
+  window.location.href = `mailto:${dest}?subject=${sub}&body=${body}`;
+  v2Evento('PDF reenviado por e-mail', dest);
+}
+
+/* ── Hook na função v2Concluir: dispara o upload após TODAS as assinaturas ── */
+const _v1_v2Concluir = v2Concluir;
+v2Concluir = function(){
+  _v1_v2Concluir();              // executa tudo original primeiro (sem alterar nada)
+  setTimeout(v2UploadPDF, 800);  // aguarda o QR Code renderizar, depois sobe o PDF
+};
+
+/* ════════════ CEP ANTES DO ENDEREÇO (etapas "Seus dados" e "Dados do imóvel") ════════════
+   Reordenação feita via DOM, sem alterar o HTML original. O cliente busca o CEP
+   primeiro e o endereço é preenchido automaticamente. */
+(function(){
+  [['p_cep','p_end'],['i_cep','i_end']].forEach(([cep,end])=>{
+    const cepField = document.getElementById(cep)?.closest('.field');
+    const endField = document.getElementById(end)?.closest('.field');
+    if(cepField && endField) endField.before(cepField);
+  });
+})();
+
+/* ════════════ ENVIO REAL DO OTP PELO WHATSAPP ════════════
+   Integração direta com provedores de API de WhatsApp usados no Brasil
+   (Z-API ou Evolution API). As credenciais são configuradas pelo gestor
+   no painel e ficam salvas no navegador (localStorage).
+   ⚠ Em produção definitiva, o recomendado é mover o envio para um backend,
+   para que o token não fique exposto no navegador do cliente. */
+function v2GetWhats(){ try{ return JSON.parse(localStorage.getItem('agemob_whats'))||null; }catch(e){ return null; } }
+function v2AbrirWhats(){
+  const w = v2GetWhats()||{provedor:'zapi'};
+  const body = document.getElementById('v2WhatsBody');
+  body.innerHTML = `
+    <div class="field"><label>Provedor de API do WhatsApp</label>
+      <select id="v2w_prov" onchange="v2WhatsCampos()">
+        <option value="zapi" ${w.provedor==='zapi'?'selected':''}>Z-API (z-api.io)</option>
+        <option value="evolution" ${w.provedor==='evolution'?'selected':''}>Evolution API (self-hosted)</option>
+      </select></div>
+    <div id="v2w_zapi" class="${w.provedor==='evolution'?'hidden':''}">
+      <div class="field"><label>ID da instância</label><input id="v2w_zid" placeholder="Ex.: 3C7D0F..." value="${w.instancia||''}"></div>
+      <div class="field"><label>Token da instância</label><input id="v2w_ztk" placeholder="Token" value="${w.token||''}"></div>
+      <div class="field"><label>Client-Token (Segurança da conta)</label><input id="v2w_zct" placeholder="Client-Token (aba Segurança no painel Z-API)" value="${w.clientToken||''}"></div>
+    </div>
+    <div id="v2w_evo" class="${w.provedor==='evolution'?'':'hidden'}">
+      <div class="field"><label>URL do servidor</label><input id="v2w_eurl" placeholder="https://seu-servidor.com" value="${w.servidor||''}"></div>
+      <div class="field"><label>Nome da instância</label><input id="v2w_einst" placeholder="luxhouse" value="${w.instancia||''}"></div>
+      <div class="field"><label>API Key</label><input id="v2w_ekey" placeholder="apikey" value="${w.token||''}"></div>
+    </div>
+    <div class="field"><label>Testar envio para (seu WhatsApp)</label>
+      <div class="cep-row"><input id="v2w_teste" placeholder="(48) 9 9999-9999" oninput="maskTel(this)" maxlength="16">
+      <button class="btn-cep" onclick="v2TestarWhats()">Enviar teste</button></div></div>
+    <div class="hint">Sem configuração, o sistema permanece em modo demonstração (código exibido na tela).
+    Para produção definitiva, recomenda-se intermediar o envio por um backend para não expor o token.</div>
+    <div class="nav-row" style="margin-top:14px">
+      <button class="btn btn-ghost" onclick="document.getElementById('v2ModalWhats').classList.remove('open')">Cancelar</button>
+      <button class="btn btn-primary" onclick="v2SalvarWhats()">Salvar conexão ✓</button>
+    </div>`;
+  document.getElementById('v2ModalWhats').classList.add('open');
+}
+function v2WhatsCampos(){
+  const p = document.getElementById('v2w_prov').value;
+  document.getElementById('v2w_zapi').classList.toggle('hidden', p!=='zapi');
+  document.getElementById('v2w_evo').classList.toggle('hidden', p!=='evolution');
+}
+function v2SalvarWhats(){
+  const p = document.getElementById('v2w_prov').value;
+  const w = p==='zapi'
+    ? { provedor:'zapi', instancia:document.getElementById('v2w_zid').value.trim(), token:document.getElementById('v2w_ztk').value.trim(), clientToken:document.getElementById('v2w_zct').value.trim() }
+    : { provedor:'evolution', servidor:document.getElementById('v2w_eurl').value.trim().replace(/\/$/,''), instancia:document.getElementById('v2w_einst').value.trim(), token:document.getElementById('v2w_ekey').value.trim() };
+  localStorage.setItem('agemob_whats', JSON.stringify(w));
+  AGEMOB_PROVIDERS.otp.driver = 'whatsapp';
+  v2Evento('Conexão WhatsApp configurada', w.provedor);
+  showToast('Conexão WhatsApp salva. O OTP será enviado de verdade. ✓','success');
+  document.getElementById('v2ModalWhats').classList.remove('open');
+}
+function v2FoneBR(num){
+  let d = String(num||'').replace(/\D/g,'');
+  if(d.length===10 || d.length===11) d = '55'+d;
+  return d;
+}
+/** Envia mensagem real pelo provedor configurado. Retorna true/false. */
+async function v2EnviarWhatsReal(numero, texto){
+  const w = v2GetWhats(); if(!w) return false;
+  const fone = v2FoneBR(numero);
+  if(fone.length<12) return false;
+  try{
+    if(w.provedor==='zapi'){
+      const r = await fetch(`https://api.z-api.io/instances/${w.instancia}/token/${w.token}/send-text`,{
+        method:'POST',
+        headers:Object.assign({'Content-Type':'application/json'}, w.clientToken?{'Client-Token':w.clientToken}:{}),
+        body:JSON.stringify({phone:fone, message:texto})});
+      return r.ok;
+    } else {
+      const r = await fetch(`${w.servidor}/message/sendText/${encodeURIComponent(w.instancia)}`,{
+        method:'POST',
+        headers:{'Content-Type':'application/json','apikey':w.token},
+        body:JSON.stringify({number:fone, text:texto})});
+      return r.ok;
+    }
+  }catch(e){ return false; }
+}
+async function v2TestarWhats(){
+  const num = document.getElementById('v2w_teste').value;
+  if(!num.trim()){ showToast('Informe o número para o teste.','error'); return; }
+  /* salva as credenciais sem fechar o modal */
+  const p = document.getElementById('v2w_prov').value;
+  const w = p==='zapi'
+    ? { provedor:'zapi', instancia:document.getElementById('v2w_zid').value.trim(), token:document.getElementById('v2w_ztk').value.trim(), clientToken:document.getElementById('v2w_zct').value.trim() }
+    : { provedor:'evolution', servidor:document.getElementById('v2w_eurl').value.trim().replace(/\/$/,''), instancia:document.getElementById('v2w_einst').value.trim(), token:document.getElementById('v2w_ekey').value.trim() };
+  localStorage.setItem('agemob_whats', JSON.stringify(w));
+  showToast('Enviando mensagem de teste…','info');
+  const ok = await v2EnviarWhatsReal(num, 'AGEMOB · Mensagem de teste da conexão WhatsApp. Sua integração está funcionando. ✓');
+  showToast(ok?'Teste enviado! Confira seu WhatsApp. ✓':'Falha no envio. Verifique credenciais, número e se o provedor permite requisições do navegador (CORS).', ok?'success':'error');
+}
+/* botão de configuração no painel admin */
+(function(){
+  const head = document.querySelector('#viewAdmin .page-head');
+  if(!head || document.getElementById('v2WhatsBtn')) return;
+  const b = document.createElement('button');
+  b.className='btn btn-ghost btn-lg'; b.id='v2WhatsBtn';
+  b.innerHTML='💬 WhatsApp (OTP)'; b.onclick=v2AbrirWhats;
+  head.insertBefore(b, document.getElementById('v2ConfigBtn'));
+})();
+/* modal de configuração */
+(function(){
+  const d = document.createElement('div');
+  d.className='overlay'; d.id='v2ModalWhats';
+  d.innerHTML = `<div class="modal" style="max-width:520px;max-height:88vh;overflow:auto">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+      <h2>💬 Conexão WhatsApp (OTP)</h2>
+      <button class="btn btn-ghost" onclick="document.getElementById('v2ModalWhats').classList.remove('open')">✕</button>
+    </div>
+    <p class="hint" style="margin-bottom:12px">Conecte sua API de WhatsApp para que o código OTP chegue de verdade no aparelho do cliente.</p>
+    <div id="v2WhatsBody"></div></div>`;
+  document.body.appendChild(d);
+})();
+
+/* ---- sobrescreve o envio do OTP: usa WhatsApp real quando configurado ---- */
+const _v1_v2EnviarOTP = v2EnviarOTP;
+v2EnviarOTP = async function(id){
+  const [canal] = V2_CANAL[id];
+  const destino = id==='conf_email' ? V('p_email') : V('p_zap');
+  const codigo = String(Math.floor(100000+Math.random()*900000));
+  V2D.otp[id] = { codigo, canal, destino, enviadoEm: new Date().toLocaleString('pt-BR'), tentativas:0, validado:false };
+  document.getElementById('v2OTPArea').classList.remove('hidden');
+  let enviadoReal = false;
+  if(id==='conf_whatsapp' && v2GetWhats()){
+    showToast('Enviando código pelo WhatsApp…','info');
+    enviadoReal = await v2EnviarWhatsReal(destino,
+      'AGEMOB · Lux House Imóveis\n\nSeu código de verificação é: *'+codigo+'*\n\nEle confirma a sua assinatura eletrônica da autorização de venda (código '+(AG.code||'')+'). Não compartilhe este código com ninguém.');
+  }
+  const d = document.getElementById('v2DemoOTP');
+  if(enviadoReal){
+    if(d) d.style.display='none';
+    v2Evento('OTP enviado (WhatsApp real)', destino);
+    showToast('Código enviado para o WhatsApp '+destino+'. ✓','success');
+  } else {
+    if(AGEMOB_V2.demo && d){ d.style.display=''; d.textContent='🔧 Modo demonstração — código gerado: '+codigo; }
+    if(id==='conf_whatsapp' && v2GetWhats()) showToast('Falha no envio real — exibindo código em modo demonstração.','error');
+    else showToast('Código enviado por '+canal+'.','success');
+    v2Evento('OTP enviado', canal+' → '+destino);
+  }
+  const i0=document.getElementById('v2otp0'); if(i0) i0.focus();
+};
+
+/* ════════════ VOLTAR AO PAINEL DURANTE O PREENCHIMENTO (COM AVISO) ════════════ */
+/* Confirma antes de sair se a autorização estiver no meio do preenchimento */
+const _v1_backToAdmin = backToAdmin;
+backToAdmin = function(){
+  const ownerAtivo = !document.getElementById('viewOwner').classList.contains('hidden');
+  const emPreenchimento = ownerAtivo && step < 6; // etapa 6 = concluída, sai sem aviso
+  if(emPreenchimento){
+    const ok = confirm('⚠ Atenção: ao voltar ao painel principal, todos os dados preenchidos nesta autorização serão perdidos.\n\nDeseja realmente sair?');
+    if(!ok) return;
+    v2Evento('Preenchimento abandonado','Saída para o painel na etapa '+(v2Idx>=0?('validação: '+(V2_CATALOGO.find(s=>s.id===v2Fila[v2Idx])||{}).nome):step));
+  }
+  v2DesligarCamera();
+  v2Idx=-1;
+  _v1_backToAdmin();
+};
+/* botão visível no topo do fluxo do proprietário (aditivo, injetado via JS) */
+(function(){
+  const head = document.querySelector('#viewOwner .owner-head') || document.querySelector('#viewOwner');
+  if(!head || document.getElementById('v2BtnPainel')) return;
+  const b = document.createElement('button');
+  b.className='btn btn-ghost'; b.id='v2BtnPainel';
+  b.style.cssText='margin:10px auto 0;display:block;font-size:13px;padding:8px 16px';
+  b.innerHTML='↩ Voltar ao painel principal';
+  b.onclick=()=>backToAdmin();
+  const prog = document.getElementById('prog');
+  if(prog) prog.before(b); else head.appendChild(b);
+})();
+</script>
+
+</body>
+</html>
