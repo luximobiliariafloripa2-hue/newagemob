@@ -2754,19 +2754,38 @@ v2EnviarOTP = async function(id){
     enviadoReal = await v2EnviarWhatsReal(destino,
       'AGEMOB · Lux House Imóveis\n\nSeu código de verificação é: *'+codigo+'*\n\nEle confirma a sua assinatura eletrônica da autorização de venda (código '+(AG.code||'')+'). Não compartilhe este código com ninguém.');
   }
+  if(id==='conf_email'){
+    showToast('Enviando código por e-mail…','info');
+    enviadoReal = await v2EnviarEmailReal(destino,
+      'Seu código de verificação — AGEMOB',
+      'Seu código de verificação é: '+codigo+'\n\nEle confirma a sua assinatura eletrônica da autorização de venda (código '+(AG.code||'')+'). Não compartilhe este código com ninguém.\n\nEquipe Lux House Imóveis',
+      '<p>Seu código de verificação é: <b style="font-size:22px">'+codigo+'</b></p><p>Ele confirma a sua assinatura eletrônica da autorização de venda (código '+(AG.code||'')+'). Não compartilhe este código com ninguém.</p><p>Equipe Lux House Imóveis</p>');
+  }
   const d = document.getElementById('v2DemoOTP');
   if(enviadoReal){
     if(d) d.style.display='none';
-    v2Evento('OTP enviado (WhatsApp real)', destino);
-    showToast('Código enviado para o WhatsApp '+destino+'. ✓','success');
+    v2Evento('OTP enviado ('+canal+' real)', destino);
+    showToast('Código enviado para '+(id==='conf_email'?'o e-mail':'o WhatsApp')+' '+destino+'. ✓','success');
   } else {
     if(AGEMOB_V2.demo && d){ d.style.display=''; d.textContent='🔧 Modo demonstração — código gerado: '+codigo; }
-    if(id==='conf_whatsapp' && v2GetWhats()) showToast('Falha no envio real — exibindo código em modo demonstração.','error');
+    if((id==='conf_whatsapp' && v2GetWhats()) || id==='conf_email') showToast('Falha no envio real — exibindo código em modo demonstração.','error');
     else showToast('Código enviado por '+canal+'.','success');
     v2Evento('OTP enviado', canal+' → '+destino);
   }
   const i0=document.getElementById('v2otp0'); if(i0) i0.focus();
 };
+
+/** Envia e-mail real via servidor (Gmail SMTP). Retorna true/false. */
+async function v2EnviarEmailReal(destino, assunto, texto, html){
+  try{
+    const r = await fetch('/api/enviar-email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ destino, assunto, texto, html })
+    });
+    return r.ok;
+  }catch(e){ return false; }
+}
 
 /* ════════════ VOLTAR AO PAINEL DURANTE O PREENCHIMENTO (COM AVISO) ════════════ */
 /* Confirma antes de sair se a autorização estiver no meio do preenchimento */

@@ -7,6 +7,7 @@ const express = require('express');
 const path    = require('path');
 const fs      = require('fs');
 const Datastore = require('nedb-promises');
+const nodemailer = require('nodemailer');
 const { gerarAutorizacaoPDF } = require('./services/pdf');
 
 const app  = express();
@@ -100,6 +101,44 @@ app.post('/api/fluxo-config', async (req, res) => {
     res.json({ ok: true });
   } catch (e) {
     res.status(500).json({ erro: 'Falha ao salvar configuração: ' + e.message });
+  }
+});
+
+// ---------- Envio de e-mail (OTP e notificações) via Gmail SMTP ----------
+// Configurado com GMAIL_USER e GMAIL_APP_PASSWORD nas variáveis de ambiente do Render.
+// GMAIL_APP_PASSWORD é uma "senha de app" do Google, não a senha normal da conta.
+let mailer = null;
+if (process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD) {
+  mailer = nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+      user: process.env.GMAIL_USER,
+      pass: process.env.GMAIL_APP_PASSWORD
+    }
+  });
+}
+
+app.post('/api/enviar-email', async (req, res) => {
+  try {
+    const { destino, assunto, texto, html } = req.body;
+    if (!destino || !assunto || (!texto && !html)) {
+      return res.status(422).json({ erro: 'Campos destino, assunto e texto/html são obrigatórios.' });
+    }
+    if (!mailer) {
+      return res.status(503).json({ erro: 'Envio de e-mail não configurado no servidor.' });
+    }
+    await mailer.sendMail({
+      from: `"Lux House Imóveis · AGEMOB" <${process.env.GMAIL_USER}>`,
+      to: destino,
+      subject: assunto,
+      text: texto || undefined,
+      html: html || undefined
+    });
+    await log('email', `E-mail enviado para ${destino}: ${assunto}`);
+    res.json({ ok: true });
+  } catch (e) {
+    await log('erro', 'Falha ao enviar e-mail: ' + e.message);
+    res.status(500).json({ erro: 'Falha ao enviar e-mail: ' + e.message });
   }
 });
 
