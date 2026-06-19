@@ -1,7 +1,7 @@
 {
   "name": "agemob",
   "version": "1.1.0",
-  "description": "AGEMOB — Autorizações Imobiliárias Inteligentes com assinatura digital via Clicksign",
+  "description": "AGEMOB — Autorizações Imobiliárias Inteligentes com links públicos e assinatura digital nativa",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"

@@ -73,7 +73,7 @@ function gerarAutorizacaoPDF(aut, imob) {
     }
 
     titulo('5. ASSINATURA ELETRÔNICA');
-    paragrafo('Este documento será assinado eletronicamente por meio da plataforma Clicksign, que atende aos requisitos de integridade, autenticidade e não repúdio previstos na legislação brasileira (MP 2.200-2/2001 e Lei 14.063/2020). A assinatura, o certificado e o log de evidências integram este instrumento.');
+    paragrafo('Este documento será assinado eletronicamente, atendendo aos requisitos de integridade, autenticidade e não repúdio previstos na legislação brasileira (MP 2.200-2/2001 e Lei 14.063/2020). A assinatura e o log de evidências integram este instrumento.');
 
     doc.moveDown(2);
     doc.font('Helvetica').fontSize(9).fillColor('#101828');

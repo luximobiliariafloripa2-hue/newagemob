@@ -306,6 +306,10 @@ label{display:block;font-size:13px;font-weight:600;color:var(--ink-2);margin-bot
       <input id="genLink" readonly>
       <button class="btn btn-ghost" onclick="copyLink()" id="copyBtn">Copiar</button>
     </div>
+    <div style="display:flex;gap:8px;margin-bottom:10px">
+      <button class="btn btn-ghost" style="flex:1;background:#25D366;color:#fff;border-color:#25D366" onclick="enviarWhatsAppLink()">💬 WhatsApp</button>
+      <button class="btn btn-ghost" style="flex:1" onclick="enviarEmailLink()">✉ E-mail</button>
+    </div>
     <div style="display:flex;gap:10px">
       <button class="btn btn-primary" style="flex:1" onclick="openOwner()">Simular como proprietário →</button>
       <button class="btn btn-ghost" onclick="closeModal()">Fechar</button>
@@ -510,6 +514,35 @@ label{display:block;font-size:13px;font-weight:600;color:var(--ink-2);margin-bot
 <button class="btn btn-ghost switch-view hidden" id="btnBack" onclick="backToAdmin()">↩ Painel da imobiliária</button>
 
 <script>
+/* ================= BASE_URL ================= */
+window.AGEMOB_BASE_URL = window.location.origin; // fallback imediato
+fetch('/api/base-url').then(r=>r.json()).then(d=>{ if(d.baseUrl) window.AGEMOB_BASE_URL = d.baseUrl; }).catch(()=>{});
+
+/* ================= ROTA DO PROPRIETÁRIO ================= */
+/* Se a URL for /autorizacao/CODIGO, abre direto o formulário do proprietário
+   sem passar pelo login administrativo. Usa openOwner() (definida mais abaixo,
+   já sobrescrita pelo motor V2) para que a fila de etapas seja montada com a
+   configuração correta vinda do servidor. */
+(function(){
+  const m = window.location.pathname.match(/^\/autorizacao\/([A-Z0-9]+)$/i);
+  if(!m) return;
+  const codigo = m[1].toUpperCase();
+  window.addEventListener('load', function(){
+    const login = document.getElementById('viewLogin');
+    if(login) login.style.display = 'none';
+    AG.code = codigo;
+    const abrir = function(){
+      if(typeof openOwner === 'function') openOwner();
+      const btnBack = document.getElementById('btnBack');
+      if(btnBack) btnBack.classList.add('hidden');
+      window.scrollTo(0,0);
+    };
+    if(typeof v2CfgPronto !== 'undefined' && v2CfgPronto) abrir();
+    else if(typeof v2CarregarConfigServidor === 'function') v2CarregarConfigServidor().then(abrir);
+    else abrir();
+  });
+})();
+
 /* ================= AUTENTICAÇÃO ================= */
 /**
  * Usuários cadastrados no sistema.
@@ -756,7 +789,7 @@ function reenviarLink(idx){
     return;
   }
   const code = a.code || 'AGM-'+Math.random().toString(36).substr(2,9).toUpperCase();
-  const link = `agemob.com/autorizacao/${code}`;
+  const link = (window.AGEMOB_BASE_URL || window.location.origin) + '/autorizacao/' + code;
   navigator.clipboard?.writeText(link).catch(()=>{});
   showToast('Link copiado com sucesso.', 'success');
 }
@@ -790,7 +823,8 @@ function genCode(){
 }
 function novaAutorizacao(){
   AG.code = genCode();
-  document.getElementById('genLink').value = `agemob.com/autorizacao/${AG.code}`;
+  const link = (window.AGEMOB_BASE_URL || window.location.origin) + '/autorizacao/' + AG.code;
+  document.getElementById('genLink').value = link;
   document.getElementById('copyBtn').textContent='Copiar';
   document.getElementById('modalLink').classList.add('open');
 }
@@ -799,6 +833,26 @@ function copyLink(){
   document.getElementById('copyBtn').textContent='Copiado ✓';
 }
 function closeModal(){ document.getElementById('modalLink').classList.remove('open'); }
+
+function enviarWhatsAppLink(){
+  const link = document.getElementById('genLink').value;
+  const msg = encodeURIComponent(
+    'Olá!\n\nSegue o link para preenchimento e assinatura da autorização de venda do seu imóvel.\n\n' +
+    link +
+    '\n\nTodo o processo leva menos de 5 minutos.\n\nEquipe Lux House Imóveis'
+  );
+  window.open('https://wa.me/?text=' + msg, '_blank');
+}
+function enviarEmailLink(){
+  const link = document.getElementById('genLink').value;
+  const assunto = encodeURIComponent('Autorização de Venda do Imóvel');
+  const corpo = encodeURIComponent(
+    'Olá!\n\nSegue abaixo o link para preenchimento e assinatura digital da autorização de venda do seu imóvel.\n\n' +
+    link +
+    '\n\nCaso tenha dúvidas, estamos à disposição.\n\nEquipe Lux House Imóveis.'
+  );
+  window.location.href = 'mailto:?subject=' + assunto + '&body=' + corpo;
+}
 
 /* ================= OWNER FLOW ================= */
 const TOTAL_STEPS=5;
@@ -1251,7 +1305,7 @@ checkAuth();
    ════════════════════════════════════════════════════════════════════ */
 
 /* ---------- 17. ARQUITETURA PREPARADA PARA INTEGRAÇÕES FUTURAS ----------
-   Interface de provedores. Para integrar Clicksign, D4Sign, DocuSign ou
+   Interface de provedores. Para integrar D4Sign, DocuSign ou
    ZapSign no futuro, basta registrar um driver que implemente:
      enviarOTP(canal, destino) -> Promise<{enviado:bool, ref:string}>
      validarOTP(ref, codigo)   -> Promise<{valido:bool}>
@@ -1259,7 +1313,7 @@ checkAuth();
      compararFaces(imgDoc, imgSelfie) -> Promise<{score:0..1}>
    Nenhuma integração é realizada agora — apenas a estrutura. */
 window.AGEMOB_PROVIDERS = {
-  assinatura: { driver: 'nativo', drivers: { nativo: true, clicksign: null, d4sign: null, docusign: null, zapsign: null } },
+  assinatura: { driver: 'nativo', drivers: { nativo: true, d4sign: null, docusign: null, zapsign: null } },
   otp:        { driver: 'demo',   drivers: { demo: true, twilio: null, zapi: null, smtp: null } },
   facial:     { driver: 'local',  drivers: { local: true, aws_rekognition: null, serpro: null } }
 };
@@ -1348,11 +1402,28 @@ function v2ConfigPadrao(){
            facialObrigatorio: false, preset: null };
 }
 function v2GetConfig(){
+  // Usa o último valor conhecido (cache local) enquanto a versão do servidor carrega.
   try{ const c = JSON.parse(localStorage.getItem('agemob_fluxo'));
        if(c && c.ordem && c.ativos) return c; }catch(e){}
   return v2ConfigPadrao();
 }
 let v2Cfg = v2GetConfig();
+let v2CfgPronto = false; // true assim que a config do servidor for confirmada
+
+/* Busca a configuração real do servidor — vale para todos os dispositivos.
+   Atualiza v2Cfg assim que chega; se o link público já tiver sido aberto
+   antes disso, refaz a fila de etapas com a config correta. */
+function v2CarregarConfigServidor(){
+  return fetch('/api/fluxo-config').then(r=>r.json()).then(d=>{
+    if(d && d.ordem && d.ativos){
+      v2Cfg = d;
+      try{ localStorage.setItem('agemob_fluxo', JSON.stringify(v2Cfg)); }catch(e){}
+    }
+    v2CfgPronto = true;
+    return v2Cfg;
+  }).catch(()=>{ v2CfgPronto = true; return v2Cfg; });
+}
+v2CarregarConfigServidor();
 let v2CfgTmp = null;
 
 function v2AbrirFluxo(){
@@ -1403,6 +1474,11 @@ function v2ToggleFacialObrig(){ v2CfgTmp.facialObrigatorio=!v2CfgTmp.facialObrig
 function v2SalvarFluxo(){
   v2Cfg = v2CfgTmp;
   localStorage.setItem('agemob_fluxo', JSON.stringify(v2Cfg));
+  fetch('/api/fluxo-config', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(v2Cfg)
+  }).catch(()=>{});
   v2Evento('Configuração de fluxo alterada', 'Etapas ativas: '+v2Cfg.ordem.filter(id=>v2Cfg.ativos[id]).join(', '));
   showToast('Fluxo de assinatura salvo com sucesso.', 'success');
   v2CloseFluxo();
