@@ -7,7 +7,6 @@ const express = require('express');
 const path    = require('path');
 const fs      = require('fs');
 const Datastore = require('nedb-promises');
-const nodemailer = require('nodemailer');
 const { gerarAutorizacaoPDF } = require('./services/pdf');
 
 const app  = express();
@@ -104,18 +103,27 @@ app.post('/api/fluxo-config', async (req, res) => {
   }
 });
 
-// ---------- Envio de e-mail (OTP e notificações) via Gmail SMTP ----------
-// Configurado com GMAIL_USER e GMAIL_APP_PASSWORD nas variáveis de ambiente do Render.
-// GMAIL_APP_PASSWORD é uma "senha de app" do Google, não a senha normal da conta.
-let mailer = null;
-if (process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD) {
-  mailer = nodemailer.createTransport({
-    service: 'gmail',
-    auth: {
-      user: process.env.GMAIL_USER,
-      pass: process.env.GMAIL_APP_PASSWORD
-    }
+// ---------- Envio de e-mail via Resend (fetch nativo — Node 18+) ----------
+async function enviarEmailResend(destino, assunto, texto, html) {
+  const r = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      from: 'AGEMOB · Lux House Imóveis <onboarding@resend.dev>',
+      to: [destino],
+      subject: assunto,
+      text: texto || undefined,
+      html: html || undefined
+    })
   });
+  if (!r.ok) {
+    const err = await r.text();
+    throw new Error(`Resend erro ${r.status}: ${err}`);
+  }
+  return r.json();
 }
 
 app.post('/api/enviar-email', async (req, res) => {
@@ -124,16 +132,10 @@ app.post('/api/enviar-email', async (req, res) => {
     if (!destino || !assunto || (!texto && !html)) {
       return res.status(422).json({ erro: 'Campos destino, assunto e texto/html são obrigatórios.' });
     }
-    if (!mailer) {
+    if (!process.env.RESEND_API_KEY) {
       return res.status(503).json({ erro: 'Envio de e-mail não configurado no servidor.' });
     }
-    await mailer.sendMail({
-      from: `"Lux House Imóveis · AGEMOB" <${process.env.GMAIL_USER}>`,
-      to: destino,
-      subject: assunto,
-      text: texto || undefined,
-      html: html || undefined
-    });
+    await enviarEmailResend(destino, assunto, texto, html);
     await log('email', `E-mail enviado para ${destino}: ${assunto}`);
     res.json({ ok: true });
   } catch (e) {
