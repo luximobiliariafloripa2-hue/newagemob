@@ -1106,7 +1106,7 @@ function assinar(){
   notificarMudancaStatus();
   document.getElementById('finalCode').textContent='Código: '+AG.code;
   const qh=document.getElementById('qrHolder'); qh.innerHTML='';
-  new QRCode(qh,{text:(window.AGEMOB_BASE_URL||window.location.origin)+'/validar/'+AG.code(window.AGEMOB_BASE_URL||window.location.origin)+'/validar/'+AG.code,width:110,height:110,colorDark:'#04273B'});
+  new QRCode(qh,{text:(window.AGEMOB_BASE_URL||window.location.origin)+'/validar/'+AG.code,width:110,height:110,colorDark:'#04273B'});
   step=6; showStep();
 }
 
@@ -2017,7 +2017,7 @@ assinar = async function(){
 function v2Concluir(){
   document.getElementById('finalCode').textContent='Código: '+AG.code+'  ·  Hash: '+V2D.hash.slice(0,20)+'…';
   const qh=document.getElementById('qrHolder'); qh.innerHTML='';
-  new QRCode(qh,{text:(window.AGEMOB_BASE_URL||window.location.origin)+'/validar/'+AG.code(window.AGEMOB_BASE_URL||window.location.origin)+'/validar/'+AG.code,width:110,height:110,colorDark:'#04273B'});
+  new QRCode(qh,{text:(window.AGEMOB_BASE_URL||window.location.origin)+'/validar/'+AG.code,width:110,height:110,colorDark:'#04273B'});
   /* link de validação (aditivo) abaixo do QR */
   let lk=document.getElementById('v2LinkValidar');
   if(!lk){ lk=document.createElement('div'); lk.id='v2LinkValidar'; lk.style.cssText='text-align:center;margin-top:10px'; }
