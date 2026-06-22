@@ -103,25 +103,25 @@ app.post('/api/fluxo-config', async (req, res) => {
   }
 });
 
-// ---------- Envio de e-mail via Resend (fetch nativo — Node 18+) ----------
-async function enviarEmailResend(destino, assunto, texto, html) {
-  const r = await fetch('https://api.resend.com/emails', {
+// ---------- Envio de e-mail via Brevo (API HTTP — funciona no Render free) ----------
+async function enviarEmailBrevo(destino, assunto, texto, html) {
+  const r = await fetch('https://api.brevo.com/v3/smtp/email', {
     method: 'POST',
     headers: {
-      'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
+      'api-key': process.env.BREVO_API_KEY,
       'Content-Type': 'application/json'
     },
     body: JSON.stringify({
-      from: 'AGEMOB · Lux House Imóveis <onboarding@resend.dev>',
-      to: [destino],
+      sender: { name: 'AGEMOB · Lux House Imóveis', email: 'luximobiliariafloripa2@gmail.com' },
+      to: [{ email: destino }],
       subject: assunto,
-      text: texto || undefined,
-      html: html || undefined
+      textContent: texto || undefined,
+      htmlContent: html || undefined
     })
   });
   if (!r.ok) {
     const err = await r.text();
-    throw new Error(`Resend erro ${r.status}: ${err}`);
+    throw new Error(`Brevo erro ${r.status}: ${err}`);
   }
   return r.json();
 }
@@ -132,10 +132,10 @@ app.post('/api/enviar-email', async (req, res) => {
     if (!destino || !assunto || (!texto && !html)) {
       return res.status(422).json({ erro: 'Campos destino, assunto e texto/html são obrigatórios.' });
     }
-    if (!process.env.RESEND_API_KEY) {
+    if (!process.env.BREVO_API_KEY) {
       return res.status(503).json({ erro: 'Envio de e-mail não configurado no servidor.' });
     }
-    await enviarEmailResend(destino, assunto, texto, html);
+    await enviarEmailBrevo(destino, assunto, texto, html);
     await log('email', `E-mail enviado para ${destino}: ${assunto}`);
     res.json({ ok: true });
   } catch (e) {
