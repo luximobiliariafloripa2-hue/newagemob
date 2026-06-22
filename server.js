@@ -241,6 +241,40 @@ app.post('/api/autorizacoes/assinar', async (req, res) => {
     res.status(500).json({ erro: 'Falha ao salvar a autorização.' });
   }
 });
+
+/** Salvar rascunho preenchido pelo corretor */
+app.post('/api/autorizacoes/rascunho', async (req, res) => {
+  try {
+    const { codigo, proprietario, imovel, preenchidoPorCorretor } = req.body;
+    if (!codigo || !proprietario?.nome) {
+      return res.status(422).json({ erro: 'Dados incompletos.' });
+    }
+    const aut = {
+      codigo,
+      proprietario,
+      imovel,
+      tipo: null,
+      status: 'rascunho',
+      preenchidoPorCorretor: !!preenchidoPorCorretor,
+      corretor: 'Lux House',
+      criadoEm: new Date().toISOString(),
+      atualizadoEm: new Date().toISOString()
+    };
+    await db.autorizacoes.insert(aut);
+    await log('autorizacao', `Rascunho criado pelo corretor: ${codigo} (${proprietario.nome})`);
+    res.json({ ok: true, codigo });
+  } catch (e) {
+    res.status(500).json({ erro: 'Falha ao salvar rascunho: ' + e.message });
+  }
+});
+
+/** Buscar dados de uma autorização pelo código */
+app.get('/api/autorizacoes/codigo/:codigo', async (req, res) => {
+  const aut = await db.autorizacoes.findOne({ codigo: req.params.codigo });
+  if (!aut) return res.json(null);
+  res.json(aut);
+});
+
 app.post('/api/autorizacoes/:id/cancelar', async (req, res) => {
   try {
     const aut = await db.autorizacoes.findOne({ _id: req.params.id });
