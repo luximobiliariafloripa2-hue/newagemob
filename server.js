@@ -209,7 +209,38 @@ app.post('/api/autorizacoes/:id/enviar', async (req, res) => {
   }
 });
 
-/** Cancelar autorização */
+/** Salvar autorização assinada pelo proprietário */
+app.post('/api/autorizacoes/assinar', async (req, res) => {
+  try {
+    const { codigo, proprietario, imovel, tipo, hash, evidencias, otp, facial, liveness, uploads } = req.body;
+    if (!codigo || !proprietario?.nome) {
+      return res.status(422).json({ erro: 'Dados incompletos.' });
+    }
+    const venc = new Date();
+    venc.setDate(venc.getDate() + 365);
+    const aut = {
+      codigo,
+      proprietario,
+      imovel,
+      tipo: tipo || 'simples',
+      status: 'assinado',
+      hash: hash || null,
+      evidencias: evidencias || null,
+      validacoes: { otp: otp || [], facial: facial || null, liveness: liveness || null, uploads: uploads || [] },
+      corretor: 'Lux House',
+      criadoEm: new Date().toISOString(),
+      assinadoEm: new Date().toISOString(),
+      vencimento: venc.toLocaleDateString('pt-BR'),
+      atualizadoEm: new Date().toISOString()
+    };
+    const salvo = await db.autorizacoes.insert(aut);
+    await log('autorizacao', `Autorização assinada: ${codigo} (${proprietario.nome})`);
+    res.json({ ok: true, _id: salvo._id });
+  } catch (e) {
+    await log('erro', 'Erro ao salvar assinatura: ' + e.message);
+    res.status(500).json({ erro: 'Falha ao salvar a autorização.' });
+  }
+});
 app.post('/api/autorizacoes/:id/cancelar', async (req, res) => {
   try {
     const aut = await db.autorizacoes.findOne({ _id: req.params.id });

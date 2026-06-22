@@ -609,16 +609,30 @@ const AG = {
   sigImg: null,
   sigModeNow: "draw",
   docs: {},
-  autorizacoes: [
-    {prop:"Marina Telles Duarte", imovel:"Apartamento · Jurerê Internacional", valor:2850000, tipo:"exclusiva", status:"ativa",      venc:"14/03/2027", corretor:"Lucas Siqueira"},
-    {prop:"Ricardo Sant'Anna",     imovel:"Casa · Daniela",                    valor:1990000, tipo:"simples",   status:"ativa",      venc:"02/02/2027", corretor:"Rodrigo Brito"},
-    {prop:"Helena Borba",          imovel:"Terreno · Cachoeira do Bom Jesus",  valor:760000,  tipo:"simples",   status:"aguardando", venc:"—",          corretor:"Lucas Siqueira"},
-    {prop:"Fábio Mendonça",        imovel:"Casa · Jurerê Internacional",       valor:5400000, tipo:"exclusiva", status:"ativa",      venc:"21/05/2027", corretor:"Rodrigo Brito"},
-    {prop:"Patrícia Lemos",        imovel:"Apartamento · Ingleses",            valor:890000,  tipo:"simples",   status:"vencida",    venc:"30/04/2026", corretor:"Lucas Siqueira"},
-    {prop:"João Vitor Ramos",      imovel:"Sala Comercial · Jurerê Office 408",valor:640000,  tipo:"exclusiva", status:"ativa",      venc:"11/01/2027", corretor:"Rodrigo Brito"},
-  ]
+  autorizacoes: []
 };
 const BRL = v => v.toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+
+/* ================= BUSCA AUTORIZAÇÕES DO SERVIDOR ================= */
+async function carregarAutorizacoes(){
+  try{
+    const r = await fetch('/api/autorizacoes');
+    const lista = await r.json();
+    AG.autorizacoes = lista.map(a => ({
+      prop:     a.proprietario?.nome || '—',
+      imovel:   `${a.imovel?.tipo || 'Imóvel'} · ${a.imovel?.bairro || a.imovel?.cidade || '—'}`,
+      valor:    a.imovel?.valor || 0,
+      tipo:     a.tipo || 'simples',
+      status:   a.status || 'assinado',
+      venc:     a.vencimento || '—',
+      corretor: a.corretor || 'Lux House',
+      code:     a.codigo,
+      hash:     a.hash,
+      _id:      a._id
+    }));
+    renderKPIs(); renderTable();
+  }catch(e){ console.error('Erro ao carregar autorizações:', e); }
+}
 
 /* ================= ATUALIZAÇÃO AUTOMÁTICA EM TEMPO REAL ================= */
 /**
@@ -627,10 +641,10 @@ const BRL = v => v.toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
  */
 let _realtimeInterval = null;
 function iniciarAtualizacaoRealtime(){
-  // Atualiza imediatamente e depois a cada 15 segundos
-  renderKPIs(); renderTable();
+  // Carrega do servidor imediatamente e depois a cada 15 segundos
+  carregarAutorizacoes();
   clearInterval(_realtimeInterval);
-  _realtimeInterval = setInterval(()=>{ renderKPIs(); renderTable(); }, 15000);
+  _realtimeInterval = setInterval(()=>{ carregarAutorizacoes(); }, 15000);
 }
 
 /** Notifica mudança de status e força re-render imediato */
@@ -2607,11 +2621,36 @@ function v2ReenviarPDFEmail(){
   v2Evento('PDF reenviado por e-mail', dest);
 }
 
-/* ── Hook na função v2Concluir: dispara o upload após TODAS as assinaturas ── */
+/* ── Hook na função v2Concluir: dispara o upload e salva no servidor ── */
 const _v1_v2Concluir = v2Concluir;
 v2Concluir = function(){
   _v1_v2Concluir();              // executa tudo original primeiro (sem alterar nada)
   setTimeout(v2UploadPDF, 800);  // aguarda o QR Code renderizar, depois sobe o PDF
+  // Salva a autorização assinada no banco do servidor
+  fetch('/api/autorizacoes/assinar', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      codigo:      AG.code,
+      proprietario: {
+        nome:  V('p_nome'), cpf: V('p_cpf'), rg: V('p_rg'),
+        email: V('p_email'), zap: V('p_zap'),
+        civil: V('p_civil'), prof: V('p_prof'),
+        end:   V('p_end'), num: V('p_num'), bairro: V('p_bairro'), cidade: V('p_cidade')
+      },
+      imovel: {
+        tipo:   V('i_tipo'), end: V('i_end'), num: V('i_num'),
+        bairro: V('i_bairro'), cidade: V('i_cidade'), valor: moneyVal()
+      },
+      tipo:      AG.tipo,
+      hash:      V2D.hash || null,
+      evidencias: V2D.evidAssinatura || null,
+      otp:       Object.values(V2D.otp||{}).filter(o=>o.validado).map(o=>({canal:o.canal,destino:o.destino,validadoEm:o.dataValidacao})),
+      facial:    V2D.facial ? {compatibilidade:V2D.facial.compatibilidade, aprovado:V2D.facial.aprovado} : null,
+      liveness:  V2D.liveness ? {aprovado:V2D.liveness.aprovado} : null,
+      uploads:   Object.values(V2D.uploads||{}).map(u=>({tipo:u.tipo, hash:u.hash}))
+    })
+  }).catch(()=>{});
 };
 
 /* ════════════ CEP ANTES DO ENDEREÇO (etapas "Seus dados" e "Dados do imóvel") ════════════
@@ -2802,18 +2841,6 @@ backToAdmin = function(){
   v2Idx=-1;
   _v1_backToAdmin();
 };
-/* botão visível no topo do fluxo do proprietário (aditivo, injetado via JS) */
-(function(){
-  const head = document.querySelector('#viewOwner .owner-head') || document.querySelector('#viewOwner');
-  if(!head || document.getElementById('v2BtnPainel')) return;
-  const b = document.createElement('button');
-  b.className='btn btn-ghost'; b.id='v2BtnPainel';
-  b.style.cssText='margin:10px auto 0;display:block;font-size:13px;padding:8px 16px';
-  b.innerHTML='↩ Voltar ao painel principal';
-  b.onclick=()=>backToAdmin();
-  const prog = document.getElementById('prog');
-  if(prog) prog.before(b); else head.appendChild(b);
-})();
 </script>
 
 </body>
