@@ -659,7 +659,7 @@ function renderKPIs(){
   const vgv = a.reduce((s,x)=>s+x.valor,0);
   const k = [
     {l:"Total de autorizações",    n:a.length,                                    s:"todas as modalidades", c:""},
-    {l:"Ativas",                   n:a.filter(x=>x.status==='ativa').length,       s:"em vigência",          c:"k-green"},
+    {l:"Ativas",                   n:a.filter(x=>x.status==='ativa'||x.status==='assinado').length,       s:"em vigência",          c:"k-green"},
     {l:"Com exclusividade",        n:a.filter(x=>x.tipo==='exclusiva').length,     s:"gestão completa",      c:"k-gold"},
     {l:"Sem exclusividade",        n:a.filter(x=>x.tipo==='simples').length,       s:"modalidade aberta",    c:""},
     {l:"Aguardando assinatura",    n:a.filter(x=>x.status==='aguardando').length,  s:"links enviados",       c:""},
@@ -682,7 +682,7 @@ function renderChart(){
  * Cada botão recebe o índice da autorização para operar sobre os dados corretos.
  */
 function renderTable(){
-  const map={ativa:['b-green','Ativa'],aguardando:['b-blue','Aguardando assinatura'],vencida:['b-red','Vencida']};
+  const map={ativa:['b-green','Ativa'],assinado:['b-green','Assinado'],aguardando:['b-blue','Aguardando assinatura'],vencida:['b-red','Vencida'],cancelado:['b-gray','Cancelado'],recusado:['b-red','Recusado'],rascunho:['b-gray','Rascunho']};
   document.getElementById('tblBody').innerHTML = AG.autorizacoes.map((a, idx)=>{
     const [cls,txt]=map[a.status]||['b-gray','Desconhecido'];
     const tipo = a.tipo==='exclusiva' ? '<span class="badge b-gold">⭐ Exclusiva</span>' : '<span class="badge b-gray">Sem exclusividade</span>';
@@ -708,7 +708,7 @@ renderChart();
 function visualizarAutorizacao(idx){
   const a = AG.autorizacoes[idx];
   if(!a) return;
-  const map={ativa:['b-green','Ativa'],aguardando:['b-blue','Aguardando assinatura'],vencida:['b-red','Vencida']};
+  const map={ativa:['b-green','Ativa'],assinado:['b-green','Assinado'],aguardando:['b-blue','Aguardando assinatura'],vencida:['b-red','Vencida'],cancelado:['b-gray','Cancelado'],recusado:['b-red','Recusado'],rascunho:['b-gray','Rascunho']};
   const [cls,txt]=map[a.status]||['b-gray','Desconhecido'];
   const tipo = a.tipo==='exclusiva' ? '⭐ Com exclusividade' : 'Sem exclusividade';
   const comissao = BRL(a.valor * 0.06).replace(',00','');
