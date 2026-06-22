@@ -336,26 +336,16 @@ label{display:block;font-size:13px;font-weight:600;color:var(--ink-2);margin-bot
     <div class="grid2">
       <div class="field" style="grid-column:1/-1"><label>Nome completo *</label><input id="p_nome" placeholder="Ex.: Bruno Amorim Costa"></div>
       <div class="field"><label>CPF *</label><input id="p_cpf" placeholder="000.000.000-00" oninput="maskCPF(this)" maxlength="14"></div>
-      <div class="field"><label>RG</label><input id="p_rg" placeholder="Número do RG"></div>
       <div class="field"><label>Data de nascimento</label><input id="p_nasc" type="date"></div>
       <div class="field"><label>Estado civil</label>
         <select id="p_civil"><option>Solteiro(a)</option><option>Casado(a)</option><option>Divorciado(a)</option><option>Viúvo(a)</option><option>União estável</option></select>
       </div>
       <div class="field"><label>Profissão</label><input id="p_prof" placeholder="Ex.: Empresário"></div>
       <div class="field"><label>WhatsApp *</label><input id="p_zap" placeholder="(48) 9 9999-9999" oninput="maskTel(this)" maxlength="16"></div>
-      <div class="field"><label>E-mail *</label><input id="p_email" type="email" placeholder="voce@email.com"></div>
-      <div class="field">
-        <label>CEP</label>
-        <div class="cep-row">
-          <input id="p_cep" placeholder="88053-000" oninput="maskCEPOnly(this)" maxlength="9">
-          <button class="btn-cep" id="btnBuscarCepP" onclick="buscarCEP('p')">Buscar CEP</button>
-        </div>
-      </div>
-      <div class="field" style="grid-column:1/-1"><label>Endereço</label><input id="p_end" placeholder="Rua, avenida..."></div>
-      <div class="field"><label>Número</label><input id="p_num"></div>
-      <div class="field"><label>Complemento</label><input id="p_comp"></div>
-      <div class="field"><label>Bairro</label><input id="p_bairro"></div>
-      <div class="field"><label>Cidade / UF</label><input id="p_cidade" placeholder="Florianópolis/SC"></div>
+      <div class="field" style="grid-column:1/-1"><label>E-mail *</label><input id="p_email" type="email" placeholder="voce@email.com"></div>
+      <!-- campos de endereço ocultos mas mantidos para compatibilidade com PDF e banco -->
+      <input type="hidden" id="p_rg"><input type="hidden" id="p_cep"><input type="hidden" id="p_end">
+      <input type="hidden" id="p_num"><input type="hidden" id="p_comp"><input type="hidden" id="p_bairro"><input type="hidden" id="p_cidade">
     </div>
     <div class="nav-row">
       <span></span>
@@ -385,6 +375,7 @@ label{display:block;font-size:13px;font-weight:600;color:var(--ink-2);margin-bot
         </div>
       </div>
       <div class="field"><label>Bairro *</label><input id="i_bairro" placeholder="Ex.: Jurerê Internacional"></div>
+      <div class="field"><label>Complemento</label><input id="i_comp" placeholder="Apto, bloco, sala..."></div>
       <div class="field"><label>Cidade / UF *</label><input id="i_cidade" value="Florianópolis/SC"></div>
     </div>
     <div class="nav-row">
@@ -1115,7 +1106,7 @@ function assinar(){
   notificarMudancaStatus();
   document.getElementById('finalCode').textContent='Código: '+AG.code;
   const qh=document.getElementById('qrHolder'); qh.innerHTML='';
-  new QRCode(qh,{text:`https://agemob.com/validar/${AG.code}`,width:110,height:110,colorDark:'#04273B'});
+  new QRCode(qh,{text:(window.AGEMOB_BASE_URL||window.location.origin)+'/validar/'+AG.code(window.AGEMOB_BASE_URL||window.location.origin)+'/validar/'+AG.code,width:110,height:110,colorDark:'#04273B'});
   step=6; showStep();
 }
 
@@ -1179,7 +1170,7 @@ function gerarPDF(){
   if(y>225){ doc.addPage(); y=20; }
 
   h('5. ASSINATURA');
-  p('Assinado eletronicamente em '+d.toLocaleDateString('pt-BR')+' às '+d.toLocaleTimeString('pt-BR')+' · Dispositivo: '+(navigator.platform||'web')+' · Validação: agemob.com/validar/'+AG.code);
+  p('Assinado eletronicamente em '+d.toLocaleDateString('pt-BR')+' às '+d.toLocaleTimeString('pt-BR')+' · Dispositivo: '+(navigator.platform||'web')+' · Validação: '+(window.AGEMOB_BASE_URL||window.location.origin)+'/validar/'+AG.code);
   if(AG.sigImg){ doc.addImage(AG.sigImg,'PNG',M,y,70,22); }
   y+=26;
   doc.setDrawColor(120); doc.line(M,y,M+80,y); y+=5;
@@ -2026,7 +2017,7 @@ assinar = async function(){
 function v2Concluir(){
   document.getElementById('finalCode').textContent='Código: '+AG.code+'  ·  Hash: '+V2D.hash.slice(0,20)+'…';
   const qh=document.getElementById('qrHolder'); qh.innerHTML='';
-  new QRCode(qh,{text:`https://agemob.com/validar/${AG.code}`,width:110,height:110,colorDark:'#04273B'});
+  new QRCode(qh,{text:(window.AGEMOB_BASE_URL||window.location.origin)+'/validar/'+AG.code(window.AGEMOB_BASE_URL||window.location.origin)+'/validar/'+AG.code,width:110,height:110,colorDark:'#04273B'});
   /* link de validação (aditivo) abaixo do QR */
   let lk=document.getElementById('v2LinkValidar');
   if(!lk){ lk=document.createElement('div'); lk.id='v2LinkValidar'; lk.style.cssText='text-align:center;margin-top:10px'; }
@@ -2146,7 +2137,7 @@ gerarPDF = function(){
   p('ASSINATURA ELETRÔNICA — As partes reconhecem a validade jurídica da assinatura eletrônica aposta neste documento, nos termos do art. 10, §2º, da MP 2.200-2/2001 e da Lei nº 14.063/2020, acompanhada do conjunto probatório descrito no Certificado de Assinatura anexo.');
   quebra(225);
   h('5. ASSINATURA');
-  p('Assinado eletronicamente em '+d.toLocaleDateString('pt-BR')+' às '+d.toLocaleTimeString('pt-BR')+' · Dispositivo: '+(navigator.platform||'web')+' · Validação: agemob.com/validar/'+AG.code);
+  p('Assinado eletronicamente em '+d.toLocaleDateString('pt-BR')+' às '+d.toLocaleTimeString('pt-BR')+' · Dispositivo: '+(navigator.platform||'web')+' · Validação: '+(window.AGEMOB_BASE_URL||window.location.origin)+'/validar/'+AG.code);
   if(AG.sigImg){ doc.addImage(AG.sigImg,'PNG',M,y,70,22); }
   y+=26; doc.setDrawColor(120); doc.line(M,y,M+80,y); y+=5;
   doc.setFontSize(9); doc.text(V('p_nome')+' · CPF '+V('p_cpf'),M,y);
@@ -2209,7 +2200,7 @@ gerarPDF = function(){
   } y+=2;
   quebra(225);
   h('INTEGRIDADE DO DOCUMENTO');
-  row('Código de validação:','agemob.com/validar/'+AG.code);
+  row('Código de validação:',(window.AGEMOB_BASE_URL||window.location.origin)+'/validar/'+AG.code);
   doc.setFont('helvetica','bold'); doc.setFontSize(9.5); doc.text('Hash SHA-256:',M,y); y+=5;
   doc.setFont('courier','normal'); doc.setFontSize(8.5);
   doc.text(doc.splitTextToSize(V2D.hash||'—', W-M*2),M,y); y+=10;
@@ -2376,7 +2367,7 @@ async function v2GerarPDFBlob(){
   p('ASSINATURA ELETRÔNICA — As partes reconhecem a validade jurídica da assinatura eletrônica aposta neste documento, nos termos do art. 10, §2º, da MP 2.200-2/2001 e da Lei nº 14.063/2020, acompanhada do conjunto probatório descrito no Certificado de Assinatura anexo.');
   quebra(225);
   h('5. ASSINATURA');
-  p('Assinado eletronicamente em '+d.toLocaleDateString('pt-BR')+' às '+d.toLocaleTimeString('pt-BR')+' · Dispositivo: '+(navigator.platform||'web')+' · Validação: agemob.com/validar/'+AG.code);
+  p('Assinado eletronicamente em '+d.toLocaleDateString('pt-BR')+' às '+d.toLocaleTimeString('pt-BR')+' · Dispositivo: '+(navigator.platform||'web')+' · Validação: '+(window.AGEMOB_BASE_URL||window.location.origin)+'/validar/'+AG.code);
   if(AG.sigImg){ doc.addImage(AG.sigImg,'PNG',M,y,70,22); }
   y+=26; doc.setDrawColor(120); doc.line(M,y,M+80,y); y+=5;
   doc.setFontSize(9); doc.text(V('p_nome')+' · CPF '+V('p_cpf'),M,y);
@@ -2424,7 +2415,7 @@ async function v2GerarPDFBlob(){
   else row('Documentos anexos:','nenhum'); y+=2;
   quebra(225);
   h('INTEGRIDADE DO DOCUMENTO');
-  row('Código de validação:','agemob.com/validar/'+AG.code);
+  row('Código de validação:',(window.AGEMOB_BASE_URL||window.location.origin)+'/validar/'+AG.code);
   doc.setFont('helvetica','bold'); doc.setFontSize(9.5); doc.text('Hash SHA-256:',M,y); y+=5;
   doc.setFont('courier','normal'); doc.setFontSize(8.5);
   doc.text(doc.splitTextToSize(V2D.hash||'—', W-M*2),M,y); y+=10;
@@ -2738,7 +2729,7 @@ async function v2EnviarWhatsReal(numero, texto){
       const r = await fetch(`${w.servidor}/message/sendText/${encodeURIComponent(w.instancia)}`,{
         method:'POST',
         headers:{'Content-Type':'application/json','apikey':w.token},
-        body:JSON.stringify({number:fone, text:texto})});
+        body:JSON.stringify({number:fone, text:(window.AGEMOB_BASE_URL||window.location.origin)+'/validar/'+AG.codetexto})});
       return r.ok;
     }
   }catch(e){ return false; }
