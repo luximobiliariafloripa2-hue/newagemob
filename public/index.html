@@ -265,12 +265,36 @@ label{display:block;font-size:13px;font-weight:600;color:var(--ink-2);margin-bot
   <div class="kpis" id="saKpis"></div>
 
   <!-- Lista de imobiliárias -->
+  <!-- Alertas de limite -->
+  <div id="saAlertas" style="margin-bottom:14px"></div>
+
+  <!-- Ranking -->
+  <div class="panel" style="margin-bottom:14px">
+    <h2>🏆 Ranking de utilização (mês atual)</h2>
+    <div id="saRanking"></div>
+  </div>
+
   <div class="panel">
-    <h2>Imobiliárias cadastradas</h2>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <h2>Clientes cadastrados</h2>
+      <div style="display:flex;gap:8px">
+        <select id="saFiltroTipo" onchange="filtrarClientes()" style="padding:8px 12px;border:1.5px solid var(--line);border-radius:8px;font-size:13px">
+          <option value="">Todos os tipos</option>
+          <option value="imobiliaria">Imobiliárias</option>
+          <option value="corretor">Corretores</option>
+        </select>
+        <select id="saFiltroStatus" onchange="filtrarClientes()" style="padding:8px 12px;border:1.5px solid var(--line);border-radius:8px;font-size:13px">
+          <option value="">Todos os status</option>
+          <option value="ativo">Ativos</option>
+          <option value="suspenso">Suspensos</option>
+          <option value="inativo">Inativos</option>
+        </select>
+      </div>
+    </div>
     <div class="tbl-scroll">
       <table class="tbl">
         <thead><tr>
-          <th>Imobiliária</th><th>CNPJ</th><th>Plano</th><th>Autorizações</th><th>Status</th><th>Ações</th>
+          <th>Cliente</th><th>Tipo</th><th>CPF/CNPJ</th><th>Plano</th><th>Uso do mês</th><th>Créditos</th><th>Status</th><th>Ações</th>
         </tr></thead>
         <tbody id="saTableBody"></tbody>
       </table>
@@ -278,37 +302,115 @@ label{display:block;font-size:13px;font-weight:600;color:var(--ink-2);margin-bot
   </div>
 </main>
 
-<!-- MODAL: Nova Imobiliária -->
+<!-- MODAL: Novo Cliente (Imobiliária ou Corretor) -->
 <div class="overlay" id="modalNovaImob">
-  <div class="modal" style="max-width:580px;max-height:90vh;overflow-y:auto">
+  <div class="modal" style="max-width:640px;max-height:92vh;overflow-y:auto">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-      <h2>Nova Imobiliária</h2>
+      <h2>Novo Cliente</h2>
       <button class="btn btn-ghost" style="padding:6px 12px" onclick="document.getElementById('modalNovaImob').classList.remove('open')">✕</button>
     </div>
-    <h3 style="font-size:13px;color:var(--ink-3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Dados da imobiliária</h3>
-    <div class="grid2">
-      <div class="field" style="grid-column:1/-1"><label>Nome *</label><input id="ni_nome" placeholder="Ex.: Imobiliária ABC"></div>
-      <div class="field"><label>CNPJ *</label><input id="ni_cnpj" placeholder="00.000.000/0001-00"></div>
-      <div class="field"><label>E-mail *</label><input id="ni_email" type="email" placeholder="contato@imob.com.br"></div>
-      <div class="field" style="grid-column:1/-1"><label>Endereço</label><input id="ni_end" placeholder="Rua, número, cidade/UF"></div>
-      <div class="field"><label>Cor primária</label><input id="ni_cor" type="color" value="#04273B"></div>
-      <div class="field"><label>Plano</label>
-        <select id="ni_plano">
-          <option value="starter">Starter (até 50 autorizações/mês)</option>
-          <option value="pro" selected>Pro (até 200 autorizações/mês)</option>
-          <option value="enterprise">Enterprise (ilimitado)</option>
-        </select>
+
+    <!-- Tipo de cliente -->
+    <div class="field">
+      <label>Tipo de cliente *</label>
+      <div style="display:flex;gap:10px">
+        <div class="choice sel" id="tc_imob" onclick="setTipoCliente('imobiliaria')" style="flex:1;padding:14px;cursor:pointer">
+          <h3 style="font-size:14px">🏢 Imobiliária</h3>
+          <p style="font-size:12px;color:var(--ink-2)">Pessoa Jurídica com CNPJ</p>
+        </div>
+        <div class="choice" id="tc_corretor" onclick="setTipoCliente('corretor')" style="flex:1;padding:14px;cursor:pointer">
+          <h3 style="font-size:14px">👤 Corretor Autônomo</h3>
+          <p style="font-size:12px;color:var(--ink-2)">Pessoa Física com CPF</p>
+        </div>
       </div>
     </div>
-    <h3 style="font-size:13px;color:var(--ink-3);text-transform:uppercase;letter-spacing:.5px;margin:16px 0 10px">Admin da imobiliária</h3>
-    <div class="grid2">
-      <div class="field"><label>Nome do admin *</label><input id="ni_adminNome" placeholder="Ex.: João Silva"></div>
-      <div class="field"><label>E-mail de login *</label><input id="ni_adminEmail" placeholder="joao@imob.com.br"></div>
-      <div class="field" style="grid-column:1/-1"><label>Senha inicial *</label><input id="ni_adminSenha" type="password" placeholder="Mínimo 8 caracteres"></div>
+
+    <!-- Dados da imobiliária -->
+    <div id="ni_campos_imob">
+      <h3 style="font-size:13px;color:var(--ink-3);text-transform:uppercase;letter-spacing:.5px;margin:14px 0 10px">Dados da empresa</h3>
+      <div class="grid2">
+        <div class="field"><label>Razão Social *</label><input id="ni_razao" placeholder="Ex.: Imobiliária ABC Ltda."></div>
+        <div class="field"><label>Nome Fantasia</label><input id="ni_fantasia" placeholder="Ex.: ABC Imóveis"></div>
+        <div class="field"><label>CNPJ *</label><input id="ni_cnpj" placeholder="00.000.000/0001-00" oninput="maskCNPJ(this)" maxlength="18"></div>
+        <div class="field"><label>CRECI Jurídico *</label><input id="ni_creci" placeholder="Ex.: 12345-J"></div>
+        <div class="field"><label>Telefone</label><input id="ni_tel" placeholder="(48) 3333-3333" oninput="maskTel(this)" maxlength="16"></div>
+        <div class="field"><label>WhatsApp</label><input id="ni_zap" placeholder="(48) 9 9999-9999" oninput="maskTel(this)" maxlength="16"></div>
+        <div class="field"><label>E-mail *</label><input id="ni_email" type="email" placeholder="contato@imob.com.br"></div>
+        <div class="field"><label>Site</label><input id="ni_site" placeholder="https://"></div>
+      </div>
+      <h3 style="font-size:13px;color:var(--ink-3);text-transform:uppercase;letter-spacing:.5px;margin:14px 0 10px">Sócio responsável / Responsável legal</h3>
+      <div class="grid2">
+        <div class="field" style="grid-column:1/-1"><label>Nome completo *</label><input id="ni_respNome" placeholder="Nome do responsável"></div>
+        <div class="field"><label>CPF *</label><input id="ni_respCpf" placeholder="000.000.000-00" oninput="maskCPF(this)" maxlength="14"></div>
+        <div class="field"><label>CRECI *</label><input id="ni_respCreci" placeholder="Ex.: 12345-F"></div>
+        <div class="field"><label>Telefone</label><input id="ni_respTel" placeholder="(48) 9 9999-9999" oninput="maskTel(this)" maxlength="16"></div>
+        <div class="field"><label>E-mail</label><input id="ni_respEmail" type="email" placeholder="responsavel@imob.com.br"></div>
+      </div>
     </div>
+
+    <!-- Dados do corretor autônomo -->
+    <div id="ni_campos_corretor" class="hidden">
+      <h3 style="font-size:13px;color:var(--ink-3);text-transform:uppercase;letter-spacing:.5px;margin:14px 0 10px">Dados do corretor</h3>
+      <div class="grid2">
+        <div class="field" style="grid-column:1/-1"><label>Nome completo *</label><input id="ni_nome_corr" placeholder="Ex.: João da Silva"></div>
+        <div class="field"><label>CPF *</label><input id="ni_cpf_corr" placeholder="000.000.000-00" oninput="maskCPF(this)" maxlength="14"></div>
+        <div class="field"><label>CRECI *</label><input id="ni_creci_corr" placeholder="Ex.: 12345-F"></div>
+        <div class="field"><label>Telefone</label><input id="ni_tel_corr" placeholder="(48) 9 9999-9999" oninput="maskTel(this)" maxlength="16"></div>
+        <div class="field"><label>WhatsApp</label><input id="ni_zap_corr" placeholder="(48) 9 9999-9999" oninput="maskTel(this)" maxlength="16"></div>
+        <div class="field"><label>E-mail *</label><input id="ni_email_corr" type="email" placeholder="corretor@email.com"></div>
+      </div>
+    </div>
+
+    <!-- Endereço (ambos os tipos) -->
+    <h3 style="font-size:13px;color:var(--ink-3);text-transform:uppercase;letter-spacing:.5px;margin:14px 0 10px">Endereço</h3>
+    <div class="grid2">
+      <div class="field">
+        <label>CEP</label>
+        <div class="cep-row">
+          <input id="ni_cep" placeholder="00000-000" oninput="maskCEPOnly(this)" maxlength="9">
+          <button class="btn-cep" onclick="buscarCEPAdmin()">Buscar</button>
+        </div>
+      </div>
+      <div class="field"><label>Número</label><input id="ni_num" placeholder="123"></div>
+      <div class="field" style="grid-column:1/-1"><label>Logradouro</label><input id="ni_logradouro" placeholder="Rua, Avenida..."></div>
+      <div class="field"><label>Complemento</label><input id="ni_comp" placeholder="Sala, Andar..."></div>
+      <div class="field"><label>Bairro</label><input id="ni_bairro" placeholder="Bairro"></div>
+      <div class="field"><label>Cidade</label><input id="ni_cidade" placeholder="Cidade"></div>
+      <div class="field"><label>Estado</label><input id="ni_estado" placeholder="SC" maxlength="2"></div>
+    </div>
+
+    <!-- Plano e configurações -->
+    <h3 style="font-size:13px;color:var(--ink-3);text-transform:uppercase;letter-spacing:.5px;margin:14px 0 10px">Plano e acesso</h3>
+    <div class="grid2">
+      <div class="field"><label>Plano *</label><select id="ni_planoId"><option value="">Carregando...</option></select></div>
+      <div class="field"><label>Status</label>
+        <select id="ni_status"><option value="ativo">Ativo</option><option value="inativo">Inativo</option><option value="suspenso">Suspenso</option></select>
+      </div>
+      <div class="field"><label>Cor primária</label><input id="ni_cor" type="color" value="#04273B"></div>
+    </div>
+    <h3 style="font-size:13px;color:var(--ink-3);text-transform:uppercase;letter-spacing:.5px;margin:14px 0 10px">Credenciais de acesso</h3>
+    <div class="grid2">
+      <div class="field"><label>E-mail de login *</label><input id="ni_adminEmail" placeholder="login@imob.com.br"></div>
+      <div class="field"><label>Senha inicial *</label><input id="ni_adminSenha" type="password" placeholder="Mínimo 8 caracteres"></div>
+    </div>
+
     <div class="nav-row" style="margin-top:16px">
       <button class="btn btn-ghost" onclick="document.getElementById('modalNovaImob').classList.remove('open')">Cancelar</button>
-      <button class="btn btn-primary" onclick="criarImobiliaria()">Criar imobiliária ✓</button>
+      <button class="btn btn-primary" onclick="criarImobiliaria()">Criar cliente ✓</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Créditos Extras -->
+<div class="overlay" id="modalCreditos">
+  <div class="modal" style="max-width:420px">
+    <h2>Adicionar créditos</h2>
+    <p style="color:var(--ink-2);font-size:13.5px;margin-bottom:16px">Adicione créditos extras manualmente para <b id="creditosImobNome"></b>.</p>
+    <div class="field"><label>Quantidade *</label><input id="cr_qtd" type="number" min="1" placeholder="Ex.: 10"></div>
+    <div class="field"><label>Motivo</label><input id="cr_motivo" placeholder="Ex.: Bônus promocional"></div>
+    <div class="nav-row" style="margin-top:16px">
+      <button class="btn btn-ghost" onclick="document.getElementById('modalCreditos').classList.remove('open')">Cancelar</button>
+      <button class="btn btn-primary" onclick="confirmarCreditos()">Adicionar ✓</button>
     </div>
   </div>
 </div>
@@ -322,6 +424,9 @@ label{display:block;font-size:13px;font-weight:600;color:var(--ink-2);margin-bot
     </div>
     <button class="btn btn-primary btn-lg" onclick="novaAutorizacao()">+ NOVA AUTORIZAÇÃO</button>
   </div>
+
+  <!-- Barra de consumo do plano -->
+  <div id="usoPlanoBanner" style="margin-bottom:14px"></div>
 
   <div class="kpis" id="kpis"></div>
 
@@ -815,8 +920,9 @@ let _realtimeInterval = null;
 function iniciarAtualizacaoRealtime(){
   // Carrega do servidor imediatamente e depois a cada 15 segundos
   carregarAutorizacoes();
+  carregarUsoPlaino();
   clearInterval(_realtimeInterval);
-  _realtimeInterval = setInterval(()=>{ carregarAutorizacoes(); }, 15000);
+  _realtimeInterval = setInterval(()=>{ carregarAutorizacoes(); carregarUsoPlaino(); }, 15000);
 }
 
 /** Notifica mudança de status e força re-render imediato */
@@ -1022,6 +1128,12 @@ function fluxoAssistido(){
   document.getElementById('modalEscolha').classList.remove('open');
   document.getElementById('modalAssistido').classList.add('open');
 }
+/* Trata erro de limite atingido (HTTP 402) */
+function tratarErroLimite(d){
+  showToast(d.erro || 'Limite atingido.', 'error');
+  carregarUsoPlaino(); // Atualiza barra de consumo
+}
+
 async function gerarLinkAssistido(){
   const nome  = document.getElementById('a_nome').value.trim();
   const cpf   = document.getElementById('a_cpf').value.trim();
@@ -1427,8 +1539,39 @@ function gerarPDF(){
 
 /* ================= INICIALIZAÇÃO ================= */
 // ═══════════════════════════════════════════════════════
-// SUPER ADMIN — Funções de gerenciamento
+// SUPER ADMIN — Funções de gerenciamento SaaS completo
 // ═══════════════════════════════════════════════════════
+
+/* Máscaras */
+function maskCNPJ(el){ el.value=el.value.replace(/\D/g,'').slice(0,14).replace(/(\d{2})(\d)/,'$1.$2').replace(/(\d{3})(\d)/,'$1.$2').replace(/(\d{3})(\d)/,'$1/$2').replace(/(\d{4})(\d{1,2})$/,'$1-$2'); }
+
+let _saImobiliariaList = [];
+let _saTipoCliente = 'imobiliaria';
+let _saCreditosImobId = null;
+
+function setTipoCliente(tipo){
+  _saTipoCliente = tipo;
+  document.getElementById('tc_imob').classList.toggle('sel', tipo==='imobiliaria');
+  document.getElementById('tc_corretor').classList.toggle('sel', tipo==='corretor');
+  document.getElementById('ni_campos_imob').classList.toggle('hidden', tipo!=='imobiliaria');
+  document.getElementById('ni_campos_corretor').classList.toggle('hidden', tipo!=='corretor');
+}
+
+async function buscarCEPAdmin(){
+  const raw = document.getElementById('ni_cep').value.replace(/\D/g,'');
+  if(raw.length!==8){ showToast('CEP inválido.','error'); return; }
+  try {
+    const r = await fetch(`https://viacep.com.br/ws/${raw}/json/`);
+    const d = await r.json();
+    if(d.erro){ showToast('CEP não encontrado.','error'); return; }
+    if(d.logradouro) document.getElementById('ni_logradouro').value = d.logradouro;
+    if(d.bairro) document.getElementById('ni_bairro').value = d.bairro;
+    if(d.localidade) document.getElementById('ni_cidade').value = d.localidade;
+    if(d.uf) document.getElementById('ni_estado').value = d.uf;
+    showToast('Endereço preenchido!','success');
+  } catch(e){ showToast('Erro ao buscar CEP.','error'); }
+}
+
 function mostrarBotaoSuperAdmin(){
   const head = document.querySelector('#viewAdmin .page-head');
   if(!head || document.getElementById('btnSuperAdmin')) return;
@@ -1457,75 +1600,246 @@ async function carregarMetricasSuperAdmin(){
     const r = await fetch('/api/admin/metricas', { headers: Auth.headers() });
     const d = await r.json();
     document.getElementById('saKpis').innerHTML = [
-      { l:'Imobiliárias ativas', n: d.imobiliarias, s:'na plataforma', c:'k-green' },
-      { l:'Autorizações total', n: d.autorizacoesTotal, s:'todas as imobiliárias', c:'' },
-      { l:'Assinadas', n: d.autorizacoesAssinadas, s:'documentos concluídos', c:'k-gold' },
-      { l:'Últimos 30 dias', n: d.autorizacoesUltimos30Dias, s:'novas autorizações', c:'' }
+      { l:'Imobiliárias ativas', n: d.imobiliariasAtivas||0, s:'PJ cadastradas', c:'k-green' },
+      { l:'Corretores ativos', n: d.corretoresAtivos||0, s:'PF cadastrados', c:'k-green' },
+      { l:'Clientes totais', n: d.clientesAtivos||0, s:'contas ativas', c:'' },
+      { l:'Suspensos', n: d.clientesSuspensos||0, s:'requerem atenção', c:'k-red' },
+      { l:'Autorizações total', n: d.autorizacoesTotal||0, s:'todas as contas', c:'' },
+      { l:'Assinadas', n: d.autorizacoesAssinadas||0, s:'documentos concluídos', c:'k-gold' },
+      { l:'Últimos 30 dias', n: d.autorizacoesUltimos30Dias||0, s:'novas autorizações', c:'' },
     ].map(x=>`<div class="kpi ${x.c}"><div class="k-label">${x.l}</div><div class="k-num">${x.n}</div><div class="k-sub">${x.s}</div></div>`).join('');
+
+    // Distribuição por plano
+    const porPlano = d.porPlano||{};
+    const planoHtml = Object.entries(porPlano).map(([slug,qtd])=>
+      `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--line);font-size:13.5px"><span style="font-weight:600;text-transform:capitalize">${slug}</span><b>${qtd} cliente${qtd!==1?'s':''}</b></div>`
+    ).join('');
+
+    // Alertas de limite
+    const alertas = d.alertasLimite||[];
+    document.getElementById('saAlertas').innerHTML = alertas.length ? `
+      <div class="panel" style="border-color:var(--gold);background:var(--gold-soft)">
+        <h2 style="color:var(--gold);font-size:14px;margin-bottom:10px">⚠ Clientes próximos do limite</h2>
+        ${alertas.map(a=>`<div style="display:flex;justify-content:space-between;font-size:13.5px;padding:4px 0">
+          <span>${a.nome}</span>
+          <span class="badge ${a.pct>=100?'b-red':a.pct>=90?'b-gold':'b-blue'}">${a.pct}% (${a.usadas}/${a.limite})</span>
+        </div>`).join('')}
+      </div>` : '';
+
+    // Ranking
+    const rr = await fetch('/api/admin/ranking', { headers: Auth.headers() });
+    const ranking = await rr.json();
+    document.getElementById('saRanking').innerHTML = ranking.length ?
+      ranking.map((r,i)=>`<div style="display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid var(--line)">
+        <span style="font-size:18px;font-weight:800;color:var(--ink-3);min-width:28px">${i+1}º</span>
+        <div style="flex:1"><div style="font-weight:600;font-size:13.5px">${r.nome}</div><div style="font-size:12px;color:var(--ink-3)">${r.plano} · ${r.usadas} utilizadas</div></div>
+        <div style="text-align:right">
+          <div style="font-size:13px;font-weight:700;color:${r.pct>=90?'var(--red)':r.pct>=80?'var(--gold)':'var(--brand)'}">${r.pct}%</div>
+          <div style="width:80px;height:6px;background:var(--line);border-radius:99px;margin-top:4px"><div style="height:100%;border-radius:99px;background:${r.pct>=90?'var(--red)':r.pct>=80?'var(--gold)':'var(--brand)'};width:${Math.min(r.pct,100)}%"></div></div>
+        </div>
+      </div>`).join('') : '<p style="color:var(--ink-3);font-size:13px">Nenhum dado ainda.</p>';
+
   } catch(e) { console.error(e); }
 }
 
 async function carregarImobiliarias(){
   try {
     const r = await fetch('/api/admin/imobiliarias', { headers: Auth.headers() });
-    const lista = await r.json();
-    document.getElementById('saTableBody').innerHTML = lista.map(imob => `
-      <tr>
-        <td>
-          <div class="prop">${imob.nome}</div>
-          <div class="sub">${imob.slug} · ${imob.email}</div>
-        </td>
-        <td>${imob.cnpj}</td>
-        <td><span class="badge ${imob.plano==='enterprise'?'b-gold':imob.plano==='pro'?'b-green':'b-gray'}">${imob.plano}</span></td>
-        <td><b>${imob._stats?.total||0}</b> <span style="color:var(--ink-3);font-size:12px">(${imob._stats?.assinadas||0} assinadas)</span></td>
-        <td><span class="badge ${imob.ativo?'b-green':'b-red'}">${imob.ativo?'Ativa':'Inativa'}</span></td>
-        <td style="white-space:nowrap">
-          <button class="icon-btn" title="${imob.ativo?'Desativar':'Ativar'}" onclick="toggleImob('${imob._id}',${!imob.ativo})">${imob.ativo?'⏸':'▶'}</button>
-        </td>
-      </tr>`).join('');
+    _saImobiliariaList = await r.json();
+    filtrarClientes();
   } catch(e) { console.error(e); }
+}
+
+function filtrarClientes(){
+  const tipo   = document.getElementById('saFiltroTipo')?.value   || '';
+  const status = document.getElementById('saFiltroStatus')?.value || '';
+  const lista  = _saImobiliariaList.filter(i =>
+    (!tipo   || i.tipoCliente === tipo) &&
+    (!status || i.status === status)
+  );
+  const planoColor = { basic:'b-gray', pro:'b-green', premium:'b-blue', enterprise:'b-gold', unlimited:'b-gold' };
+  const statusColor = { ativo:'b-green', suspenso:'b-gold', inativo:'b-red' };
+  document.getElementById('saTableBody').innerHTML = lista.map(imob => {
+    const pct = imob.limiteAutorizacoes && imob.limiteAutorizacoes > 0
+      ? Math.min(Math.round((imob._stats?.total||0) / imob.limiteAutorizacoes * 100), 100) : 0;
+    const barColor = pct>=100?'var(--red)':pct>=80?'var(--gold)':'var(--brand)';
+    const doc = imob.tipoCliente==='corretor' ? (imob.cpf||'—') : (imob.cnpj||'—');
+    return `<tr>
+      <td>
+        <div class="prop">${imob.nome}</div>
+        <div class="sub">${imob.email}</div>
+      </td>
+      <td><span class="badge ${imob.tipoCliente==='corretor'?'b-blue':'b-gray'}">${imob.tipoCliente==='corretor'?'Corretor':'Imobiliária'}</span></td>
+      <td style="font-family:monospace;font-size:12px">${doc}</td>
+      <td><span class="badge ${planoColor[imob.planoSlug]||'b-gray'}">${imob.planoNome||imob.planoSlug||'Pro'}</span></td>
+      <td>
+        <div style="font-size:12.5px;margin-bottom:4px">${imob._stats?.total||0} / ${imob.limiteAutorizacoes===-1?'∞':imob.limiteAutorizacoes||0}</div>
+        ${imob.limiteAutorizacoes>0?`<div style="width:100px;height:5px;background:var(--line);border-radius:99px"><div style="height:100%;border-radius:99px;background:${barColor};width:${pct}%"></div></div>`:''}
+      </td>
+      <td><span class="badge b-blue">${imob.creditosExtras||0}</span></td>
+      <td><span class="badge ${statusColor[imob.status]||'b-gray'}">${imob.status||'ativo'}</span></td>
+      <td style="white-space:nowrap">
+        <button class="icon-btn" title="Créditos" onclick="abrirModalCreditos('${imob._id}','${imob.nome.replace(/'/g,'')}')">💰</button>
+        <button class="icon-btn" title="${imob.status==='ativo'?'Suspender':'Ativar'}" onclick="toggleImob('${imob._id}','${imob.status==='ativo'?'suspenso':'ativo'}')">${imob.status==='ativo'?'⏸':'▶'}</button>
+      </td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="8" style="text-align:center;color:var(--ink-3);padding:20px">Nenhum cliente encontrado.</td></tr>';
 }
 
 function abrirModalNovaImob(){
   document.getElementById('modalNovaImob').classList.add('open');
 }
 
+function abrirModalNovaImob(){
+  // Carrega planos disponíveis
+  fetch('/api/admin/planos', { headers: Auth.headers() }).then(r=>r.json()).then(planos=>{
+    const sel = document.getElementById('ni_planoId');
+    sel.innerHTML = planos.filter(p=>p.ativo).map(p=>`<option value="${p._id}">${p.nome} (${p.limite===-1?'Ilimitado':p.limite+' auth/mês'})</option>`).join('');
+  }).catch(()=>{});
+  document.getElementById('modalNovaImob').classList.add('open');
+}
+
 async function criarImobiliaria(){
-  const nome       = document.getElementById('ni_nome').value.trim();
-  const cnpj       = document.getElementById('ni_cnpj').value.trim();
-  const email      = document.getElementById('ni_email').value.trim();
-  const endereco   = document.getElementById('ni_end').value.trim();
-  const corPrimaria= document.getElementById('ni_cor').value;
-  const plano      = document.getElementById('ni_plano').value;
-  const adminNome  = document.getElementById('ni_adminNome').value.trim();
-  const adminEmail = document.getElementById('ni_adminEmail').value.trim();
-  const adminSenha = document.getElementById('ni_adminSenha').value;
-  if(!nome||!cnpj||!email||!adminEmail||!adminSenha){ showToast('Preencha todos os campos obrigatórios.','error'); return; }
+  const tipo = _saTipoCliente;
+  const email = document.getElementById(tipo==='corretor'?'ni_email_corr':'ni_email').value.trim();
+  const nome  = tipo==='corretor'
+    ? document.getElementById('ni_nome_corr').value.trim()
+    : document.getElementById('ni_razao').value.trim();
+
+  const payload = {
+    tipoCliente:  tipo,
+    corPrimaria:  document.getElementById('ni_cor').value,
+    planoId:      document.getElementById('ni_planoId').value,
+    status:       document.getElementById('ni_status').value,
+    adminEmail:   document.getElementById('ni_adminEmail').value.trim(),
+    adminSenha:   document.getElementById('ni_adminSenha').value,
+    endereco: {
+      cep:         document.getElementById('ni_cep').value,
+      logradouro:  document.getElementById('ni_logradouro').value,
+      numero:      document.getElementById('ni_num').value,
+      complemento: document.getElementById('ni_comp').value,
+      bairro:      document.getElementById('ni_bairro').value,
+      cidade:      document.getElementById('ni_cidade').value,
+      estado:      document.getElementById('ni_estado').value
+    }
+  };
+
+  if (tipo === 'imobiliaria') {
+    Object.assign(payload, {
+      nome:        document.getElementById('ni_razao').value.trim(),
+      razaoSocial: document.getElementById('ni_razao').value.trim(),
+      nomeFantasia:document.getElementById('ni_fantasia').value.trim(),
+      cnpj:        document.getElementById('ni_cnpj').value.trim(),
+      creci:       document.getElementById('ni_creci').value.trim(),
+      telefone:    document.getElementById('ni_tel').value,
+      whatsapp:    document.getElementById('ni_zap').value,
+      email:       document.getElementById('ni_email').value.trim(),
+      site:        document.getElementById('ni_site').value,
+      responsavel: {
+        nome:    document.getElementById('ni_respNome').value.trim(),
+        cpf:     document.getElementById('ni_respCpf').value.trim(),
+        creci:   document.getElementById('ni_respCreci').value.trim(),
+        telefone:document.getElementById('ni_respTel').value,
+        email:   document.getElementById('ni_respEmail').value.trim()
+      }
+    });
+  } else {
+    Object.assign(payload, {
+      nome:     document.getElementById('ni_nome_corr').value.trim(),
+      cpf:      document.getElementById('ni_cpf_corr').value.trim(),
+      creci:    document.getElementById('ni_creci_corr').value.trim(),
+      telefone: document.getElementById('ni_tel_corr').value,
+      whatsapp: document.getElementById('ni_zap_corr').value,
+      email:    document.getElementById('ni_email_corr').value.trim()
+    });
+  }
+
+  if(!payload.nome||!email||!payload.adminEmail||!payload.adminSenha){
+    showToast('Preencha todos os campos obrigatórios (*).','error'); return;
+  }
+
   try {
     const r = await fetch('/api/admin/imobiliarias', {
-      method: 'POST', headers: Auth.headers(),
-      body: JSON.stringify({ nome, cnpj, email, endereco, corPrimaria, plano, adminNome, adminEmail, adminSenha })
+      method: 'POST', headers: Auth.headers(), body: JSON.stringify(payload)
     });
     const d = await r.json();
     if(!r.ok) throw new Error(d.erro);
     document.getElementById('modalNovaImob').classList.remove('open');
-    showToast(`Imobiliária "${nome}" criada com sucesso! ✓`, 'success');
+    showToast(`Cliente "${payload.nome}" criado com sucesso! ✓`, 'success');
     carregarImobiliarias();
     carregarMetricasSuperAdmin();
-    // Limpa campos
-    ['ni_nome','ni_cnpj','ni_email','ni_end','ni_adminNome','ni_adminEmail','ni_adminSenha'].forEach(id => document.getElementById(id).value='');
   } catch(e) { showToast('Erro: '+e.message, 'error'); }
 }
 
-async function toggleImob(id, ativo){
+async function toggleImob(id, novoStatus){
   try {
     await fetch(`/api/admin/imobiliarias/${id}/status`, {
       method: 'PATCH', headers: Auth.headers(),
-      body: JSON.stringify({ ativo })
+      body: JSON.stringify({ ativo: novoStatus === 'ativo', status: novoStatus })
     });
-    showToast(ativo ? 'Imobiliária ativada.' : 'Imobiliária desativada.', 'success');
+    showToast('Status atualizado.', 'success');
     carregarImobiliarias();
+    carregarMetricasSuperAdmin();
   } catch(e) { showToast('Erro ao alterar status.', 'error'); }
+}
+
+function abrirModalCreditos(id, nome){
+  _saCreditosImobId = id;
+  document.getElementById('creditosImobNome').textContent = nome;
+  document.getElementById('cr_qtd').value = '';
+  document.getElementById('cr_motivo').value = '';
+  document.getElementById('modalCreditos').classList.add('open');
+}
+
+async function confirmarCreditos(){
+  const qtd = parseInt(document.getElementById('cr_qtd').value);
+  const motivo = document.getElementById('cr_motivo').value.trim();
+  if(!qtd||qtd<1){ showToast('Informe uma quantidade válida.','error'); return; }
+  try {
+    const r = await fetch(`/api/admin/imobiliarias/${_saCreditosImobId}/creditos`, {
+      method: 'POST', headers: Auth.headers(),
+      body: JSON.stringify({ quantidade: qtd, motivo })
+    });
+    const d = await r.json();
+    if(!r.ok) throw new Error(d.erro);
+    document.getElementById('modalCreditos').classList.remove('open');
+    showToast(`${qtd} crédito${qtd>1?'s':''} adicionado${qtd>1?'s':''}! Novo saldo: ${d.novoSaldo}`, 'success');
+    carregarImobiliarias();
+  } catch(e) { showToast('Erro: '+e.message,'error'); }
+}
+
+/* ── Barra de consumo do plano (painel da imobiliária) ── */
+async function carregarUsoPlaino(){
+  try {
+    const r = await fetch('/api/uso-plano', { headers: Auth.headers() });
+    if(!r.ok) return;
+    const d = await r.json();
+    const banner = document.getElementById('usoPlanoBanner');
+    if(!banner) return;
+    const cor = d.pct>=100?'var(--red)':d.pct>=90?'#DC6803':d.pct>=80?'var(--gold)':'var(--brand)';
+    const bgAlerta = d.alerta==='critico'?'#FEF3F2':d.alerta==='urgente'?'#FFF6ED':d.alerta==='aviso'?'var(--gold-soft)':'var(--brand-soft)';
+    const bordAlerta = d.alerta==='critico'?'var(--red)':d.alerta==='urgente'?'#DC6803':d.alerta==='aviso'?'var(--gold)':'var(--brand)';
+    banner.innerHTML = `<div style="background:${bgAlerta};border:1.5px solid ${bordAlerta};border-radius:14px;padding:16px 20px;margin-bottom:4px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px">
+        <div>
+          <b style="font-family:'Sora',sans-serif;font-size:14px">Plano ${d.planoNome}</b>
+          <span style="margin-left:10px;font-size:13px;color:var(--ink-2)">${d.usadas} de ${d.limite===-1?'∞':d.limite} utilizadas este mês</span>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center">
+          ${d.creditosExtras>0?`<span class="badge b-blue">💰 ${d.creditosExtras} crédito${d.creditosExtras>1?'s':''} extra${d.creditosExtras>1?'s':''}</span>`:''}
+          <span style="font-weight:700;font-size:15px;color:${cor}">${d.pct}%</span>
+        </div>
+      </div>
+      <div style="height:8px;background:rgba(0,0,0,.08);border-radius:99px">
+        <div style="height:100%;border-radius:99px;background:${cor};width:${Math.min(d.pct,100)}%;transition:width .6s"></div>
+      </div>
+      ${d.alerta?`<p style="margin-top:8px;font-size:13px;font-weight:600;color:${cor}">${
+        d.alerta==='critico'?'🔴 Seu limite foi atingido. Adquira créditos extras ou faça upgrade do plano.':
+        d.alerta==='urgente'?'🟠 Você está próximo do limite do seu plano.':
+        '🟡 Você já utilizou 80% das autorizações do seu plano.'
+      }</p>`:''}
+    </div>`;
+  } catch(e) {}
 }
 
 // Verifica autenticação ao carregar

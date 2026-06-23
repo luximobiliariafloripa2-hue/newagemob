@@ -28,6 +28,9 @@ const db = {
   imobiliarias:  Datastore.create({ filename: path.join(DATA_DIR, 'imobiliarias.db'),  autoload: true }),
   usuarios:      Datastore.create({ filename: path.join(DATA_DIR, 'usuarios.db'),      autoload: true }),
   autorizacoes:  Datastore.create({ filename: path.join(DATA_DIR, 'autorizacoes.db'),  autoload: true }),
+  planos:        Datastore.create({ filename: path.join(DATA_DIR, 'planos.db'),        autoload: true }),
+  pacotes:       Datastore.create({ filename: path.join(DATA_DIR, 'pacotes.db'),       autoload: true }),
+  compras:       Datastore.create({ filename: path.join(DATA_DIR, 'compras.db'),       autoload: true }),
   config:        Datastore.create({ filename: path.join(DATA_DIR, 'config.db'),        autoload: true }),
   logs:          Datastore.create({ filename: path.join(DATA_DIR, 'logs.db'),          autoload: true })
 };
@@ -36,7 +39,7 @@ const STORAGE_BASE = process.env.STORAGE_DIR || path.join(__dirname, 'storage');
 ['originais','assinados'].forEach(d => fs.mkdirSync(path.join(STORAGE_BASE, d), { recursive: true }));
 
 // ═══════════════════════════════════════════════════════
-// SEED — Super Admin + Lux House (só na primeira execução)
+// SEED — Super Admin + Planos + Pacotes + Lux House
 // ═══════════════════════════════════════════════════════
 async function seed() {
   // Super admin
@@ -44,41 +47,58 @@ async function seed() {
   if (!superAdmin) {
     const hash = await bcrypt.hash(process.env.SUPER_ADMIN_PASS || 'LuxAdmin2026!', 10);
     await db.usuarios.insert({
-      nome:  'Super Admin AGEMOB',
-      email: process.env.SUPER_ADMIN_EMAIL || 'admin@agemob.com.br',
-      senha: hash,
-      role:  'super_admin',
-      ativo: true,
-      criadoEm: new Date().toISOString()
+      nome: 'Super Admin AGEMOB', email: process.env.SUPER_ADMIN_EMAIL || 'admin@agemob.com.br',
+      senha: hash, role: 'super_admin', ativo: true, criadoEm: new Date().toISOString()
     });
     console.log('  ✓ Super admin criado');
   }
-  // Lux House (imobiliária padrão)
+
+  // Planos padrão
+  const planoCount = await db.planos.count({});
+  if (planoCount === 0) {
+    for (const p of [
+      { slug:'basic', nome:'Basic', limite:15, valor:0, ativo:true },
+      { slug:'pro', nome:'Pro', limite:30, valor:0, ativo:true },
+      { slug:'premium', nome:'Premium', limite:50, valor:0, ativo:true },
+      { slug:'enterprise', nome:'Enterprise', limite:100, valor:0, ativo:true },
+      { slug:'unlimited', nome:'Unlimited', limite:-1, valor:0, ativo:true }
+    ]) await db.planos.insert({ ...p, criadoEm: new Date().toISOString() });
+    console.log('  ✓ Planos criados');
+  }
+
+  // Pacotes de créditos padrão
+  const pacoteCount = await db.pacotes.count({});
+  if (pacoteCount === 0) {
+    for (const p of [
+      { nome:'Starter', quantidade:5, valor:0, ativo:true },
+      { nome:'Growth', quantidade:10, valor:0, ativo:true },
+      { nome:'Business', quantidade:20, valor:0, ativo:true },
+      { nome:'Max', quantidade:50, valor:0, ativo:true }
+    ]) await db.pacotes.insert({ ...p, criadoEm: new Date().toISOString() });
+    console.log('  ✓ Pacotes criados');
+  }
+
+  // Lux House
   const luxHouse = await db.imobiliarias.findOne({ slug: 'lux-house' });
   if (!luxHouse) {
+    const plano = await db.planos.findOne({ slug: 'pro' });
     const imob = await db.imobiliarias.insert({
-      nome:      'Lux House Imóveis',
-      slug:      'lux-house',
-      cnpj:      '48.192.939/0001-21',
-      endereco:  'Rua das Algas, 733 - Sala 1, Jurerê Internacional, Florianópolis/SC',
-      email:     'luximobiliariafloripa2@gmail.com',
-      corPrimaria: '#04273B',
-      corSecundaria: '#C9A227',
-      plano:     'pro',
-      ativo:     true,
-      criadoEm:  new Date().toISOString()
+      tipoCliente:'imobiliaria', nome:'Lux House Imóveis',
+      razaoSocial:'Lux House Imóveis Ltda.', nomeFantasia:'Lux House Imóveis',
+      slug:'lux-house', cnpj:'48.192.939/0001-21', creci:'', telefone:'', whatsapp:'',
+      email:'luximobiliariafloripa2@gmail.com', site:'',
+      endereco:{ cep:'', logradouro:'Rua das Algas', numero:'733',
+        complemento:'Sala 1', bairro:'Jurerê Internacional', cidade:'Florianópolis', estado:'SC' },
+      responsavel:{ nome:'Bruno Amorim Costa', cpf:'', creci:'', telefone:'', whatsapp:'', email:'luximobiliariafloripa2@gmail.com' },
+      corPrimaria:'#04273B', corSecundaria:'#C9A227',
+      planoId: plano?._id||null, planoSlug:'pro', planoNome:'Pro',
+      limiteAutorizacoes:30, creditosExtras:0, status:'ativo', ativo:true,
+      criadoEm: new Date().toISOString()
     });
-    // Admin da Lux House
     const hash = await bcrypt.hash(process.env.LUX_ADMIN_PASS || 'lux2026', 10);
     await db.usuarios.insert({
-      nome:          'Admin Lux House',
-      email:         'admin',
-      senha:         hash,
-      role:          'admin',
-      imobiliariaId: imob._id,
-      imobiliariaSlug: 'lux-house',
-      ativo:         true,
-      criadoEm:      new Date().toISOString()
+      nome:'Admin Lux House', email:'admin', senha:hash, role:'admin',
+      imobiliariaId:imob._id, imobiliariaSlug:'lux-house', ativo:true, criadoEm:new Date().toISOString()
     });
     console.log('  ✓ Lux House criada');
   }
@@ -187,46 +207,68 @@ app.get('/api/admin/imobiliarias', authMiddleware(['super_admin']), async (_req,
   res.json(result);
 });
 
-// Criar nova imobiliária
+// Criar novo cliente (Imobiliária PJ ou Corretor Autônomo)
 app.post('/api/admin/imobiliarias', authMiddleware(['super_admin']), async (req, res) => {
   try {
-    const { nome, cnpj, email, endereco, corPrimaria, plano, adminEmail, adminSenha, adminNome } = req.body;
-    if (!nome || !cnpj || !email || !adminEmail || !adminSenha) {
-      return res.status(422).json({ erro: 'Nome, CNPJ, e-mail, admin e-mail e senha são obrigatórios.' });
+    const {
+      tipoCliente, nome, razaoSocial, nomeFantasia, cnpj, cpf, creci,
+      telefone, whatsapp, email, site, endereco, responsavel,
+      corPrimaria, planoId, adminEmail, adminSenha, adminNome, status
+    } = req.body;
+
+    // Validações básicas
+    if (!nome || !email || !adminEmail || !adminSenha) {
+      return res.status(422).json({ erro: 'Nome, e-mail, e-mail de admin e senha são obrigatórios.' });
     }
-    // Slug a partir do nome
-    const slug = nome.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
-    const existe = await db.imobiliarias.findOne({ slug });
-    if (existe) return res.status(422).json({ erro: 'Já existe uma imobiliária com esse nome.' });
+    if (tipoCliente === 'imobiliaria' && !cnpj) {
+      return res.status(422).json({ erro: 'CNPJ obrigatório para imobiliárias.' });
+    }
+    if (tipoCliente === 'corretor' && !cpf) {
+      return res.status(422).json({ erro: 'CPF obrigatório para corretores autônomos.' });
+    }
+
+    // Duplicidade
+    if (cnpj) { const ex = await db.imobiliarias.findOne({ cnpj }); if(ex) return res.status(422).json({ erro: 'CNPJ já cadastrado.' }); }
+    if (cpf)  { const ex = await db.imobiliarias.findOne({ cpf });  if(ex) return res.status(422).json({ erro: 'CPF já cadastrado.' }); }
+    if (creci){ const ex = await db.imobiliarias.findOne({ creci }); if(ex) return res.status(422).json({ erro: 'CRECI já cadastrado.' }); }
+
+    // Busca plano
+    let plano = null;
+    if (planoId) plano = await db.planos.findOne({ _id: planoId });
+    if (!plano) plano = await db.planos.findOne({ slug: 'pro' });
+
+    const slug = nome.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')
+               + '-' + Date.now().toString(36);
 
     const imob = await db.imobiliarias.insert({
-      nome, cnpj, email, endereco: endereco || '',
-      slug,
-      corPrimaria:   corPrimaria   || '#04273B',
-      corSecundaria: '#C9A227',
-      plano:         plano || 'starter',
-      ativo:         true,
-      criadoEm:      new Date().toISOString(),
-      atualizadoEm:  new Date().toISOString()
+      tipoCliente:    tipoCliente || 'imobiliaria',
+      nome, razaoSocial: razaoSocial || nome, nomeFantasia: nomeFantasia || nome,
+      slug, cnpj: cnpj||'', cpf: cpf||'', creci: creci||'',
+      telefone: telefone||'', whatsapp: whatsapp||'', email, site: site||'',
+      endereco:   endereco   || {},
+      responsavel: responsavel || {},
+      corPrimaria: corPrimaria || '#04273B', corSecundaria: '#C9A227',
+      planoId: plano?._id||null, planoSlug: plano?.slug||'pro', planoNome: plano?.nome||'Pro',
+      limiteAutorizacoes: plano?.limite ?? 30,
+      creditosExtras: 0,
+      status: status || 'ativo',
+      ativo: true,
+      criadoEm:     new Date().toISOString(),
+      atualizadoEm: new Date().toISOString()
     });
 
-    // Cria admin da imobiliária
     const hash = await bcrypt.hash(adminSenha, 10);
     await db.usuarios.insert({
-      nome:            adminNome || 'Admin',
-      email:           adminEmail.toLowerCase().trim(),
-      senha:           hash,
-      role:            'admin',
-      imobiliariaId:   imob._id,
-      imobiliariaSlug: slug,
-      ativo:           true,
-      criadoEm:        new Date().toISOString()
+      nome: adminNome || nome, email: adminEmail.toLowerCase().trim(),
+      senha: hash, role: 'admin',
+      imobiliariaId: imob._id, imobiliariaSlug: slug,
+      ativo: true, criadoEm: new Date().toISOString()
     });
 
-    await log('admin', `Imobiliária criada: ${nome} (${slug})`);
+    await log('admin', `Cliente criado: ${nome} (${tipoCliente||'imobiliaria'})`);
     res.json({ ok: true, imobiliaria: imob });
   } catch(e) {
-    res.status(500).json({ erro: 'Falha ao criar imobiliária: ' + e.message });
+    res.status(500).json({ erro: 'Falha ao criar cliente: ' + e.message });
   }
 });
 
@@ -265,6 +307,237 @@ app.get('/api/admin/metricas', authMiddleware(['super_admin']), async (_req, res
 app.get('/api/admin/imobiliarias/:id/usuarios', authMiddleware(['super_admin']), async (req, res) => {
   const lista = await db.usuarios.find({ imobiliariaId: req.params.id });
   res.json(lista.map(({ senha, ...u }) => u));
+});
+
+// ═══════════════════════════════════════════════════════
+// HELPERS SAAS — Controle de limite e créditos
+// ═══════════════════════════════════════════════════════
+async function verificarLimite(imobiliariaId) {
+  const imob = await db.imobiliarias.findOne({ _id: imobiliariaId });
+  if (!imob) return { ok: false, erro: 'Imobiliária não encontrada.' };
+  if (imob.status === 'suspenso') return { ok: false, erro: 'Conta suspensa. Entre em contato com o suporte.' };
+  if (imob.status === 'inativo') return { ok: false, erro: 'Conta inativa.' };
+
+  // Unlimited — sem limite
+  if (imob.limiteAutorizacoes === -1) return { ok: true };
+
+  // Conta autorizações do mês atual
+  const now = new Date();
+  const inicio = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+  const usadas = await db.autorizacoes.count({
+    imobiliariaId,
+    criadoEm: { $gte: inicio }
+  });
+
+  const limite = imob.limiteAutorizacoes || 0;
+  const extras = imob.creditosExtras || 0;
+
+  if (usadas < limite) return { ok: true, usadas, limite, extras, tipo: 'plano' };
+  if (usadas < limite + extras) return { ok: true, usadas, limite, extras, tipo: 'credito_extra' };
+
+  return {
+    ok: false,
+    erro: 'Você atingiu o limite de autorizações do seu plano. Adquira créditos adicionais ou faça upgrade.',
+    usadas, limite, extras
+  };
+}
+
+async function consumirCredito(imobiliariaId, tipo) {
+  if (tipo === 'credito_extra') {
+    await db.imobiliarias.update({ _id: imobiliariaId }, { $inc: { creditosExtras: -1 } });
+  }
+}
+
+function calcularPorcentagem(usadas, limite) {
+  if (limite === -1) return 0;
+  return Math.round((usadas / Math.max(limite, 1)) * 100);
+}
+
+// ═══════════════════════════════════════════════════════
+// PLANOS — CRUD
+// ═══════════════════════════════════════════════════════
+app.get('/api/admin/planos', authMiddleware(['super_admin']), async (_req, res) => {
+  const lista = await db.planos.find({}).sort({ limite: 1 });
+  res.json(lista);
+});
+
+app.post('/api/admin/planos', authMiddleware(['super_admin']), async (req, res) => {
+  try {
+    const { nome, limite, valor } = req.body;
+    if (!nome || limite === undefined) return res.status(422).json({ erro: 'Nome e limite são obrigatórios.' });
+    const slug = nome.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
+    const plano = await db.planos.insert({ slug, nome, limite: parseInt(limite), valor: parseFloat(valor||0), ativo: true, criadoEm: new Date().toISOString() });
+    res.json(plano);
+  } catch(e) { res.status(500).json({ erro: e.message }); }
+});
+
+app.put('/api/admin/planos/:id', authMiddleware(['super_admin']), async (req, res) => {
+  const { nome, limite, valor, ativo } = req.body;
+  await db.planos.update({ _id: req.params.id }, { $set: { nome, limite: parseInt(limite), valor: parseFloat(valor||0), ativo, atualizadoEm: new Date().toISOString() } });
+  res.json({ ok: true });
+});
+
+app.delete('/api/admin/planos/:id', authMiddleware(['super_admin']), async (req, res) => {
+  await db.planos.remove({ _id: req.params.id });
+  res.json({ ok: true });
+});
+
+// ═══════════════════════════════════════════════════════
+// PACOTES DE CRÉDITOS — CRUD
+// ═══════════════════════════════════════════════════════
+app.get('/api/admin/pacotes', authMiddleware(['super_admin']), async (_req, res) => {
+  res.json(await db.pacotes.find({}).sort({ quantidade: 1 }));
+});
+
+app.get('/api/pacotes', async (_req, res) => {
+  res.json(await db.pacotes.find({ ativo: true }).sort({ quantidade: 1 }));
+});
+
+app.post('/api/admin/pacotes', authMiddleware(['super_admin']), async (req, res) => {
+  const { nome, quantidade, valor } = req.body;
+  if (!nome || !quantidade) return res.status(422).json({ erro: 'Nome e quantidade obrigatórios.' });
+  const pacote = await db.pacotes.insert({ nome, quantidade: parseInt(quantidade), valor: parseFloat(valor||0), ativo: true, criadoEm: new Date().toISOString() });
+  res.json(pacote);
+});
+
+app.put('/api/admin/pacotes/:id', authMiddleware(['super_admin']), async (req, res) => {
+  const { nome, quantidade, valor, ativo } = req.body;
+  await db.pacotes.update({ _id: req.params.id }, { $set: { nome, quantidade: parseInt(quantidade), valor: parseFloat(valor||0), ativo, atualizadoEm: new Date().toISOString() } });
+  res.json({ ok: true });
+});
+
+app.delete('/api/admin/pacotes/:id', authMiddleware(['super_admin']), async (req, res) => {
+  await db.pacotes.remove({ _id: req.params.id });
+  res.json({ ok: true });
+});
+
+// ═══════════════════════════════════════════════════════
+// CRÉDITOS — Operações manuais pelo Super Admin
+// ═══════════════════════════════════════════════════════
+app.post('/api/admin/imobiliarias/:id/creditos', authMiddleware(['super_admin']), async (req, res) => {
+  try {
+    const { quantidade, motivo } = req.body;
+    if (!quantidade) return res.status(422).json({ erro: 'Quantidade obrigatória.' });
+    const imob = await db.imobiliarias.findOne({ _id: req.params.id });
+    if (!imob) return res.status(404).json({ erro: 'Não encontrada.' });
+    const novoSaldo = (imob.creditosExtras || 0) + parseInt(quantidade);
+    await db.imobiliarias.update({ _id: req.params.id }, { $set: { creditosExtras: novoSaldo, atualizadoEm: new Date().toISOString() } });
+    await db.compras.insert({
+      imobiliariaId: req.params.id,
+      tipo: 'manual',
+      quantidade: parseInt(quantidade),
+      motivo: motivo || 'Crédito manual pelo admin',
+      statusPagamento: 'aprovado',
+      criadoEm: new Date().toISOString()
+    });
+    await log('credito', `Crédito manual: +${quantidade} para ${imob.nome}. Motivo: ${motivo||'—'}`);
+    res.json({ ok: true, novoSaldo });
+  } catch(e) { res.status(500).json({ erro: e.message }); }
+});
+
+// Alterar plano de uma imobiliária
+app.patch('/api/admin/imobiliarias/:id/plano', authMiddleware(['super_admin']), async (req, res) => {
+  try {
+    const { planoId } = req.body;
+    const plano = await db.planos.findOne({ _id: planoId });
+    if (!plano) return res.status(404).json({ erro: 'Plano não encontrado.' });
+    await db.imobiliarias.update({ _id: req.params.id }, {
+      $set: { planoId, planoSlug: plano.slug, planoNome: plano.nome, limiteAutorizacoes: plano.limite, atualizadoEm: new Date().toISOString() }
+    });
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ erro: e.message }); }
+});
+
+// ═══════════════════════════════════════════════════════
+// SUPER ADMIN — Cadastro expandido de imobiliária
+// ═══════════════════════════════════════════════════════
+// Validação de CPF
+function validarCPF(cpf) {
+  const c = cpf.replace(/\D/g,'');
+  if (c.length !== 11 || /^(\d)+$/.test(c)) return false;
+  let s = 0; for(let i=0;i<9;i++) s += +c[i]*(10-i);
+  let r = s%11<2?0:11-s%11; if(r!==+c[9]) return false;
+  s=0; for(let i=0;i<10;i++) s+=+c[i]*(11-i);
+  r=s%11<2?0:11-s%11; return r===+c[10];
+}
+function validarCNPJ(cnpj) {
+  const c = cnpj.replace(/\D/g,'');
+  if (c.length !== 14 || /^(\d)+$/.test(c)) return false;
+  const calc = (c, n) => { let s=0,p=n-7; for(let i=0;i<n-1;i++){s+=+c[i]*(p--); if(p<2)p=9;} const r=s%11; return r<2?0:11-r; };
+  return calc(c,10)===+c[9] && calc(c,11)===+c[10];
+}
+
+// ═══════════════════════════════════════════════════════
+// DASHBOARD SAAS — Uso do plano por imobiliária
+// ═══════════════════════════════════════════════════════
+app.get('/api/uso-plano', authMiddleware(['admin','corretor']), async (req, res) => {
+  const imob = await db.imobiliarias.findOne({ _id: req.user.imobiliariaId });
+  if (!imob) return res.status(404).json({ erro: 'Não encontrada.' });
+  const now = new Date();
+  const inicio = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+  const usadas = await db.autorizacoes.count({ imobiliariaId: req.user.imobiliariaId, criadoEm: { $gte: inicio } });
+  const limite = imob.limiteAutorizacoes || 0;
+  const extras = imob.creditosExtras || 0;
+  const pct = calcularPorcentagem(usadas, limite);
+  res.json({
+    planoNome: imob.planoNome || imob.planoSlug || 'Pro',
+    limite, usadas, disponiveis: Math.max(0, limite - usadas + extras),
+    creditosExtras: extras, pct,
+    alerta: pct >= 100 ? 'critico' : pct >= 90 ? 'urgente' : pct >= 80 ? 'aviso' : null
+  });
+});
+
+// Métricas globais ampliadas
+app.get('/api/admin/metricas', authMiddleware(['super_admin']), async (_req, res) => {
+  const imobs   = await db.imobiliarias.find({});
+  const total   = await db.autorizacoes.count({});
+  const assinadas = await db.autorizacoes.count({ status: 'assinado' });
+  const now = new Date();
+  const inicio30 = new Date(now.getFullYear(), now.getMonth(), 1);
+  inicio30.setDate(inicio30.getDate() - 30);
+  const recentes = await db.autorizacoes.count({ criadoEm: { $gte: inicio30.toISOString() } });
+
+  // Por plano
+  const porPlano = {};
+  for (const imob of imobs) {
+    const slug = imob.planoSlug || 'pro';
+    porPlano[slug] = (porPlano[slug] || 0) + 1;
+  }
+
+  // Imobiliárias próximas do limite
+  const alertas = [];
+  for (const imob of imobs.filter(i => i.ativo && i.status === 'ativo')) {
+    const mesInicio = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+    const usadas = await db.autorizacoes.count({ imobiliariaId: imob._id, criadoEm: { $gte: mesInicio } });
+    const pct = calcularPorcentagem(usadas, imob.limiteAutorizacoes || 0);
+    if (pct >= 80) alertas.push({ nome: imob.nome, pct, usadas, limite: imob.limiteAutorizacoes });
+  }
+
+  res.json({
+    imobiliariasAtivas: imobs.filter(i => i.ativo && i.tipoCliente==='imobiliaria').length,
+    corretoresAtivos:   imobs.filter(i => i.ativo && i.tipoCliente==='corretor').length,
+    clientesAtivos:     imobs.filter(i => i.ativo).length,
+    clientesSuspensos:  imobs.filter(i => i.status==='suspenso').length,
+    autorizacoesTotal:  total,
+    autorizacoesAssinadas: assinadas,
+    autorizacoesUltimos30Dias: recentes,
+    porPlano,
+    alertasLimite: alertas.sort((a,b) => b.pct - a.pct)
+  });
+});
+
+// Ranking de utilização
+app.get('/api/admin/ranking', authMiddleware(['super_admin']), async (_req, res) => {
+  const imobs = await db.imobiliarias.find({ ativo: true });
+  const now = new Date();
+  const mesInicio = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+  const ranking = [];
+  for (const imob of imobs) {
+    const usadas = await db.autorizacoes.count({ imobiliariaId: imob._id, criadoEm: { $gte: mesInicio } });
+    const pct = calcularPorcentagem(usadas, imob.limiteAutorizacoes || 0);
+    ranking.push({ nome: imob.nome, plano: imob.planoNome||'Pro', usadas, limite: imob.limiteAutorizacoes, pct });
+  }
+  res.json(ranking.sort((a,b) => b.usadas - a.usadas).slice(0, 10));
 });
 
 // ═══════════════════════════════════════════════════════
@@ -315,9 +588,11 @@ app.get('/api/autorizacoes', authMiddleware(['admin','corretor','super_admin']),
   res.json(lista);
 });
 
-// Criar rascunho (link vazio)
+// Criar rascunho (link vazio) — com verificação de limite
 app.post('/api/autorizacoes', authMiddleware(['admin','corretor']), async (req, res) => {
   try {
+    const limite = await verificarLimite(req.user.imobiliariaId);
+    if (!limite.ok) return res.status(402).json({ erro: limite.erro, usadas: limite.usadas, limiteTotal: (limite.limite||0)+(limite.extras||0) });
     const codigo = genCode();
     const linkPublico = `${getBaseUrl(req)}/autorizacao/${codigo}`;
     const aut = {
@@ -331,16 +606,19 @@ app.post('/api/autorizacoes', authMiddleware(['admin','corretor']), async (req, 
       atualizadoEm:    new Date().toISOString()
     };
     const salvo = await db.autorizacoes.insert(aut);
+    if (limite.tipo === 'credito_extra') await consumirCredito(req.user.imobiliariaId, 'credito_extra');
     await log('autorizacao', `Link vazio gerado: ${codigo}`, null, req.user.imobiliariaId);
     res.json(salvo);
   } catch(e) { res.status(500).json({ erro: e.message }); }
 });
 
-// Criar rascunho assistido (corretor preenche os dados)
+// Criar rascunho assistido (corretor preenche os dados) — com verificação de limite
 app.post('/api/autorizacoes/rascunho', authMiddleware(['admin','corretor']), async (req, res) => {
   try {
     const { codigo, proprietario, imovel } = req.body;
     if (!codigo || !proprietario?.nome) return res.status(422).json({ erro: 'Dados incompletos.' });
+    const limite = await verificarLimite(req.user.imobiliariaId);
+    if (!limite.ok) return res.status(402).json({ erro: limite.erro });
     const linkPublico = `${getBaseUrl(req)}/autorizacao/${codigo}`;
     const aut = {
       codigo, linkPublico,
