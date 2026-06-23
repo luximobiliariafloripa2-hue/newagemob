@@ -1,51 +1,95 @@
 /**
- * AGEMOB — Servidor (Express + NeDB)
- * API REST · Links Públicos de Autorização
+ * AGEMOB v2 — Plataforma SaaS de Autorizações Imobiliárias
+ * Multi-tenant · JWT Auth · Super Admin · RBAC
  */
 require('dotenv').config();
-const express = require('express');
-const path    = require('path');
-const fs      = require('fs');
-const Datastore = require('nedb-promises');
+const express    = require('express');
+const path       = require('path');
+const fs         = require('fs');
+const bcrypt     = require('bcryptjs');
+const jwt        = require('jsonwebtoken');
+const rateLimit  = require('express-rate-limit');
+const Datastore  = require('nedb-promises');
 const { gerarAutorizacaoPDF } = require('./services/pdf');
 
 const app  = express();
 const PORT = process.env.PORT || 3000;
+const JWT_SECRET = process.env.JWT_SECRET || 'agemob-dev-secret-mude-em-producao';
 
-// ---------- Render / Proxies reversos ----------
-// Necessário para que req.protocol retorne 'https' corretamente no Render.
-// Sem isso, os links gerados sairiam como http:// mesmo em produção.
 app.set('trust proxy', 1);
 
-// ---------- Banco de dados ----------
-// No Render o filesystem é efêmero — dados são perdidos a cada deploy/restart.
-// Para produção persistente, migrar para MongoDB Atlas ou PlanetScale.
-// Por ora, o NeDB funciona para demonstração e testes em staging.
+// ═══════════════════════════════════════════════════════
+// BANCO DE DADOS — NeDB (multi-tenant por coleção)
+// ═══════════════════════════════════════════════════════
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
 fs.mkdirSync(DATA_DIR, { recursive: true });
 
 const db = {
-  autorizacoes: Datastore.create({ filename: path.join(DATA_DIR, 'autorizacoes.db'), autoload: true }),
-  config:       Datastore.create({ filename: path.join(DATA_DIR, 'config.db'),       autoload: true }),
-  logs:         Datastore.create({ filename: path.join(DATA_DIR, 'logs.db'),         autoload: true })
-};
-
-const IMOBILIARIA = {
-  razao:    'Lux House Imóveis Ltda.',
-  cnpj:     '48.192.939/0001-21',
-  endereco: 'Rua das Algas, 733 - Sala 1, Jurerê Internacional, Florianópolis/SC'
+  imobiliarias:  Datastore.create({ filename: path.join(DATA_DIR, 'imobiliarias.db'),  autoload: true }),
+  usuarios:      Datastore.create({ filename: path.join(DATA_DIR, 'usuarios.db'),      autoload: true }),
+  autorizacoes:  Datastore.create({ filename: path.join(DATA_DIR, 'autorizacoes.db'),  autoload: true }),
+  config:        Datastore.create({ filename: path.join(DATA_DIR, 'config.db'),        autoload: true }),
+  logs:          Datastore.create({ filename: path.join(DATA_DIR, 'logs.db'),          autoload: true })
 };
 
 const STORAGE_BASE = process.env.STORAGE_DIR || path.join(__dirname, 'storage');
-const STORAGE = {
-  originais: path.join(STORAGE_BASE, 'originais'),
-  assinados: path.join(STORAGE_BASE, 'assinados')
-};
-Object.values(STORAGE).forEach(d => fs.mkdirSync(d, { recursive: true }));
+['originais','assinados'].forEach(d => fs.mkdirSync(path.join(STORAGE_BASE, d), { recursive: true }));
 
-async function log(tipo, mensagem, dados) {
-  try { await db.logs.insert({ tipo, mensagem, dados: dados || null, em: new Date().toISOString() }); }
-  catch (e) { console.error('Falha ao gravar log:', e.message); }
+// ═══════════════════════════════════════════════════════
+// SEED — Super Admin + Lux House (só na primeira execução)
+// ═══════════════════════════════════════════════════════
+async function seed() {
+  // Super admin
+  const superAdmin = await db.usuarios.findOne({ role: 'super_admin' });
+  if (!superAdmin) {
+    const hash = await bcrypt.hash(process.env.SUPER_ADMIN_PASS || 'LuxAdmin2026!', 10);
+    await db.usuarios.insert({
+      nome:  'Super Admin AGEMOB',
+      email: process.env.SUPER_ADMIN_EMAIL || 'admin@agemob.com.br',
+      senha: hash,
+      role:  'super_admin',
+      ativo: true,
+      criadoEm: new Date().toISOString()
+    });
+    console.log('  ✓ Super admin criado');
+  }
+  // Lux House (imobiliária padrão)
+  const luxHouse = await db.imobiliarias.findOne({ slug: 'lux-house' });
+  if (!luxHouse) {
+    const imob = await db.imobiliarias.insert({
+      nome:      'Lux House Imóveis',
+      slug:      'lux-house',
+      cnpj:      '48.192.939/0001-21',
+      endereco:  'Rua das Algas, 733 - Sala 1, Jurerê Internacional, Florianópolis/SC',
+      email:     'luximobiliariafloripa2@gmail.com',
+      corPrimaria: '#04273B',
+      corSecundaria: '#C9A227',
+      plano:     'pro',
+      ativo:     true,
+      criadoEm:  new Date().toISOString()
+    });
+    // Admin da Lux House
+    const hash = await bcrypt.hash(process.env.LUX_ADMIN_PASS || 'lux2026', 10);
+    await db.usuarios.insert({
+      nome:          'Admin Lux House',
+      email:         'admin',
+      senha:         hash,
+      role:          'admin',
+      imobiliariaId: imob._id,
+      imobiliariaSlug: 'lux-house',
+      ativo:         true,
+      criadoEm:      new Date().toISOString()
+    });
+    console.log('  ✓ Lux House criada');
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// HELPERS
+// ═══════════════════════════════════════════════════════
+async function log(tipo, mensagem, dados, imobiliariaId) {
+  try { await db.logs.insert({ tipo, mensagem, dados: dados||null, imobiliariaId: imobiliariaId||null, em: new Date().toISOString() }); }
+  catch(e) { console.error('Log error:', e.message); }
 }
 
 function genCode() {
@@ -54,305 +98,379 @@ function genCode() {
   return s;
 }
 
-/**
- * Retorna a BASE_URL do sistema.
- * Prioridade: variável de ambiente BASE_URL > protocolo+host da request.
- * No Render, definir BASE_URL=https://seu-app.onrender.com nas env vars.
- */
 function getBaseUrl(req) {
   if (process.env.BASE_URL) return process.env.BASE_URL.replace(/\/$/, '');
   if (req) return `${req.protocol}://${req.get('host')}`;
   return 'http://localhost:' + PORT;
 }
 
-function gerarLinkPublico(codigo, req) {
-  return `${getBaseUrl(req)}/autorizacao/${codigo}`;
-}
-
-// ---------- Middlewares ----------
+// ═══════════════════════════════════════════════════════
+// MIDDLEWARES
+// ═══════════════════════════════════════════════════════
 app.use(express.json({ limit: '10mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Expõe a BASE_URL resolvida para o frontend
-app.get('/api/base-url', (req, res) => {
-  res.json({ baseUrl: getBaseUrl(req) });
-});
+// Rate limiting — proteção brute force
+const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 20, message: { erro: 'Muitas tentativas. Aguarde 15 minutos.' } });
+const apiLimiter  = rateLimit({ windowMs: 60 * 1000, max: 100 });
+app.use('/api/auth', authLimiter);
+app.use('/api', apiLimiter);
 
-// Health check — usado pelo Render para verificar se o serviço está vivo
-app.get('/api/health', (_req, res) => {
-  res.json({ ok: true, ts: new Date().toISOString() });
-});
-
-// ---------- Configuração do fluxo de assinatura (etapas V2) ----------
-// Persiste no banco para que todos os dispositivos vejam a mesma configuração,
-// em vez de localStorage (que é por navegador/dispositivo).
-app.get('/api/fluxo-config', async (_req, res) => {
-  const doc = await db.config.findOne({ _key: 'fluxo' });
-  res.json(doc ? doc.valor : null);
-});
-app.post('/api/fluxo-config', async (req, res) => {
-  try {
-    await db.config.update(
-      { _key: 'fluxo' },
-      { _key: 'fluxo', valor: req.body, atualizadoEm: new Date().toISOString() },
-      { upsert: true }
-    );
-    res.json({ ok: true });
-  } catch (e) {
-    res.status(500).json({ erro: 'Falha ao salvar configuração: ' + e.message });
-  }
-});
-
-// ---------- Envio de e-mail via Brevo (API HTTP — funciona no Render free) ----------
-async function enviarEmailBrevo(destino, assunto, texto, html) {
-  const r = await fetch('https://api.brevo.com/v3/smtp/email', {
-    method: 'POST',
-    headers: {
-      'api-key': process.env.BREVO_API_KEY,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      sender: { name: 'AGEMOB · Lux House Imóveis', email: 'luximobiliariafloripa2@gmail.com' },
-      to: [{ email: destino }],
-      subject: assunto,
-      textContent: texto || undefined,
-      htmlContent: html || undefined
-    })
-  });
-  if (!r.ok) {
-    const err = await r.text();
-    throw new Error(`Brevo erro ${r.status}: ${err}`);
-  }
-  return r.json();
+// Middleware JWT — verifica token e injeta req.user
+function authMiddleware(roles = []) {
+  return async (req, res, next) => {
+    const header = req.headers.authorization;
+    if (!header?.startsWith('Bearer ')) return res.status(401).json({ erro: 'Token não fornecido.' });
+    try {
+      const payload = jwt.verify(header.slice(7), JWT_SECRET);
+      req.user = payload;
+      if (roles.length && !roles.includes(payload.role)) {
+        return res.status(403).json({ erro: 'Acesso negado.' });
+      }
+      next();
+    } catch(e) {
+      return res.status(401).json({ erro: 'Token inválido ou expirado.' });
+    }
+  };
 }
 
-app.post('/api/enviar-email', async (req, res) => {
-  try {
-    const { destino, assunto, texto, html } = req.body;
-    if (!destino || !assunto || (!texto && !html)) {
-      return res.status(422).json({ erro: 'Campos destino, assunto e texto/html são obrigatórios.' });
-    }
-    if (!process.env.BREVO_API_KEY) {
-      return res.status(503).json({ erro: 'Envio de e-mail não configurado no servidor.' });
-    }
-    await enviarEmailBrevo(destino, assunto, texto, html);
-    await log('email', `E-mail enviado para ${destino}: ${assunto}`);
-    res.json({ ok: true });
-  } catch (e) {
-    await log('erro', 'Falha ao enviar e-mail: ' + e.message);
-    res.status(500).json({ erro: 'Falha ao enviar e-mail: ' + e.message });
+// ═══════════════════════════════════════════════════════
+// AUTH ROUTES
+// ═══════════════════════════════════════════════════════
+app.post('/api/auth/login', async (req, res) => {
+  const { email, senha } = req.body;
+  if (!email || !senha) return res.status(422).json({ erro: 'E-mail e senha são obrigatórios.' });
+  const user = await db.usuarios.findOne({ email: email.toLowerCase().trim(), ativo: true });
+  if (!user) return res.status(401).json({ erro: 'Credenciais inválidas.' });
+  const ok = await bcrypt.compare(senha, user.senha);
+  if (!ok) return res.status(401).json({ erro: 'Credenciais inválidas.' });
+
+  let imobiliaria = null;
+  if (user.imobiliariaId) {
+    imobiliaria = await db.imobiliarias.findOne({ _id: user.imobiliariaId });
   }
+
+  const token = jwt.sign({
+    userId:          user._id,
+    nome:            user.nome,
+    email:           user.email,
+    role:            user.role,
+    imobiliariaId:   user.imobiliariaId   || null,
+    imobiliariaSlug: user.imobiliariaSlug || null,
+    imobiliariaNome: imobiliaria?.nome    || null
+  }, JWT_SECRET, { expiresIn: '8h' });
+
+  await log('auth', `Login: ${user.email} (${user.role})`, null, user.imobiliariaId);
+  res.json({ token, user: { nome: user.nome, email: user.email, role: user.role, imobiliaria } });
 });
 
-// ---------- Autorizações ----------
-app.get('/api/autorizacoes', async (_req, res) => {
-  const lista = await db.autorizacoes.find({}).sort({ criadoEm: -1 });
-  res.json(lista);
+app.get('/api/auth/me', authMiddleware(), async (req, res) => {
+  const user = await db.usuarios.findOne({ _id: req.user.userId });
+  if (!user) return res.status(404).json({ erro: 'Usuário não encontrado.' });
+  const { senha, ...safe } = user;
+  res.json(safe);
 });
 
-app.post('/api/autorizacoes', async (req, res) => {
+// ═══════════════════════════════════════════════════════
+// SUPER ADMIN ROUTES — /api/admin/*
+// ═══════════════════════════════════════════════════════
+
+// Listar todas as imobiliárias
+app.get('/api/admin/imobiliarias', authMiddleware(['super_admin']), async (_req, res) => {
+  const lista = await db.imobiliarias.find({}).sort({ criadoEm: -1 });
+  // Adiciona contagem de autorizações para cada imobiliária
+  const result = await Promise.all(lista.map(async imob => {
+    const total = await db.autorizacoes.count({ imobiliariaId: imob._id });
+    const assinadas = await db.autorizacoes.count({ imobiliariaId: imob._id, status: 'assinado' });
+    return { ...imob, _stats: { total, assinadas } };
+  }));
+  res.json(result);
+});
+
+// Criar nova imobiliária
+app.post('/api/admin/imobiliarias', authMiddleware(['super_admin']), async (req, res) => {
   try {
-    const { proprietario, imovel, tipo, corretor } = req.body;
-    if (!proprietario?.nome || !proprietario?.email || !imovel?.valor) {
-      return res.status(422).json({ erro: 'Nome, e-mail do proprietário e valor do imóvel são obrigatórios.' });
+    const { nome, cnpj, email, endereco, corPrimaria, plano, adminEmail, adminSenha, adminNome } = req.body;
+    if (!nome || !cnpj || !email || !adminEmail || !adminSenha) {
+      return res.status(422).json({ erro: 'Nome, CNPJ, e-mail, admin e-mail e senha são obrigatórios.' });
     }
-    const codigo = genCode();
-    const linkPublico = gerarLinkPublico(codigo, req);
-    const aut = {
-      codigo,
-      linkPublico,
-      proprietario, imovel,
-      tipo:     tipo === 'exclusiva' ? 'exclusiva' : 'simples',
-      corretor: corretor || 'Lux House',
-      status:   'rascunho',
-      criadoEm:     new Date().toISOString(),
-      atualizadoEm: new Date().toISOString()
-    };
-    const salvo = await db.autorizacoes.insert(aut);
-    await log('autorizacao', `Captação criada: ${salvo.codigo} (${proprietario.nome})`);
-    res.json(salvo);
-  } catch (e) {
-    await log('erro', 'Erro ao criar autorização: ' + e.message);
-    res.status(500).json({ erro: 'Falha ao criar a autorização.' });
-  }
-});
+    // Slug a partir do nome
+    const slug = nome.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
+    const existe = await db.imobiliarias.findOne({ slug });
+    if (existe) return res.status(422).json({ erro: 'Já existe uma imobiliária com esse nome.' });
 
-/** GERAR LINK PÚBLICO para envio ao proprietário */
-app.post('/api/autorizacoes/:id/enviar', async (req, res) => {
-  try {
-    const aut = await db.autorizacoes.findOne({ _id: req.params.id });
-    if (!aut) return res.status(404).json({ erro: 'Autorização não encontrada.' });
-    if (!['rascunho', 'recusado', 'cancelado'].includes(aut.status)) {
-      return res.status(422).json({ erro: `Autorização com status "${aut.status}" não pode ser reenviada.` });
-    }
-
-    const pdfBuffer = await gerarAutorizacaoPDF(aut, IMOBILIARIA);
-    const original  = path.join(STORAGE.originais, `${aut.codigo}_original.pdf`);
-    fs.writeFileSync(original, pdfBuffer);
-
-    const linkPublico = aut.linkPublico || gerarLinkPublico(aut.codigo, req);
-
-    await db.autorizacoes.update({ _id: aut._id }, {
-      $set: {
-        status:      'aguardando',
-        linkPublico,
-        pdfOriginal:  original,
-        enviadoEm:    new Date().toISOString(),
-        atualizadoEm: new Date().toISOString()
-      }
+    const imob = await db.imobiliarias.insert({
+      nome, cnpj, email, endereco: endereco || '',
+      slug,
+      corPrimaria:   corPrimaria   || '#04273B',
+      corSecundaria: '#C9A227',
+      plano:         plano || 'starter',
+      ativo:         true,
+      criadoEm:      new Date().toISOString(),
+      atualizadoEm:  new Date().toISOString()
     });
-    await log('autorizacao', `Autorização ${aut.codigo} aguardando assinatura`, { linkPublico });
-    res.json({ ok: true, status: 'aguardando', linkPublico });
-  } catch (e) {
-    await log('erro', 'Erro ao gerar link: ' + e.message);
-    res.status(500).json({ erro: 'Falha ao gerar o link: ' + e.message });
+
+    // Cria admin da imobiliária
+    const hash = await bcrypt.hash(adminSenha, 10);
+    await db.usuarios.insert({
+      nome:            adminNome || 'Admin',
+      email:           adminEmail.toLowerCase().trim(),
+      senha:           hash,
+      role:            'admin',
+      imobiliariaId:   imob._id,
+      imobiliariaSlug: slug,
+      ativo:           true,
+      criadoEm:        new Date().toISOString()
+    });
+
+    await log('admin', `Imobiliária criada: ${nome} (${slug})`);
+    res.json({ ok: true, imobiliaria: imob });
+  } catch(e) {
+    res.status(500).json({ erro: 'Falha ao criar imobiliária: ' + e.message });
   }
 });
 
-/** Salvar autorização assinada pelo proprietário */
-app.post('/api/autorizacoes/assinar', async (req, res) => {
+// Editar imobiliária
+app.put('/api/admin/imobiliarias/:id', authMiddleware(['super_admin']), async (req, res) => {
   try {
-    const { codigo, proprietario, imovel, tipo, hash, evidencias, otp, facial, liveness, uploads } = req.body;
-    if (!codigo || !proprietario?.nome) {
-      return res.status(422).json({ erro: 'Dados incompletos.' });
-    }
-    const venc = new Date();
-    venc.setDate(venc.getDate() + 365);
-    const aut = {
-      codigo,
-      proprietario,
-      imovel,
-      tipo: tipo || 'simples',
-      status: 'assinado',
-      hash: hash || null,
-      evidencias: evidencias || null,
-      validacoes: { otp: otp || [], facial: facial || null, liveness: liveness || null, uploads: uploads || [] },
-      corretor: 'Lux House',
-      criadoEm: new Date().toISOString(),
-      assinadoEm: new Date().toISOString(),
-      vencimento: venc.toLocaleDateString('pt-BR'),
-      atualizadoEm: new Date().toISOString()
-    };
-    const salvo = await db.autorizacoes.insert(aut);
-    await log('autorizacao', `Autorização assinada: ${codigo} (${proprietario.nome})`);
-    res.json({ ok: true, _id: salvo._id });
-  } catch (e) {
-    await log('erro', 'Erro ao salvar assinatura: ' + e.message);
-    res.status(500).json({ erro: 'Falha ao salvar a autorização.' });
+    const { nome, cnpj, email, endereco, corPrimaria, plano, ativo } = req.body;
+    await db.imobiliarias.update({ _id: req.params.id }, {
+      $set: { nome, cnpj, email, endereco, corPrimaria, plano, ativo, atualizadoEm: new Date().toISOString() }
+    });
+    res.json({ ok: true });
+  } catch(e) {
+    res.status(500).json({ erro: 'Falha ao atualizar.' });
   }
 });
 
-/** Salvar rascunho preenchido pelo corretor */
-app.post('/api/autorizacoes/rascunho', async (req, res) => {
-  try {
-    const { codigo, proprietario, imovel, preenchidoPorCorretor } = req.body;
-    if (!codigo || !proprietario?.nome) {
-      return res.status(422).json({ erro: 'Dados incompletos.' });
-    }
-    const aut = {
-      codigo,
-      proprietario,
-      imovel,
-      tipo: null,
-      status: 'rascunho',
-      preenchidoPorCorretor: !!preenchidoPorCorretor,
-      corretor: 'Lux House',
-      criadoEm: new Date().toISOString(),
-      atualizadoEm: new Date().toISOString()
-    };
-    await db.autorizacoes.insert(aut);
-    await log('autorizacao', `Rascunho criado pelo corretor: ${codigo} (${proprietario.nome})`);
-    res.json({ ok: true, codigo });
-  } catch (e) {
-    res.status(500).json({ erro: 'Falha ao salvar rascunho: ' + e.message });
-  }
+// Desativar/ativar imobiliária
+app.patch('/api/admin/imobiliarias/:id/status', authMiddleware(['super_admin']), async (req, res) => {
+  const { ativo } = req.body;
+  await db.imobiliarias.update({ _id: req.params.id }, { $set: { ativo: !!ativo, atualizadoEm: new Date().toISOString() } });
+  res.json({ ok: true });
 });
 
-/** Buscar dados de uma autorização pelo código */
+// Métricas globais para o super admin
+app.get('/api/admin/metricas', authMiddleware(['super_admin']), async (_req, res) => {
+  const imobs   = await db.imobiliarias.count({ ativo: true });
+  const total   = await db.autorizacoes.count({});
+  const assinadas = await db.autorizacoes.count({ status: 'assinado' });
+  const hoje    = new Date(); hoje.setHours(0,0,0,0);
+  const hoje30  = new Date(hoje); hoje30.setDate(hoje30.getDate()-30);
+  const recentes = await db.autorizacoes.count({ criadoEm: { $gte: hoje30.toISOString() } });
+  res.json({ imobiliarias: imobs, autorizacoesTotal: total, autorizacoesAssinadas: assinadas, autorizacoesUltimos30Dias: recentes });
+});
+
+// Listar usuários de uma imobiliária
+app.get('/api/admin/imobiliarias/:id/usuarios', authMiddleware(['super_admin']), async (req, res) => {
+  const lista = await db.usuarios.find({ imobiliariaId: req.params.id });
+  res.json(lista.map(({ senha, ...u }) => u));
+});
+
+// ═══════════════════════════════════════════════════════
+// ROTAS PÚBLICAS (sem auth)
+// ═══════════════════════════════════════════════════════
+app.get('/api/health', (_req, res) => res.json({ ok: true, ts: new Date().toISOString(), version: '2.0.0' }));
+
+app.get('/api/base-url', (req, res) => res.json({ baseUrl: getBaseUrl(req) }));
+
+// Buscar dados de uma autorização pelo código (para pré-preencher link assistido)
 app.get('/api/autorizacoes/codigo/:codigo', async (req, res) => {
   const aut = await db.autorizacoes.findOne({ codigo: req.params.codigo });
   if (!aut) return res.json(null);
   res.json(aut);
 });
 
-app.post('/api/autorizacoes/:id/cancelar', async (req, res) => {
+// Buscar dados da imobiliária pelo slug (para branding no link do proprietário)
+app.get('/api/imobiliaria/:slug', async (req, res) => {
+  const imob = await db.imobiliarias.findOne({ slug: req.params.slug, ativo: true });
+  if (!imob) return res.status(404).json({ erro: 'Imobiliária não encontrada.' });
+  // Retorna apenas dados públicos (sem dados sensíveis)
+  const { _id, nome, slug, corPrimaria, corSecundaria, endereco } = imob;
+  res.json({ _id, nome, slug, corPrimaria, corSecundaria, endereco });
+});
+
+// ═══════════════════════════════════════════════════════
+// ROTAS AUTENTICADAS — Autorizações (admin + corretor)
+// ═══════════════════════════════════════════════════════
+
+// Configuração do fluxo de assinatura (por imobiliária)
+app.get('/api/fluxo-config', authMiddleware(['admin','corretor','super_admin']), async (req, res) => {
+  const key = `fluxo_${req.user.imobiliariaId || 'global'}`;
+  const doc = await db.config.findOne({ _key: key });
+  res.json(doc ? doc.valor : null);
+});
+app.post('/api/fluxo-config', authMiddleware(['admin','super_admin']), async (req, res) => {
   try {
-    const aut = await db.autorizacoes.findOne({ _id: req.params.id });
-    if (!aut) return res.status(404).json({ erro: 'Autorização não encontrada.' });
-    await db.autorizacoes.update({ _id: aut._id }, {
-      $set: { status: 'cancelado', atualizadoEm: new Date().toISOString() }
-    });
-    await log('status', `Autorização ${aut.codigo} cancelada`);
+    const key = `fluxo_${req.user.imobiliariaId || 'global'}`;
+    await db.config.update({ _key: key }, { _key: key, valor: req.body, atualizadoEm: new Date().toISOString() }, { upsert: true });
     res.json({ ok: true });
-  } catch (e) {
-    res.status(500).json({ erro: 'Falha ao cancelar.' });
+  } catch(e) { res.status(500).json({ erro: e.message }); }
+});
+
+// Listar autorizações (filtradas por imobiliária)
+app.get('/api/autorizacoes', authMiddleware(['admin','corretor','super_admin']), async (req, res) => {
+  const query = req.user.role === 'super_admin' ? {} : { imobiliariaId: req.user.imobiliariaId };
+  const lista = await db.autorizacoes.find(query).sort({ criadoEm: -1 });
+  res.json(lista);
+});
+
+// Criar rascunho (link vazio)
+app.post('/api/autorizacoes', authMiddleware(['admin','corretor']), async (req, res) => {
+  try {
+    const codigo = genCode();
+    const linkPublico = `${getBaseUrl(req)}/autorizacao/${codigo}`;
+    const aut = {
+      codigo, linkPublico,
+      imobiliariaId:   req.user.imobiliariaId,
+      imobiliariaSlug: req.user.imobiliariaSlug,
+      corretorId:      req.user.userId,
+      corretorNome:    req.user.nome,
+      status:          'rascunho',
+      criadoEm:        new Date().toISOString(),
+      atualizadoEm:    new Date().toISOString()
+    };
+    const salvo = await db.autorizacoes.insert(aut);
+    await log('autorizacao', `Link vazio gerado: ${codigo}`, null, req.user.imobiliariaId);
+    res.json(salvo);
+  } catch(e) { res.status(500).json({ erro: e.message }); }
+});
+
+// Criar rascunho assistido (corretor preenche os dados)
+app.post('/api/autorizacoes/rascunho', authMiddleware(['admin','corretor']), async (req, res) => {
+  try {
+    const { codigo, proprietario, imovel } = req.body;
+    if (!codigo || !proprietario?.nome) return res.status(422).json({ erro: 'Dados incompletos.' });
+    const linkPublico = `${getBaseUrl(req)}/autorizacao/${codigo}`;
+    const aut = {
+      codigo, linkPublico,
+      proprietario, imovel,
+      tipo:            null,
+      status:          'rascunho',
+      preenchidoPorCorretor: true,
+      imobiliariaId:   req.user.imobiliariaId,
+      imobiliariaSlug: req.user.imobiliariaSlug,
+      corretorId:      req.user.userId,
+      corretorNome:    req.user.nome,
+      criadoEm:        new Date().toISOString(),
+      atualizadoEm:    new Date().toISOString()
+    };
+    await db.autorizacoes.insert(aut);
+    await log('autorizacao', `Rascunho assistido: ${codigo} (${proprietario.nome})`, null, req.user.imobiliariaId);
+    res.json({ ok: true, codigo, linkPublico });
+  } catch(e) { res.status(500).json({ erro: e.message }); }
+});
+
+// Salvar autorização assinada (chamado pelo proprietário — sem auth)
+app.post('/api/autorizacoes/assinar', async (req, res) => {
+  try {
+    const { codigo, proprietario, imovel, tipo, hash, evidencias, otp, facial, liveness, uploads } = req.body;
+    if (!codigo || !proprietario?.nome) return res.status(422).json({ erro: 'Dados incompletos.' });
+    const venc = new Date(); venc.setDate(venc.getDate() + 365);
+    // Busca rascunho existente para preservar imobiliariaId
+    const rascunho = await db.autorizacoes.findOne({ codigo });
+    const aut = {
+      codigo, proprietario, imovel,
+      tipo:          tipo || 'simples',
+      status:        'assinado',
+      hash:          hash || null,
+      evidencias:    evidencias || null,
+      validacoes:    { otp: otp||[], facial: facial||null, liveness: liveness||null, uploads: uploads||[] },
+      imobiliariaId:   rascunho?.imobiliariaId   || null,
+      imobiliariaSlug: rascunho?.imobiliariaSlug || null,
+      corretorId:      rascunho?.corretorId      || null,
+      corretorNome:    rascunho?.corretorNome    || 'Lux House',
+      criadoEm:      new Date().toISOString(),
+      assinadoEm:    new Date().toISOString(),
+      vencimento:    venc.toLocaleDateString('pt-BR'),
+      atualizadoEm:  new Date().toISOString()
+    };
+    if (rascunho) {
+      await db.autorizacoes.update({ codigo }, { $set: { ...aut } });
+    } else {
+      await db.autorizacoes.insert(aut);
+    }
+    await log('autorizacao', `Assinada: ${codigo} (${proprietario.nome})`, null, aut.imobiliariaId);
+    res.json({ ok: true });
+  } catch(e) {
+    res.status(500).json({ erro: e.message });
   }
 });
 
-/** Downloads — PDF original / assinado / certificado */
-app.get('/api/autorizacoes/:id/pdf', async (req, res) => {
-  const aut = await db.autorizacoes.findOne({ _id: req.params.id });
-  if (!aut) return res.status(404).json({ erro: 'Autorização não encontrada.' });
-  const buffer = await gerarAutorizacaoPDF(aut, IMOBILIARIA);
-  res.setHeader('Content-Type', 'application/pdf');
-  res.setHeader('Content-Disposition', `attachment; filename=AGEMOB_Autorizacao_${aut.codigo}.pdf`);
-  res.send(buffer);
-});
-app.get('/api/autorizacoes/:id/pdf-assinado', async (req, res) => {
-  const aut = await db.autorizacoes.findOne({ _id: req.params.id });
-  if (!aut?.pdfAssinado || !fs.existsSync(aut.pdfAssinado)) {
-    return res.status(404).json({ erro: 'PDF assinado ainda não disponível.' });
-  }
-  res.download(aut.pdfAssinado);
-});
-app.get('/api/autorizacoes/:id/certificado', async (req, res) => {
-  const aut = await db.autorizacoes.findOne({ _id: req.params.id });
-  if (!aut?.certificado || !fs.existsSync(aut.certificado)) {
-    return res.status(404).json({ erro: 'Certificado ainda não disponível.' });
-  }
-  res.download(aut.certificado);
+// Cancelar autorização
+app.post('/api/autorizacoes/:id/cancelar', authMiddleware(['admin','corretor']), async (req, res) => {
+  try {
+    const aut = await db.autorizacoes.findOne({ _id: req.params.id, imobiliariaId: req.user.imobiliariaId });
+    if (!aut) return res.status(404).json({ erro: 'Não encontrada.' });
+    await db.autorizacoes.update({ _id: aut._id }, { $set: { status: 'cancelado', atualizadoEm: new Date().toISOString() } });
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ erro: e.message }); }
 });
 
-// ---------- Dashboard ----------
-app.get('/api/dashboard', async (_req, res) => {
-  const lista     = await db.autorizacoes.find({});
-  const enviadas  = lista.filter(a => a.enviadoEm).length;
+// Dashboard (por imobiliária)
+app.get('/api/dashboard', authMiddleware(['admin','corretor','super_admin']), async (req, res) => {
+  const query = req.user.role === 'super_admin' ? {} : { imobiliariaId: req.user.imobiliariaId };
+  const lista = await db.autorizacoes.find(query);
   const assinadas = lista.filter(a => a.status === 'assinado');
-  const pendentes = lista.filter(a => ['aguardando', 'visualizado'].includes(a.status)).length;
-  const taxa      = enviadas ? Math.round((assinadas.length / enviadas) * 100) : 0;
-  const tempos    = assinadas
-    .filter(a => a.enviadoEm && a.assinadoEm)
-    .map(a => (new Date(a.assinadoEm) - new Date(a.enviadoEm)) / 36e5);
-  const tempoMedioH = tempos.length ? (tempos.reduce((s, t) => s + t, 0) / tempos.length) : null;
-
   res.json({
     total:       lista.length,
     rascunhos:   lista.filter(a => a.status === 'rascunho').length,
-    enviadas,
-    pendentes,
-    visualizadas: lista.filter(a => a.status === 'visualizado').length,
     assinadas:   assinadas.length,
-    recusadas:   lista.filter(a => a.status === 'recusado').length,
     canceladas:  lista.filter(a => a.status === 'cancelado').length,
     exclusivas:  lista.filter(a => a.tipo === 'exclusiva').length,
-    taxaAssinatura:  taxa,
-    tempoMedioHoras: tempoMedioH !== null ? Math.round(tempoMedioH * 10) / 10 : null,
-    vgv: lista.reduce((s, a) => s + (a.imovel?.valor || 0), 0)
-  })
+    vgv:         lista.reduce((s,a) => s + (a.imovel?.valor||0), 0)
+  });
 });
 
-// ---------- Logs ----------
-app.get('/api/logs', async (_req, res) => {
-  const logs = await db.logs.find({}).sort({ em: -1 }).limit(100);
-  res.json(logs);
+// Envio de e-mail via Brevo
+async function enviarEmailBrevo(destino, assunto, texto, html, nomeImob) {
+  const r = await fetch('https://api.brevo.com/v3/smtp/email', {
+    method: 'POST',
+    headers: { 'api-key': process.env.BREVO_API_KEY, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      sender: { name: `AGEMOB · ${nomeImob||'Imóveis'}`, email: process.env.BREVO_SENDER || 'luximobiliariafloripa2@gmail.com' },
+      to: [{ email: destino }],
+      subject: assunto,
+      textContent: texto || undefined,
+      htmlContent: html  || undefined
+    })
+  });
+  if (!r.ok) throw new Error(`Brevo ${r.status}: ${await r.text()}`);
+  return r.json();
+}
+
+app.post('/api/enviar-email', async (req, res) => {
+  try {
+    const { destino, assunto, texto, html, nomeImob } = req.body;
+    if (!destino || !assunto || (!texto && !html)) return res.status(422).json({ erro: 'Campos obrigatórios.' });
+    if (!process.env.BREVO_API_KEY) return res.status(503).json({ erro: 'E-mail não configurado.' });
+    await enviarEmailBrevo(destino, assunto, texto, html, nomeImob);
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ erro: e.message }); }
 });
 
-// ---------- SPA catch-all ----------
+// Configuração fluxo pública (para o proprietário buscar sem auth)
+app.get('/api/fluxo-config-publico/:slug', async (req, res) => {
+  const key = `fluxo_${req.params.slug}`;
+  const imob = await db.imobiliarias.findOne({ slug: req.params.slug });
+  if (!imob) return res.json(null);
+  const doc = await db.config.findOne({ _key: `fluxo_${imob._id}` });
+  res.json(doc ? doc.valor : null);
+});
+
+// ═══════════════════════════════════════════════════════
+// SPA CATCH-ALL
+// ═══════════════════════════════════════════════════════
 app.get('/{*path}', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-app.listen(PORT, () => {
-  console.log(`\n  AGEMOB rodando em http://localhost:${PORT}`);
-  console.log(`  BASE_URL: ${process.env.BASE_URL || '(automático pelo host da request)'}\n`);
-});
+// ═══════════════════════════════════════════════════════
+// START
+// ═══════════════════════════════════════════════════════
+seed().then(() => {
+  app.listen(PORT, () => {
+    console.log(`\n  AGEMOB v2 rodando em http://localhost:${PORT}`);
+    console.log(`  BASE_URL: ${process.env.BASE_URL || '(automático)'}\n`);
+  });
+}).catch(console.error);

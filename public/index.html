@@ -251,6 +251,68 @@ label{display:block;font-size:13px;font-weight:600;color:var(--ink-2);margin-bot
   </div>
 </header>
 
+<!-- ====================== VIEW: SUPER ADMIN ====================== -->
+<main class="wrap hidden" id="viewSuperAdmin">
+  <div class="page-head">
+    <div>
+      <h1>⚡ Super Admin AGEMOB</h1>
+      <p>Gerencie todas as imobiliárias da plataforma</p>
+    </div>
+    <button class="btn btn-primary btn-lg" onclick="abrirModalNovaImob()">+ Nova Imobiliária</button>
+  </div>
+
+  <!-- Métricas globais -->
+  <div class="kpis" id="saKpis"></div>
+
+  <!-- Lista de imobiliárias -->
+  <div class="panel">
+    <h2>Imobiliárias cadastradas</h2>
+    <div class="tbl-scroll">
+      <table class="tbl">
+        <thead><tr>
+          <th>Imobiliária</th><th>CNPJ</th><th>Plano</th><th>Autorizações</th><th>Status</th><th>Ações</th>
+        </tr></thead>
+        <tbody id="saTableBody"></tbody>
+      </table>
+    </div>
+  </div>
+</main>
+
+<!-- MODAL: Nova Imobiliária -->
+<div class="overlay" id="modalNovaImob">
+  <div class="modal" style="max-width:580px;max-height:90vh;overflow-y:auto">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <h2>Nova Imobiliária</h2>
+      <button class="btn btn-ghost" style="padding:6px 12px" onclick="document.getElementById('modalNovaImob').classList.remove('open')">✕</button>
+    </div>
+    <h3 style="font-size:13px;color:var(--ink-3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Dados da imobiliária</h3>
+    <div class="grid2">
+      <div class="field" style="grid-column:1/-1"><label>Nome *</label><input id="ni_nome" placeholder="Ex.: Imobiliária ABC"></div>
+      <div class="field"><label>CNPJ *</label><input id="ni_cnpj" placeholder="00.000.000/0001-00"></div>
+      <div class="field"><label>E-mail *</label><input id="ni_email" type="email" placeholder="contato@imob.com.br"></div>
+      <div class="field" style="grid-column:1/-1"><label>Endereço</label><input id="ni_end" placeholder="Rua, número, cidade/UF"></div>
+      <div class="field"><label>Cor primária</label><input id="ni_cor" type="color" value="#04273B"></div>
+      <div class="field"><label>Plano</label>
+        <select id="ni_plano">
+          <option value="starter">Starter (até 50 autorizações/mês)</option>
+          <option value="pro" selected>Pro (até 200 autorizações/mês)</option>
+          <option value="enterprise">Enterprise (ilimitado)</option>
+        </select>
+      </div>
+    </div>
+    <h3 style="font-size:13px;color:var(--ink-3);text-transform:uppercase;letter-spacing:.5px;margin:16px 0 10px">Admin da imobiliária</h3>
+    <div class="grid2">
+      <div class="field"><label>Nome do admin *</label><input id="ni_adminNome" placeholder="Ex.: João Silva"></div>
+      <div class="field"><label>E-mail de login *</label><input id="ni_adminEmail" placeholder="joao@imob.com.br"></div>
+      <div class="field" style="grid-column:1/-1"><label>Senha inicial *</label><input id="ni_adminSenha" type="password" placeholder="Mínimo 8 caracteres"></div>
+    </div>
+    <div class="nav-row" style="margin-top:16px">
+      <button class="btn btn-ghost" onclick="document.getElementById('modalNovaImob').classList.remove('open')">Cancelar</button>
+      <button class="btn btn-primary" onclick="criarImobiliaria()">Criar imobiliária ✓</button>
+    </div>
+  </div>
+</div>
+
 <!-- ====================== VIEW: ADMIN ====================== -->
 <main class="wrap" id="viewAdmin">
   <div class="page-head">
@@ -616,56 +678,94 @@ fetch('/api/base-url').then(r=>r.json()).then(d=>{ if(d.baseUrl) window.AGEMOB_B
 
 /* ================= AUTENTICAÇÃO ================= */
 /**
- * Usuários cadastrados no sistema.
- * Estrutura preparada para múltiplas imobiliárias.
- * Em produção, substituir por autenticação via backend.
+ * Autenticação JWT enterprise — multi-tenant AGEMOB v2
  */
-const USUARIOS = [
-  { email: "admin", senha: "lux2026", nomeImobiliaria: "Lux House Imóveis", perfil: "admin" }
-];
+
+/* ================= JWT AUTH ================= */
+const Auth = {
+  token: null,
+  user:  null,
+
+  save(token, user) {
+    this.token = token;
+    this.user  = user;
+    localStorage.setItem('agemob_token', token);
+    localStorage.setItem('agemob_user',  JSON.stringify(user));
+  },
+  load() {
+    this.token = localStorage.getItem('agemob_token');
+    const u    = localStorage.getItem('agemob_user');
+    this.user  = u ? JSON.parse(u) : null;
+    return !!this.token && !!this.user;
+  },
+  clear() {
+    this.token = null; this.user = null;
+    localStorage.removeItem('agemob_token');
+    localStorage.removeItem('agemob_user');
+  },
+  headers() {
+    return { 'Content-Type':'application/json', 'Authorization': `Bearer ${this.token}` };
+  },
+  isSuperAdmin() { return this.user?.role === 'super_admin'; }
+};
 
 /** Verifica se há sessão ativa ao carregar a página */
 function checkAuth(){
-  const sessao = localStorage.getItem('agemob_sessao');
-  if(sessao){
-    const user = JSON.parse(sessao);
-    document.getElementById('agencyName').textContent = user.nomeImobiliaria;
+  if (Auth.load()) {
+    document.getElementById('agencyName').textContent = Auth.user?.imobiliaria?.nome || Auth.user?.nome || 'AGEMOB';
     document.getElementById('viewLogin').classList.add('hidden');
+    // Super admin vê botão especial
+    if (Auth.isSuperAdmin()) mostrarBotaoSuperAdmin();
   } else {
     document.getElementById('viewLogin').classList.remove('hidden');
   }
 }
 
-/** Realiza o login */
-function doLogin(){
+/** Realiza o login via API */
+async function doLogin(){
   const email  = document.getElementById('loginEmail').value.trim().toLowerCase();
   const senha  = document.getElementById('loginSenha').value;
   const errEl  = document.getElementById('loginError');
-  const user   = USUARIOS.find(u => u.email === email && u.senha === senha);
-  if(user){
-    localStorage.setItem('agemob_sessao', JSON.stringify(user));
-    document.getElementById('agencyName').textContent = user.nomeImobiliaria;
+  const btnEl  = document.querySelector('#viewLogin button[onclick="doLogin()"]');
+  if (!email || !senha) { errEl.style.display='block'; errEl.textContent='Preencha e-mail e senha.'; return; }
+  if (btnEl) { btnEl.disabled=true; btnEl.textContent='Entrando…'; }
+  try {
+    const r = await fetch('/api/auth/login', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({email, senha}) });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.erro || 'Credenciais inválidas.');
+    Auth.save(d.token, d.user);
+    document.getElementById('agencyName').textContent = d.user?.imobiliaria?.nome || d.user?.nome || 'AGEMOB';
     document.getElementById('viewLogin').classList.add('hidden');
     errEl.style.display = 'none';
-  } else {
-    errEl.style.display = 'block';
-    document.getElementById('loginSenha').value = '';
+    if (Auth.isSuperAdmin()) {
+      mostrarBotaoSuperAdmin();
+      abrirSuperAdmin();
+    } else {
+      iniciarAtualizacaoRealtime();
+    }
+  } catch(e) {
+    errEl.style.display='block'; errEl.textContent = e.message;
+    document.getElementById('loginSenha').value='';
     document.getElementById('loginSenha').focus();
+  } finally {
+    if (btnEl) { btnEl.disabled=false; btnEl.textContent='Entrar →'; }
   }
 }
 
 /** Realiza o logout */
 function doLogout(){
   if(!confirm('Deseja sair do painel?')) return;
-  localStorage.removeItem('agemob_sessao');
+  Auth.clear();
   document.getElementById('loginEmail').value = '';
   document.getElementById('loginSenha').value = '';
   document.getElementById('loginError').style.display = 'none';
   document.getElementById('viewLogin').classList.remove('hidden');
-  // Garantir que volta para viewAdmin caso esteja em outra view
   document.getElementById('viewOwner').classList.add('hidden');
   document.getElementById('btnBack').classList.add('hidden');
   document.getElementById('viewAdmin').classList.remove('hidden');
+  // Esconde painel super admin se estava aberto
+  const sa = document.getElementById('viewSuperAdmin');
+  if (sa) sa.classList.add('hidden');
 }
 
 /* ================= STATE ================= */
@@ -687,7 +787,8 @@ const BRL = v => v.toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 /* ================= BUSCA AUTORIZAÇÕES DO SERVIDOR ================= */
 async function carregarAutorizacoes(){
   try{
-    const r = await fetch('/api/autorizacoes');
+    const r = await fetch('/api/autorizacoes', { headers: Auth.headers() });
+    if(r.status===401){ doLogout(); return; }
     const lista = await r.json();
     AG.autorizacoes = lista.map(a => ({
       prop:     a.proprietario?.nome || '—',
@@ -696,7 +797,7 @@ async function carregarAutorizacoes(){
       tipo:     a.tipo || 'simples',
       status:   a.status || 'assinado',
       venc:     a.vencimento || '—',
-      corretor: a.corretor || 'Lux House',
+      corretor: a.corretorNome || a.corretor || 'Lux House',
       code:     a.codigo,
       hash:     a.hash,
       _id:      a._id
@@ -957,7 +1058,7 @@ async function gerarLinkAssistido(){
   try {
     const r = await fetch('/api/autorizacoes/rascunho', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: Auth.headers(),
       body: JSON.stringify(dados)
     });
     if(!r.ok) throw new Error('Falha ao salvar');
@@ -1325,6 +1426,108 @@ function gerarPDF(){
 }
 
 /* ================= INICIALIZAÇÃO ================= */
+// ═══════════════════════════════════════════════════════
+// SUPER ADMIN — Funções de gerenciamento
+// ═══════════════════════════════════════════════════════
+function mostrarBotaoSuperAdmin(){
+  const head = document.querySelector('#viewAdmin .page-head');
+  if(!head || document.getElementById('btnSuperAdmin')) return;
+  const b = document.createElement('button');
+  b.id = 'btnSuperAdmin';
+  b.className = 'btn btn-ghost btn-lg';
+  b.innerHTML = '⚡ Super Admin';
+  b.onclick = abrirSuperAdmin;
+  head.insertBefore(b, head.firstChild);
+}
+
+function abrirSuperAdmin(){
+  document.getElementById('viewAdmin').classList.add('hidden');
+  document.getElementById('viewSuperAdmin').classList.remove('hidden');
+  carregarMetricasSuperAdmin();
+  carregarImobiliarias();
+}
+
+function voltarSuperAdmin(){
+  document.getElementById('viewSuperAdmin').classList.add('hidden');
+  document.getElementById('viewAdmin').classList.remove('hidden');
+}
+
+async function carregarMetricasSuperAdmin(){
+  try {
+    const r = await fetch('/api/admin/metricas', { headers: Auth.headers() });
+    const d = await r.json();
+    document.getElementById('saKpis').innerHTML = [
+      { l:'Imobiliárias ativas', n: d.imobiliarias, s:'na plataforma', c:'k-green' },
+      { l:'Autorizações total', n: d.autorizacoesTotal, s:'todas as imobiliárias', c:'' },
+      { l:'Assinadas', n: d.autorizacoesAssinadas, s:'documentos concluídos', c:'k-gold' },
+      { l:'Últimos 30 dias', n: d.autorizacoesUltimos30Dias, s:'novas autorizações', c:'' }
+    ].map(x=>`<div class="kpi ${x.c}"><div class="k-label">${x.l}</div><div class="k-num">${x.n}</div><div class="k-sub">${x.s}</div></div>`).join('');
+  } catch(e) { console.error(e); }
+}
+
+async function carregarImobiliarias(){
+  try {
+    const r = await fetch('/api/admin/imobiliarias', { headers: Auth.headers() });
+    const lista = await r.json();
+    document.getElementById('saTableBody').innerHTML = lista.map(imob => `
+      <tr>
+        <td>
+          <div class="prop">${imob.nome}</div>
+          <div class="sub">${imob.slug} · ${imob.email}</div>
+        </td>
+        <td>${imob.cnpj}</td>
+        <td><span class="badge ${imob.plano==='enterprise'?'b-gold':imob.plano==='pro'?'b-green':'b-gray'}">${imob.plano}</span></td>
+        <td><b>${imob._stats?.total||0}</b> <span style="color:var(--ink-3);font-size:12px">(${imob._stats?.assinadas||0} assinadas)</span></td>
+        <td><span class="badge ${imob.ativo?'b-green':'b-red'}">${imob.ativo?'Ativa':'Inativa'}</span></td>
+        <td style="white-space:nowrap">
+          <button class="icon-btn" title="${imob.ativo?'Desativar':'Ativar'}" onclick="toggleImob('${imob._id}',${!imob.ativo})">${imob.ativo?'⏸':'▶'}</button>
+        </td>
+      </tr>`).join('');
+  } catch(e) { console.error(e); }
+}
+
+function abrirModalNovaImob(){
+  document.getElementById('modalNovaImob').classList.add('open');
+}
+
+async function criarImobiliaria(){
+  const nome       = document.getElementById('ni_nome').value.trim();
+  const cnpj       = document.getElementById('ni_cnpj').value.trim();
+  const email      = document.getElementById('ni_email').value.trim();
+  const endereco   = document.getElementById('ni_end').value.trim();
+  const corPrimaria= document.getElementById('ni_cor').value;
+  const plano      = document.getElementById('ni_plano').value;
+  const adminNome  = document.getElementById('ni_adminNome').value.trim();
+  const adminEmail = document.getElementById('ni_adminEmail').value.trim();
+  const adminSenha = document.getElementById('ni_adminSenha').value;
+  if(!nome||!cnpj||!email||!adminEmail||!adminSenha){ showToast('Preencha todos os campos obrigatórios.','error'); return; }
+  try {
+    const r = await fetch('/api/admin/imobiliarias', {
+      method: 'POST', headers: Auth.headers(),
+      body: JSON.stringify({ nome, cnpj, email, endereco, corPrimaria, plano, adminNome, adminEmail, adminSenha })
+    });
+    const d = await r.json();
+    if(!r.ok) throw new Error(d.erro);
+    document.getElementById('modalNovaImob').classList.remove('open');
+    showToast(`Imobiliária "${nome}" criada com sucesso! ✓`, 'success');
+    carregarImobiliarias();
+    carregarMetricasSuperAdmin();
+    // Limpa campos
+    ['ni_nome','ni_cnpj','ni_email','ni_end','ni_adminNome','ni_adminEmail','ni_adminSenha'].forEach(id => document.getElementById(id).value='');
+  } catch(e) { showToast('Erro: '+e.message, 'error'); }
+}
+
+async function toggleImob(id, ativo){
+  try {
+    await fetch(`/api/admin/imobiliarias/${id}/status`, {
+      method: 'PATCH', headers: Auth.headers(),
+      body: JSON.stringify({ ativo })
+    });
+    showToast(ativo ? 'Imobiliária ativada.' : 'Imobiliária desativada.', 'success');
+    carregarImobiliarias();
+  } catch(e) { showToast('Erro ao alterar status.', 'error'); }
+}
+
 // Verifica autenticação ao carregar
 checkAuth();
 </script>
@@ -1487,13 +1690,51 @@ const V2E = {
 };
 /* IP público — coletado em tempo de execução no navegador do signatário */
 fetch('https://api.ipify.org?format=json').then(r=>r.json()).then(d=>{ V2E.ip=d.ip; }).catch(()=>{});
-/* Geolocalização aproximada (somente quando autorizada pelo usuário) */
+/* Geolocalização — exibe card explicativo antes de pedir permissão */
 function v2PedirGeo(){
   if(!navigator.geolocation || V2E.geo) return;
+  // Mostra card de explicação antes de pedir permissão
+  v2MostrarCardGeo();
+}
+function v2MostrarCardGeo(){
+  // Evita duplicar
+  if(document.getElementById('v2GeoCard')) return;
+  const card = document.createElement('div');
+  card.id = 'v2GeoCard';
+  card.style.cssText = 'position:fixed;bottom:20px;left:50%;transform:translateX(-50%);max-width:420px;width:calc(100% - 40px);background:#fff;border:1.5px solid var(--brand);border-radius:16px;padding:18px 20px;box-shadow:0 8px 32px rgba(0,0,0,.18);z-index:500;animation:pop .3s cubic-bezier(.2,.8,.2,1)';
+  card.innerHTML = `
+    <div style="display:flex;gap:12px;align-items:flex-start">
+      <div style="font-size:28px;flex-shrink:0">📍</div>
+      <div style="flex:1">
+        <b style="font-size:14px;font-family:'Sora',sans-serif;color:var(--ink)">Compartilhar localização</b>
+        <p style="font-size:13px;color:var(--ink-2);margin:4px 0 12px;line-height:1.5">Para fortalecer a validade jurídica da sua assinatura, podemos registrar sua localização aproximada como evidência do documento. Seus dados não serão compartilhados com terceiros.</p>
+        <div style="display:flex;gap:8px">
+          <button onclick="v2AceitarGeo()" style="flex:1;padding:9px;background:var(--brand);color:#fff;border:none;border-radius:9px;font-weight:600;font-size:13px;cursor:pointer">✓ Permitir</button>
+          <button onclick="v2RecusarGeo()" style="flex:1;padding:9px;background:#F2F4F7;color:var(--ink-2);border:none;border-radius:9px;font-weight:600;font-size:13px;cursor:pointer">Agora não</button>
+        </div>
+      </div>
+    </div>`;
+  document.body.appendChild(card);
+  // Auto-remove após 30s se não interagir
+  setTimeout(()=>{ if(document.getElementById('v2GeoCard')) v2RecusarGeo(); }, 30000);
+}
+function v2AceitarGeo(){
+  const card = document.getElementById('v2GeoCard');
+  if(card) card.remove();
   navigator.geolocation.getCurrentPosition(
-    p=>{ V2E.geo = p.coords.latitude.toFixed(5)+', '+p.coords.longitude.toFixed(5)+' (±'+Math.round(p.coords.accuracy)+'m)';
-         v2Evento('Geolocalização autorizada', V2E.geo); },
-    ()=>{ V2E.geo=null; }, {enableHighAccuracy:false, timeout:8000});
+    p => {
+      V2E.geo = p.coords.latitude.toFixed(5)+', '+p.coords.longitude.toFixed(5)+' (±'+Math.round(p.coords.accuracy)+'m)';
+      v2Evento('Geolocalização autorizada', V2E.geo);
+    },
+    () => { V2E.geo = 'permissão negada pelo navegador'; },
+    { enableHighAccuracy: true, timeout: 10000 }
+  );
+}
+function v2RecusarGeo(){
+  const card = document.getElementById('v2GeoCard');
+  if(card) card.remove();
+  V2E.geo = 'não autorizada pelo usuário';
+  v2Evento('Geolocalização recusada', '');
 }
 /* Trilha de auditoria — todos os eventos com data, hora, IP, usuário e sessão */
 function v2Evento(tipo, detalhe){
@@ -1558,7 +1799,7 @@ let v2CfgPronto = false; // true assim que a config do servidor for confirmada
    Atualiza v2Cfg assim que chega; se o link público já tiver sido aberto
    antes disso, refaz a fila de etapas com a config correta. */
 function v2CarregarConfigServidor(){
-  return fetch('/api/fluxo-config').then(r=>r.json()).then(d=>{
+  return fetch('/api/fluxo-config', { headers: Auth.token ? {'Authorization':'Bearer '+Auth.token} : {} }).then(r=>r.json()).then(d=>{
     if(d && d.ordem && d.ativos){
       v2Cfg = d;
       try{ localStorage.setItem('agemob_fluxo', JSON.stringify(v2Cfg)); }catch(e){}
@@ -1620,7 +1861,7 @@ function v2SalvarFluxo(){
   localStorage.setItem('agemob_fluxo', JSON.stringify(v2Cfg));
   fetch('/api/fluxo-config', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: Auth.headers(),
     body: JSON.stringify(v2Cfg)
   }).catch(()=>{});
   v2Evento('Configuração de fluxo alterada', 'Etapas ativas: '+v2Cfg.ordem.filter(id=>v2Cfg.ativos[id]).join(', '));
