@@ -858,8 +858,8 @@ async function doLogin(){
 }
 
 /** Realiza o logout */
-function doLogout(){
-  if(!confirm('Deseja sair do painel?')) return;
+function doLogout(confirmar){
+  if(confirmar !== false && !confirm('Deseja sair do painel?')) return;
   Auth.clear();
   document.getElementById('loginEmail').value = '';
   document.getElementById('loginSenha').value = '';
@@ -893,7 +893,7 @@ const BRL = v => v.toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 async function carregarAutorizacoes(){
   try{
     const r = await fetch('/api/autorizacoes', { headers: Auth.headers() });
-    if(r.status===401){ doLogout(); return; }
+    if(r.status===401){ doLogout(false); return; }
     const lista = await r.json();
     AG.autorizacoes = lista.map(a => ({
       prop:     a.proprietario?.nome || '—',
