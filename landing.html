@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AGEMOB — Autorizações Imobiliárias Inteligentes</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --navy:#04273B; --navy2:#073352; --gold:#C9A227; --gold2:#E3C768;
+  --ink:#101828; --ink2:#475467; --ink3:#98A2B3;
+  --paper:#F8F9FB; --card:#fff; --line:#E4E7EC;
+  --radius:16px; --shadow:0 1px 3px rgba(16,24,40,.08);
+  --shadow-lg:0 12px 40px -8px rgba(16,24,40,.18);
+}
+html{scroll-behavior:smooth}
+body{font-family:'Inter',sans-serif;background:#fff;color:var(--ink);font-size:16px;line-height:1.6;overflow-x:hidden}
+h1,h2,h3,h4{font-family:'Sora',sans-serif}
+a{color:inherit;text-decoration:none}
+button,input,select,textarea{font-family:inherit}
+
+/* ── NAV ── */
+nav{position:sticky;top:0;z-index:100;background:rgba(255,255,255,.92);backdrop-filter:blur(12px);border-bottom:1px solid var(--line)}
+.nav-in{max-width:1160px;margin:0 auto;padding:0 24px;height:66px;display:flex;align-items:center;gap:16px}
+.logo{display:flex;align-items:center;gap:10px;font-family:'Sora',sans-serif;font-weight:800;font-size:20px;color:var(--navy)}
+.logo .seal{width:34px;height:34px;border-radius:50%;background:var(--navy);color:#fff;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800}
+nav .spacer{flex:1}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border:none;border-radius:10px;padding:11px 22px;font-weight:600;font-size:14.5px;cursor:pointer;transition:.15s}
+.btn-ghost{background:transparent;border:1.5px solid var(--line);color:var(--ink)}
+.btn-ghost:hover{border-color:var(--navy);color:var(--navy)}
+.btn-primary{background:var(--navy);color:#fff}
+.btn-primary:hover{background:var(--navy2)}
+.btn-gold{background:var(--gold);color:#fff}
+.btn-gold:hover{background:#b8860b}
+.btn-lg{padding:15px 32px;font-size:16px;border-radius:12px}
+@media(max-width:640px){.nav-login{display:none}}
+
+/* ── HERO ── */
+.hero{background:linear-gradient(135deg,var(--navy) 0%,#0a3d5c 60%,#0d4a6e 100%);color:#fff;padding:100px 24px 80px;text-align:center;position:relative;overflow:hidden}
+.hero::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse at 30% 50%,rgba(201,162,39,.15) 0%,transparent 60%)}
+.hero-tag{display:inline-flex;align-items:center;gap:8px;background:rgba(201,162,39,.2);border:1px solid rgba(201,162,39,.4);color:var(--gold2);border-radius:99px;padding:6px 16px;font-size:13px;font-weight:600;margin-bottom:28px}
+.hero h1{font-size:clamp(36px,6vw,64px);font-weight:800;line-height:1.1;letter-spacing:-1.5px;margin-bottom:22px;max-width:820px;margin-left:auto;margin-right:auto}
+.hero h1 span{color:var(--gold2)}
+.hero p{font-size:clamp(16px,2vw,20px);color:rgba(255,255,255,.75);max-width:600px;margin:0 auto 40px}
+.hero-btns{display:flex;gap:14px;justify-content:center;flex-wrap:wrap}
+.hero-stats{display:flex;justify-content:center;gap:48px;margin-top:64px;flex-wrap:wrap}
+.hero-stat b{display:block;font-family:'Sora',sans-serif;font-size:32px;font-weight:800;color:var(--gold2)}
+.hero-stat span{font-size:14px;color:rgba(255,255,255,.6)}
+
+/* ── SECTIONS ── */
+section{padding:80px 24px}
+.container{max-width:1160px;margin:0 auto}
+.section-tag{display:inline-block;background:var(--gold);color:#fff;border-radius:99px;padding:5px 14px;font-size:12.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;margin-bottom:14px}
+.section-title{font-size:clamp(26px,4vw,42px);font-weight:800;letter-spacing:-.5px;margin-bottom:14px;color:var(--navy)}
+.section-sub{font-size:17px;color:var(--ink2);max-width:560px}
+.text-center{text-align:center}
+.text-center .section-sub{margin:0 auto}
+
+/* ── BENEFÍCIOS ── */
+.benefits{background:var(--paper)}
+.benefits-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;margin-top:48px}
+@media(max-width:900px){.benefits-grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:580px){.benefits-grid{grid-template-columns:1fr}}
+.benefit-card{background:#fff;border:1px solid var(--line);border-radius:var(--radius);padding:28px;transition:.2s;box-shadow:var(--shadow)}
+.benefit-card:hover{transform:translateY(-4px);box-shadow:var(--shadow-lg);border-color:var(--navy)}
+.benefit-icon{width:48px;height:48px;border-radius:12px;background:linear-gradient(135deg,var(--navy),var(--navy2));display:flex;align-items:center;justify-content:center;font-size:22px;margin-bottom:16px}
+.benefit-card h3{font-size:17px;font-weight:700;margin-bottom:8px;color:var(--navy)}
+.benefit-card p{font-size:14px;color:var(--ink2);line-height:1.6}
+
+/* ── COMO FUNCIONA ── */
+.steps{display:grid;grid-template-columns:repeat(4,1fr);gap:24px;margin-top:48px;position:relative}
+@media(max-width:900px){.steps{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:520px){.steps{grid-template-columns:1fr}}
+.step{text-align:center}
+.step-num{width:52px;height:52px;border-radius:50%;background:var(--navy);color:#fff;display:flex;align-items:center;justify-content:center;font-family:'Sora';font-weight:800;font-size:20px;margin:0 auto 16px}
+.step h4{font-size:16px;font-weight:700;margin-bottom:8px;color:var(--navy)}
+.step p{font-size:14px;color:var(--ink2)}
+
+/* ── EXCLUSIVIDADE ── */
+.exclusividade{background:linear-gradient(135deg,#0B1E2D 0%,#0F2E45 100%);color:#fff}
+.exclusividade .section-title{color:#fff}
+.exclusividade .section-sub{color:rgba(255,255,255,.7)}
+.exc-grid{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:48px}
+@media(max-width:720px){.exc-grid{grid-template-columns:1fr}}
+.exc-card{border-radius:var(--radius);padding:32px}
+.exc-card.exclusiva{background:linear-gradient(135deg,rgba(201,162,39,.2),rgba(201,162,39,.08));border:1.5px solid rgba(201,162,39,.4)}
+.exc-card.simples{background:rgba(255,255,255,.05);border:1.5px solid rgba(255,255,255,.1)}
+.exc-card h3{font-size:20px;font-weight:800;margin-bottom:6px}
+.exc-card.exclusiva h3{color:var(--gold2)}
+.exc-badge{display:inline-block;background:var(--gold);color:#fff;border-radius:99px;padding:3px 12px;font-size:11px;font-weight:700;margin-bottom:18px}
+.exc-items{list-style:none;display:flex;flex-direction:column;gap:12px;margin-top:16px}
+.exc-items li{display:flex;align-items:center;gap:10px;font-size:14.5px}
+.exc-items li .ic{width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;flex-shrink:0}
+.exclusiva .exc-items li .ic{background:var(--gold);color:#fff}
+.simples .exc-items li .ic{background:rgba(255,255,255,.15);color:rgba(255,255,255,.5)}
+
+/* ── COMPARATIVO ── */
+.comparativo{background:var(--paper)}
+.comp-table{width:100%;border-collapse:collapse;margin-top:40px;background:#fff;border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow-lg)}
+.comp-table th{padding:16px 20px;font-size:13px;font-weight:700;text-align:center;background:var(--navy);color:#fff}
+.comp-table th:first-child{text-align:left;width:40%}
+.comp-table th.gold{background:linear-gradient(135deg,var(--gold),#b8860b);color:#fff}
+.comp-table td{padding:14px 20px;font-size:14px;border-bottom:1px solid var(--line);text-align:center}
+.comp-table td:first-child{text-align:left;font-weight:600;color:var(--ink)}
+.comp-table tr:last-child td{border-bottom:none}
+.comp-table .yes{color:#067647;font-weight:700}
+.comp-table .no{color:var(--ink3)}
+.comp-table .partial{color:#DC6803;font-weight:600}
+
+/* ── DEPOIMENTOS ── */
+.depos-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;margin-top:48px}
+@media(max-width:860px){.depos-grid{grid-template-columns:1fr 1fr}}
+@media(max-width:520px){.depos-grid{grid-template-columns:1fr}}
+.depo{background:#fff;border:1px solid var(--line);border-radius:var(--radius);padding:24px;box-shadow:var(--shadow)}
+.depo p{font-size:14.5px;color:var(--ink2);line-height:1.7;font-style:italic;margin-bottom:16px}
+.depo-autor{display:flex;align-items:center;gap:10px}
+.depo-avatar{width:38px;height:38px;border-radius:50%;background:var(--navy);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;flex-shrink:0}
+.depo-autor b{font-size:13.5px;display:block;color:var(--ink)}
+.depo-autor span{font-size:12px;color:var(--ink3)}
+
+/* ── CTA FINAL ── */
+.cta-final{background:linear-gradient(135deg,var(--navy) 0%,#0d4a6e 100%);color:#fff;text-align:center;padding:100px 24px}
+.cta-final h2{font-size:clamp(28px,5vw,48px);font-weight:800;letter-spacing:-.5px;margin-bottom:16px}
+.cta-final p{font-size:18px;color:rgba(255,255,255,.75);margin-bottom:40px}
+
+/* ── FOOTER ── */
+footer{background:var(--navy);color:rgba(255,255,255,.6);text-align:center;padding:28px 24px;font-size:13.5px}
+footer a{color:var(--gold2);font-weight:600}
+
+/* ── MODAL DE CADASTRO ── */
+.overlay{position:fixed;inset:0;background:rgba(16,24,40,.6);backdrop-filter:blur(4px);display:none;align-items:center;justify-content:center;z-index:200;padding:20px}
+.overlay.open{display:flex}
+.modal{background:#fff;border-radius:20px;max-width:520px;width:100%;padding:36px;box-shadow:0 24px 64px rgba(0,0,0,.2);animation:pop .25s cubic-bezier(.2,.8,.2,1);max-height:90vh;overflow-y:auto}
+@keyframes pop{from{transform:scale(.95);opacity:0}to{transform:scale(1);opacity:1}}
+.modal h2{font-size:22px;color:var(--navy);margin-bottom:6px}
+.modal .sub{font-size:14px;color:var(--ink2);margin-bottom:24px}
+.field{margin-bottom:14px}
+.field label{display:block;font-size:13px;font-weight:600;color:var(--ink2);margin-bottom:5px}
+.field input,.field select{width:100%;padding:11px 14px;border:1.5px solid var(--line);border-radius:10px;font-size:15px;outline:none;transition:.15s;font-family:inherit}
+.field input:focus{border-color:var(--navy);box-shadow:0 0 0 3px rgba(4,39,59,.1)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:480px){.grid2{grid-template-columns:1fr}}
+.erro-msg{color:#D92D20;font-size:13px;font-weight:600;margin-bottom:12px;display:none}
+.sucesso-box{text-align:center;padding:20px 0;display:none}
+.sucesso-box .check{width:72px;height:72px;border-radius:50%;background:#04273B;color:#fff;font-size:32px;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;animation:pop .4s}
+.sucesso-box h3{font-size:20px;color:var(--navy);margin-bottom:8px}
+.sucesso-box p{font-size:14px;color:var(--ink2)}
+.trial-badge{background:linear-gradient(135deg,var(--gold),#b8860b);color:#fff;border-radius:10px;padding:12px 16px;font-size:13.5px;font-weight:600;margin-bottom:20px;text-align:center}
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <div class="nav-in">
+    <div class="logo"><div class="seal">A</div>AGEMOB</div>
+    <div class="spacer"></div>
+    <a href="/index.html" class="btn btn-ghost nav-login" style="margin-right:4px">Entrar</a>
+    <button class="btn btn-primary" onclick="abrirCadastro()">Começar grátis →</button>
+  </div>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-tag">✦ Plataforma de autorizações imobiliárias</div>
+  <h1>Autorizações de venda<br><span>digitais, seguras e rápidas</span></h1>
+  <p>O proprietário recebe um link, preenche, assina e você tem um documento com validade jurídica em menos de 5 minutos.</p>
+  <div class="hero-btns">
+    <button class="btn btn-gold btn-lg" onclick="abrirCadastro()">Começar grátis — 1 autorização de teste</button>
+    <a href="#como-funciona" class="btn btn-lg" style="background:rgba(255,255,255,.12);color:#fff;border:1.5px solid rgba(255,255,255,.25)">Ver como funciona</a>
+  </div>
+  <div class="hero-stats">
+    <div class="hero-stat"><b>100%</b><span>Digital e sem papel</span></div>
+    <div class="hero-stat"><b>&lt;5min</b><span>Para o proprietário assinar</span></div>
+    <div class="hero-stat"><b>SHA-256</b><span>Hash criptográfico no documento</span></div>
+    <div class="hero-stat"><b>MP 2.200</b><span>Validade jurídica garantida</span></div>
+  </div>
+</section>
+
+<!-- BENEFÍCIOS -->
+<section class="benefits" id="beneficios">
+  <div class="container">
+    <div class="text-center" style="margin-bottom:8px"><span class="section-tag">Benefícios</span></div>
+    <h2 class="section-title text-center">Tudo que você precisa em<br>uma plataforma</h2>
+    <div class="benefits-grid">
+      <div class="benefit-card">
+        <div class="benefit-icon">✍️</div>
+        <h3>Assinatura digital nativa</h3>
+        <p>Assinatura eletrônica por desenho ou digitação, com evidências jurídicas completas coletadas no momento da assinatura.</p>
+      </div>
+      <div class="benefit-card">
+        <div class="benefit-icon">🔗</div>
+        <h3>Link público para o proprietário</h3>
+        <p>Envie um link por WhatsApp ou e-mail. O proprietário abre no celular, preenche os dados e assina — sem instalar nada.</p>
+      </div>
+      <div class="benefit-card">
+        <div class="benefit-icon">📄</div>
+        <h3>PDF gerado automaticamente</h3>
+        <p>Documento completo com assinatura, dados do imóvel, certificado de evidências e trilha de auditoria em PDF.</p>
+      </div>
+      <div class="benefit-card">
+        <div class="benefit-icon">🛡️</div>
+        <h3>Segurança jurídica máxima</h3>
+        <p>Hash SHA-256, IP do signatário, geolocalização, OTP por e-mail/WhatsApp, selfie e reconhecimento facial opcional.</p>
+      </div>
+      <div class="benefit-card">
+        <div class="benefit-icon">📊</div>
+        <h3>Painel em tempo real</h3>
+        <p>Acompanhe todas as autorizações, status de assinatura, VGV em carteira e métricas da sua imobiliária em um só lugar.</p>
+      </div>
+      <div class="benefit-card">
+        <div class="benefit-icon">⭐</div>
+        <h3>Gestão de exclusividade</h3>
+        <p>Diferenciação clara entre autorização exclusiva e não exclusiva, com argumentos de venda integrados ao fluxo do proprietário.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- COMO FUNCIONA -->
+<section id="como-funciona">
+  <div class="container">
+    <div class="text-center" style="margin-bottom:8px"><span class="section-tag">Como funciona</span></div>
+    <h2 class="section-title text-center">Do envio à assinatura<br>em 4 passos</h2>
+    <p class="section-sub text-center" style="margin-bottom:0">Simples para o corretor. Ainda mais simples para o proprietário.</p>
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <h4>Corretor gera o link</h4>
+        <p>Clique em "Nova Autorização" e escolha enviar link vazio ou já preencher os dados do proprietário.</p>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <h4>Proprietário recebe</h4>
+        <p>O link chega por WhatsApp ou e-mail. Abre direto no celular, sem baixar aplicativo.</p>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <h4>Preenche e assina</h4>
+        <p>Dados do imóvel, escolha do tipo de autorização, validação de identidade e assinatura digital.</p>
+      </div>
+      <div class="step">
+        <div class="step-num">4</div>
+        <h4>PDF pronto</h4>
+        <p>Documento com assinatura, certificado de evidências e hash SHA-256 gerado automaticamente.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- EXCLUSIVIDADE -->
+<section class="exclusividade" id="exclusividade">
+  <div class="container">
+    <div style="margin-bottom:8px"><span class="section-tag">Exclusividade</span></div>
+    <h2 class="section-title" style="color:#fff;max-width:600px">Ajude seus proprietários a<br>tomar a decisão certa</h2>
+    <p class="section-sub">O AGEMOB apresenta as vantagens da exclusividade diretamente no fluxo de assinatura do proprietário — aumentando sua taxa de conversão.</p>
+    <div class="exc-grid">
+      <div class="exc-card exclusiva">
+        <h3>⭐ Com exclusividade</h3>
+        <div class="exc-badge">Mais escolhida · Vende mais rápido</div>
+        <p style="font-size:14px;color:rgba(255,255,255,.7);margin-bottom:0">Imóveis em captação exclusiva recebem dedicação comercial total da imobiliária.</p>
+        <ul class="exc-items">
+          <li><div class="ic">✓</div><span>Vídeo e fotos profissionais do imóvel</span></li>
+          <li><div class="ic">✓</div><span>Tráfego pago e Meta Ads exclusivos</span></li>
+          <li><div class="ic">✓</div><span>Destaque prioritário nos portais</span></li>
+          <li><div class="ic">✓</div><span>Equipe de corretores dedicada</span></li>
+          <li><div class="ic">✓</div><span>Relatórios periódicos de desempenho</span></li>
+          <li><div class="ic">✓</div><span>Gestão comercial completa</span></li>
+        </ul>
+      </div>
+      <div class="exc-card simples">
+        <h3>Sem exclusividade</h3>
+        <p style="font-size:14px;color:rgba(255,255,255,.5);margin:12px 0">Divulgação padrão, sem investimento dedicado em marketing.</p>
+        <ul class="exc-items">
+          <li><div class="ic">–</div><span style="color:rgba(255,255,255,.5)">Divulgação básica nos portais</span></li>
+          <li><div class="ic">–</div><span style="color:rgba(255,255,255,.5)">Sem tráfego pago exclusivo</span></li>
+          <li><div class="ic">–</div><span style="color:rgba(255,255,255,.5)">Sem prioridade comercial</span></li>
+          <li><div class="ic">–</div><span style="color:rgba(255,255,255,.5)">Sem relatórios periódicos</span></li>
+          <li><div class="ic">–</div><span style="color:rgba(255,255,255,.5)">Sem campanha de marketing digital</span></li>
+          <li><div class="ic">–</div><span style="color:rgba(255,255,255,.5)">Sem gestor comercial dedicado</span></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- COMPARATIVO -->
+<section class="comparativo" id="comparativo">
+  <div class="container">
+    <div class="text-center" style="margin-bottom:8px"><span class="section-tag">Comparativo</span></div>
+    <h2 class="section-title text-center">O que muda na prática</h2>
+    <p class="section-sub text-center">Resultados reais para o proprietário que escolhe a exclusividade.</p>
+    <div style="overflow-x:auto">
+      <table class="comp-table">
+        <thead>
+          <tr>
+            <th>Critério</th>
+            <th class="gold">⭐ Com Exclusividade</th>
+            <th>Sem Exclusividade</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>Tempo médio de venda</td><td class="yes">Mais rápido</td><td class="partial">Variável</td></tr>
+          <tr><td>Fotos e vídeo profissional</td><td class="yes">✓ Incluído</td><td class="no">✗ Não garantido</td></tr>
+          <tr><td>Campanhas de tráfego pago</td><td class="yes">✓ Meta Ads dedicados</td><td class="no">✗ Não incluso</td></tr>
+          <tr><td>Destaque em portais</td><td class="yes">✓ Prioritário</td><td class="partial">Padrão</td></tr>
+          <tr><td>Corretores dedicados</td><td class="yes">✓ Equipe exclusiva</td><td class="partial">Compartilhado</td></tr>
+          <tr><td>Relatórios de desempenho</td><td class="yes">✓ Periódicos</td><td class="no">✗ Não incluso</td></tr>
+          <tr><td>Estratégia personalizada</td><td class="yes">✓ Sim</td><td class="no">✗ Não</td></tr>
+          <tr><td>Chance de propostas</td><td class="yes">Significativamente maior</td><td class="partial">Menor</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- DEPOIMENTOS -->
+<section id="depoimentos">
+  <div class="container">
+    <div class="text-center" style="margin-bottom:8px"><span class="section-tag">Resultados</span></div>
+    <h2 class="section-title text-center">Quem já usa o AGEMOB</h2>
+    <div class="depos-grid">
+      <div class="depo">
+        <p>"Antes eu perdia horas para conseguir uma assinatura presencial. Hoje o proprietário assina em minutos pelo celular e eu já tenho o PDF."</p>
+        <div class="depo-autor"><div class="depo-avatar">L</div><div><b>Lucas Siqueira</b><span>Corretor · Florianópolis/SC</span></div></div>
+      </div>
+      <div class="depo">
+        <p>"A parte da exclusividade ficou muito mais fácil de apresentar. O sistema já mostra todos os benefícios direto para o proprietário."</p>
+        <div class="depo-autor"><div class="depo-avatar">A</div><div><b>Ana Cristina</b><span>Gerente comercial · Imobiliária Premium</span></div></div>
+      </div>
+      <div class="depo">
+        <p>"A segurança jurídica é o que mais me convenceu. Hash SHA-256, evidências, IP, geolocalização — tudo no certificado do PDF."</p>
+        <div class="depo-autor"><div class="depo-avatar">R</div><div><b>Rafael Monteiro</b><span>Diretor · Grupo Imobiliário Sul</span></div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CTA FINAL -->
+<section class="cta-final">
+  <div class="container">
+    <h2>Pronto para modernizar<br>sua captação?</h2>
+    <p>Comece agora com 1 autorização de teste grátis.<br>Sem cartão de crédito. Sem compromisso.</p>
+    <button class="btn btn-gold btn-lg" onclick="abrirCadastro()" style="font-size:17px;padding:17px 40px">
+      Cadastrar minha imobiliária →
+    </button>
+    <p style="margin-top:20px;font-size:14px;color:rgba(255,255,255,.45)">Já tem conta? <a href="/index.html" style="color:var(--gold2)">Fazer login</a></p>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <p>© 2026 AGEMOB · Plataforma de Autorizações Imobiliárias · <a href="/index.html">Entrar no painel</a></p>
+  <p style="margin-top:6px;font-size:12px">Assinatura eletrônica com validade jurídica nos termos da MP 2.200-2/2001 e Lei 14.063/2020</p>
+</footer>
+
+<!-- MODAL DE CADASTRO -->
+<div class="overlay" id="modalCadastro">
+  <div class="modal">
+    <!-- Formulário -->
+    <div id="formCadastro">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">
+        <h2>Criar conta grátis</h2>
+        <button onclick="fecharCadastro()" style="border:none;background:none;font-size:22px;cursor:pointer;color:var(--ink3);line-height:1">✕</button>
+      </div>
+      <p class="sub">Configure sua imobiliária em menos de 2 minutos.</p>
+      <div class="trial-badge">🎁 1 autorização de teste grátis — sem cartão de crédito</div>
+      <div class="erro-msg" id="erroMsg"></div>
+      <div class="grid2">
+        <div class="field" style="grid-column:1/-1">
+          <label>Nome da imobiliária *</label>
+          <input id="c_nome" placeholder="Ex.: Imobiliária ABC">
+        </div>
+        <div class="field">
+          <label>CNPJ *</label>
+          <input id="c_cnpj" placeholder="00.000.000/0001-00" oninput="maskCNPJ(this)" maxlength="18">
+        </div>
+        <div class="field">
+          <label>Telefone / WhatsApp</label>
+          <input id="c_tel" placeholder="(48) 9 9999-9999" oninput="maskTel(this)" maxlength="16">
+        </div>
+        <div class="field" style="grid-column:1/-1">
+          <label>Nome do responsável *</label>
+          <input id="c_resp" placeholder="Nome completo">
+        </div>
+        <div class="field" style="grid-column:1/-1">
+          <label>E-mail de acesso *</label>
+          <input id="c_email" type="email" placeholder="voce@imobiliaria.com.br">
+        </div>
+        <div class="field" style="grid-column:1/-1">
+          <label>Senha *</label>
+          <input id="c_senha" type="password" placeholder="Mínimo 6 caracteres">
+        </div>
+      </div>
+      <button class="btn btn-primary" style="width:100%;padding:14px;font-size:16px;margin-top:8px;border-radius:12px" id="btnCadastrar" onclick="cadastrar()">
+        Criar minha conta →
+      </button>
+      <p style="text-align:center;font-size:13px;color:var(--ink3);margin-top:14px">
+        Já tem conta? <a href="/index.html" style="color:var(--navy);font-weight:600">Fazer login</a>
+      </p>
+    </div>
+
+    <!-- Sucesso -->
+    <div class="sucesso-box" id="sucessoCadastro">
+      <div class="check">✓</div>
+      <h3>Conta criada com sucesso!</h3>
+      <p>Sua imobiliária está configurada.<br>Você tem <b>1 autorização de teste</b> disponível.</p>
+      <button class="btn btn-primary btn-lg" style="margin-top:24px;width:100%" onclick="irParaPainel()">
+        Acessar o painel →
+      </button>
+    </div>
+  </div>
+</div>
+
+<script>
+let _tokenCadastro = null;
+
+function abrirCadastro(){ document.getElementById('modalCadastro').classList.add('open'); }
+function fecharCadastro(){ document.getElementById('modalCadastro').classList.remove('open'); }
+
+document.getElementById('modalCadastro').addEventListener('click', e => {
+  if(e.target === document.getElementById('modalCadastro')) fecharCadastro();
+});
+
+function maskCNPJ(el){
+  el.value = el.value.replace(/\D/g,'').slice(0,14)
+    .replace(/(\d{2})(\d)/,'$1.$2')
+    .replace(/(\d{3})(\d)/,'$1.$2')
+    .replace(/(\d{3})(\d)/,'$1/$2')
+    .replace(/(\d{4})(\d{1,2})$/,'$1-$2');
+}
+function maskTel(el){
+  el.value = el.value.replace(/\D/g,'').slice(0,11)
+    .replace(/(\d{2})(\d)/,'($1) $2')
+    .replace(/(\d{5})(\d)/,'$1-$2');
+}
+
+async function cadastrar(){
+  const nome  = document.getElementById('c_nome').value.trim();
+  const cnpj  = document.getElementById('c_cnpj').value.trim();
+  const resp  = document.getElementById('c_resp').value.trim();
+  const email = document.getElementById('c_email').value.trim();
+  const senha = document.getElementById('c_senha').value;
+  const tel   = document.getElementById('c_tel').value.trim();
+  const erroEl = document.getElementById('erroMsg');
+  erroEl.style.display = 'none';
+
+  if(!nome||!cnpj||!resp||!email||!senha){
+    erroEl.textContent = 'Preencha todos os campos obrigatórios.';
+    erroEl.style.display = 'block'; return;
+  }
+  if(senha.length < 6){
+    erroEl.textContent = 'A senha deve ter pelo menos 6 caracteres.';
+    erroEl.style.display = 'block'; return;
+  }
+
+  const btn = document.getElementById('btnCadastrar');
+  btn.disabled = true; btn.textContent = 'Criando conta…';
+
+  try {
+    const r = await fetch('/api/cadastro', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nome, cnpj, responsavel:resp, email, senha, telefone:tel, whatsapp:tel })
+    });
+    const d = await r.json();
+    if(!r.ok) throw new Error(d.erro || 'Erro ao criar conta.');
+    _tokenCadastro = d.token;
+    // Salva token no localStorage para login automático
+    localStorage.setItem('agemob_token', d.token);
+    localStorage.setItem('agemob_user', JSON.stringify(d.user || { nome:resp, email, role:'admin', imobiliaria:{ nome } }));
+    document.getElementById('formCadastro').style.display = 'none';
+    document.getElementById('sucessoCadastro').style.display = 'block';
+  } catch(e) {
+    erroEl.textContent = e.message;
+    erroEl.style.display = 'block';
+  } finally {
+    btn.disabled = false; btn.textContent = 'Criar minha conta →';
+  }
+}
+
+function irParaPainel(){
+  window.location.href = '/index.html';
+}
+
+// Atalho: Enter no último campo
+document.getElementById('c_senha').addEventListener('keydown', e => {
+  if(e.key === 'Enter') cadastrar();
+});
+</script>
+</body>
+</html>

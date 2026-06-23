@@ -545,6 +545,55 @@ app.get('/api/admin/ranking', authMiddleware(['super_admin']), async (_req, res)
 // ═══════════════════════════════════════════════════════
 app.get('/api/health', (_req, res) => res.json({ ok: true, ts: new Date().toISOString(), version: '2.0.0' }));
 
+// Auto-cadastro publico via landing page
+app.post('/api/cadastro', async (req, res) => {
+  try {
+    const { nome, cnpj, responsavel, email, telefone, whatsapp, senha } = req.body;
+    if (!nome || !cnpj || !email || !senha || !responsavel)
+      return res.status(422).json({ erro: 'Preencha todos os campos obrigatorios.' });
+    if (senha.length < 6)
+      return res.status(422).json({ erro: 'A senha deve ter pelo menos 6 caracteres.' });
+
+    const cnpjLimpo = cnpj.replace(/\D/g, '');
+    const exEmail = await db.usuarios.findOne({ email: email.toLowerCase().trim() });
+    if (exEmail) return res.status(422).json({ erro: 'E-mail ja cadastrado.' });
+
+    const plano = await db.planos.findOne({ slug: 'basic' });
+    const slugBase = nome.toLowerCase().normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    const slug = slugBase + '-' + Date.now().toString(36);
+
+    const imob = await db.imobiliarias.insert({
+      tipoCliente:'imobiliaria', nome, razaoSocial:nome, nomeFantasia:nome,
+      slug, cnpj, email, telefone:telefone||'', whatsapp:whatsapp||'',
+      responsavel:{ nome:responsavel, email },
+      corPrimaria:'#04273B', corSecundaria:'#C9A227',
+      planoId:plano?._id||null, planoSlug:'basic', planoNome:'Basic',
+      limiteAutorizacoes:1, creditosExtras:0,
+      status:'ativo', ativo:true, origem:'landing',
+      criadoEm:new Date().toISOString(), atualizadoEm:new Date().toISOString()
+    });
+
+    const hash = await bcrypt.hash(senha, 10);
+    await db.usuarios.insert({
+      nome:responsavel, email:email.toLowerCase().trim(), senha:hash,
+      role:'admin', imobiliariaId:imob._id, imobiliariaSlug:slug,
+      ativo:true, criadoEm:new Date().toISOString()
+    });
+
+    await log('cadastro', `Nova imobiliaria via landing: ${nome} (${email})`);
+
+    const token = jwt.sign({
+      userId:imob._id, nome:responsavel, email:email.toLowerCase().trim(),
+      role:'admin', imobiliariaId:imob._id, imobiliariaSlug:slug, imobiliariaNome:nome
+    }, JWT_SECRET, { expiresIn:'8h' });
+
+    res.json({ ok:true, token, imobiliaria:{ nome, slug, plano:'Basic', limite:1 } });
+  } catch(e) {
+    res.status(500).json({ erro: 'Falha ao criar conta. Tente novamente.' });
+  }
+});
+
 app.get('/api/base-url', (req, res) => res.json({ baseUrl: getBaseUrl(req) }));
 
 // Buscar dados de uma autorização pelo código (para pré-preencher link assistido)
