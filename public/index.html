@@ -275,6 +275,7 @@ label{display:block;font-size:13px;font-weight:600;color:var(--ink-2);margin-bot
     <button class="sa-tab on" id="tab-dashboard" onclick="saTrocaAba('dashboard')">📊 Dashboard</button>
     <button class="sa-tab" id="tab-clientes" onclick="saTrocaAba('clientes')">👥 Clientes</button>
     <button class="sa-tab" id="tab-planos" onclick="saTrocaAba('planos')">📋 Planos</button>
+  <button class="sa-tab" id="tab-boletos" onclick="saTrocaAba('boletos')">💰 Boletos</button>
   </div>
 
   <!-- ABA: DASHBOARD -->
@@ -336,6 +337,43 @@ label{display:block;font-size:13px;font-weight:600;color:var(--ink-2);margin-bot
             <th>Uso do mês</th><th>Extras</th><th>MRR</th><th>Renovação</th><th>Ações</th>
           </tr></thead>
           <tbody id="saTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ABA: BOLETOS -->
+  <div id="sa-aba-boletos" class="hidden">
+    <!-- KPIs financeiros -->
+    <div class="kpis" id="saBoletoKpis" style="grid-template-columns:repeat(4,1fr);margin-bottom:14px"></div>
+
+    <!-- Filtros -->
+    <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+      <input id="saBoletoSearch" placeholder="🔍 Buscar imobiliária..." oninput="filtrarBoletos()"
+        style="flex:1;min-width:180px;padding:9px 13px;border:1.5px solid var(--line);border-radius:9px;font-size:13.5px">
+      <select id="saBoletoFiltroStatus" onchange="filtrarBoletos()" style="padding:9px 12px;border:1.5px solid var(--line);border-radius:9px;font-size:13px">
+        <option value="">Todos os status</option>
+        <option value="pago">Pago</option>
+        <option value="a_vencer">A vencer</option>
+        <option value="vencido">Vencido</option>
+        <option value="cancelado">Cancelado</option>
+      </select>
+      <select id="saBoletoFiltroPeriodo" onchange="filtrarBoletos()" style="padding:9px 12px;border:1.5px solid var(--line);border-radius:9px;font-size:13px">
+        <option value="">Todos os períodos</option>
+        <option value="mes_atual">Mês atual</option>
+        <option value="mes_anterior">Mês anterior</option>
+        <option value="3_meses">Últimos 3 meses</option>
+      </select>
+      <button class="btn btn-primary" onclick="abrirModalEmitirBoleto()">+ Emitir boleto</button>
+    </div>
+
+    <div class="panel" style="padding:0;overflow:hidden">
+      <div class="tbl-scroll">
+        <table class="tbl">
+          <thead><tr>
+            <th>Imobiliária</th><th>Plano</th><th>Valor</th><th>Competência</th><th>Vencimento</th><th>Pagamento</th><th>Status</th><th>Ações</th>
+          </tr></thead>
+          <tbody id="saBoletosBody"></tbody>
         </table>
       </div>
     </div>
@@ -523,7 +561,8 @@ label{display:block;font-size:13px;font-weight:600;color:var(--ink-2);margin-bot
       <p>Lux House Imóveis Ltda. · CNPJ 48.192.939/0001-21 · Jurerê Internacional, Florianópolis/SC</p>
     </div>
     <div style="display:flex;gap:10px">
-      <button class="btn btn-ghost btn-lg" onclick="abrirInserirAutorizacao()">+ Inserir Novas Autorizações</button>
+      <button class="btn btn-ghost btn-lg" onclick="abrirComprarCreditos()">💳 Comprar Créditos</button>
+      <button class="btn btn-ghost btn-lg" onclick="abrirBoletos()">📄 Boletos</button>
       <button class="btn btn-primary btn-lg" onclick="novaAutorizacao()">+ NOVA AUTORIZAÇÃO</button>
     </div>
   </div>
@@ -835,6 +874,97 @@ label{display:block;font-size:13px;font-weight:600;color:var(--ink-2);margin-bot
   </section>
 </main>
 
+
+
+<!-- ====================== MODAL: EMITIR BOLETO (SUPER ADMIN) ====================== -->
+<div class="overlay" id="modalEmitirBoleto">
+  <div class="modal" style="max-width:480px">
+    <h2>Emitir boleto</h2>
+    <div class="grid2" style="margin-top:16px">
+      <div class="field" style="grid-column:1/-1">
+        <label>Imobiliária *</label>
+        <select id="eb_imobId" style="width:100%"></select>
+      </div>
+      <div class="field"><label>Valor (R$) *</label><input id="eb_valor" type="number" step="0.01" placeholder="99.90"></div>
+      <div class="field"><label>Vencimento *</label><input id="eb_venc" type="date"></div>
+      <div class="field" style="grid-column:1/-1"><label>Competência *</label><input id="eb_comp" placeholder="Ex.: Janeiro/2026"></div>
+      <div class="field" style="grid-column:1/-1"><label>Observação</label><input id="eb_obs" placeholder="Mensalidade plano Pro - Janeiro/2026"></div>
+    </div>
+    <div class="nav-row" style="margin-top:16px">
+      <button class="btn btn-ghost" onclick="document.getElementById('modalEmitirBoleto').classList.remove('open')">Cancelar</button>
+      <button class="btn btn-primary" onclick="emitirBoleto()">Emitir ✓</button>
+    </div>
+  </div>
+</div>
+
+<!-- ====================== MODAL: COMPRAR CRÉDITOS ====================== -->
+<div class="overlay" id="modalComprarCreditos">
+  <div class="modal" style="max-width:580px;max-height:90vh;overflow-y:auto">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+      <h2>💳 Comprar Créditos</h2>
+      <button class="btn btn-ghost" style="padding:6px 12px" onclick="document.getElementById('modalComprarCreditos').classList.remove('open')">✕</button>
+    </div>
+    <p style="color:var(--ink-2);font-size:13.5px;margin-bottom:6px">Cada autorização de venda consome 1 crédito. Compre pacotes adicionais a qualquer momento.</p>
+
+    <!-- Saldo atual -->
+    <div id="creditoSaldoBanner" style="background:var(--brand-soft);border:1.5px solid var(--brand);border-radius:12px;padding:14px 16px;margin-bottom:18px;display:flex;justify-content:space-between;align-items:center">
+      <div>
+        <div style="font-size:12px;color:var(--ink-2);font-weight:600;text-transform:uppercase;letter-spacing:.4px">Saldo atual</div>
+        <div style="font-family:'Sora',sans-serif;font-size:26px;font-weight:800;color:var(--brand)" id="creditoSaldoNum">—</div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-size:12px;color:var(--ink-2)">Utilizados este mês</div>
+        <div style="font-size:20px;font-weight:700;color:var(--ink)" id="creditoUsadoNum">—</div>
+      </div>
+    </div>
+
+    <!-- Pacotes -->
+    <h3 style="font-size:13px;color:var(--ink-3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px">Pacotes disponíveis</h3>
+    <div id="pacotesGrid" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:18px"></div>
+
+    <!-- Histórico -->
+    <h3 style="font-size:13px;color:var(--ink-3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Histórico de recargas</h3>
+    <div id="creditoHistorico" style="font-size:13.5px;color:var(--ink-2)">Carregando...</div>
+  </div>
+</div>
+
+<!-- ====================== MODAL: BOLETOS ====================== -->
+<div class="overlay" id="modalBoletos">
+  <div class="modal" style="max-width:680px;max-height:92vh;overflow-y:auto">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <h2>📄 Boletos</h2>
+      <button class="btn btn-ghost" style="padding:6px 12px" onclick="document.getElementById('modalBoletos').classList.remove('open')">✕</button>
+    </div>
+
+    <!-- Próximo boleto -->
+    <div id="proximoBoleto" style="margin-bottom:20px"></div>
+
+    <!-- Resumo financeiro -->
+    <div class="kpis" id="resumoFinanceiro" style="grid-template-columns:repeat(3,1fr);margin-bottom:20px"></div>
+
+    <!-- Histórico -->
+    <h3 style="font-size:13px;color:var(--ink-3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Histórico de boletos</h3>
+    <div class="tbl-scroll">
+      <table class="tbl">
+        <thead><tr><th>Competência</th><th>Valor</th><th>Vencimento</th><th>Pagamento</th><th>Status</th><th>Ações</th></tr></thead>
+        <tbody id="boletosHistoricoBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ====================== MODAL: CONFIRMAR COMPRA CRÉDITO ====================== -->
+<div class="overlay" id="modalConfirmarCredito">
+  <div class="modal" style="max-width:380px">
+    <h2>Confirmar compra</h2>
+    <p style="color:var(--ink-2);font-size:14px;margin:12px 0 20px" id="confirmarCreditoTexto"></p>
+    <p style="font-size:13px;color:var(--ink-3);margin-bottom:20px">⚠️ Esta é uma operação manual. O administrador da plataforma irá processar o pagamento e creditar os créditos na sua conta.</p>
+    <div class="nav-row">
+      <button class="btn btn-ghost" onclick="document.getElementById('modalConfirmarCredito').classList.remove('open')">Cancelar</button>
+      <button class="btn btn-primary" onclick="confirmarCompraPacote()">Solicitar compra →</button>
+    </div>
+  </div>
+</div>
 
 <!-- ====================== MODAL: INSERIR NOVAS AUTORIZAÇÕES ====================== -->
 <div class="overlay" id="modalInserirAutorizacao">
@@ -2075,6 +2205,263 @@ async function carregarUsoPlaino(){
 }
 
 function tratarErroLimite(d){ showToast(d.erro||'Limite atingido.','error'); carregarUsoPlaino(); }
+
+// ══ COMPRAR CRÉDITOS ══
+let _pacoteParaComprar = null;
+
+async function abrirComprarCreditos(){
+  document.getElementById('modalComprarCreditos').classList.add('open');
+  // Carrega saldo atual
+  try {
+    const r = await fetch('/api/minha-assinatura', { headers: Auth.headers() });
+    const d = await r.json();
+    document.getElementById('creditoSaldoNum').textContent = (d.extras || 0) + (d.disponiveis || 0);
+    document.getElementById('creditoUsadoNum').textContent = d.usadas || 0;
+  } catch(e) {}
+  // Carrega pacotes
+  try {
+    const r = await fetch('/api/pacotes');
+    const pacotes = await r.json();
+    document.getElementById('pacotesGrid').innerHTML = pacotes.map(p => `
+      <div style="border:1.5px solid var(--line);border-radius:14px;padding:18px;text-align:center;cursor:pointer;transition:.15s"
+           onmouseover="this.style.borderColor='var(--brand)'" onmouseout="this.style.borderColor='var(--line)'"
+           onclick="selecionarPacote('${p._id}','${p.nome}',${p.quantidade},${p.valor||0})">
+        <div style="font-family:'Sora',sans-serif;font-size:28px;font-weight:800;color:var(--brand)">${p.quantidade}</div>
+        <div style="font-size:13px;color:var(--ink-2);margin:4px 0 8px">créditos</div>
+        <div style="font-size:16px;font-weight:700;color:var(--gold)">${p.valor>0?'R$ '+p.valor.toFixed(2).replace('.',','):'Sob consulta'}</div>
+        <button class="btn btn-primary" style="margin-top:12px;width:100%;padding:9px;font-size:13.5px">Comprar</button>
+      </div>`).join('') || '<p style="color:var(--ink-3);grid-column:1/-1">Nenhum pacote disponível no momento.</p>';
+  } catch(e) {}
+  // Histórico
+  try {
+    const r = await fetch('/api/creditos/historico', { headers: Auth.headers() });
+    const hist = await r.json();
+    document.getElementById('creditoHistorico').innerHTML = hist.length
+      ? `<table class="tbl"><thead><tr><th>Data</th><th>Pacote</th><th>Créditos</th><th>Status</th></tr></thead><tbody>${
+          hist.map(h => `<tr>
+            <td>${new Date(h.criadoEm).toLocaleDateString('pt-BR')}</td>
+            <td>${h.motivo||h.tipo||'—'}</td>
+            <td>+${h.quantidade}</td>
+            <td><span class="badge b-green">Aprovado</span></td>
+          </tr>`).join('')
+        }</tbody></table>`
+      : '<p style="color:var(--ink-3);font-size:13px">Nenhuma recarga ainda.</p>';
+  } catch(e) { document.getElementById('creditoHistorico').textContent = 'Indisponível.'; }
+}
+
+function selecionarPacote(id, nome, qtd, valor){
+  _pacoteParaComprar = { id, nome, qtd, valor };
+  document.getElementById('confirmarCreditoTexto').innerHTML =
+    `Você está solicitando o pacote <b>${nome}</b>:<br><br>
+     <b>${qtd} créditos</b> por <b>R$ ${valor.toFixed(2).replace('.',',')}</b><br><br>
+     Após confirmação, nossa equipe entrará em contato para processar o pagamento.`;
+  document.getElementById('modalComprarCreditos').classList.remove('open');
+  document.getElementById('modalConfirmarCredito').classList.add('open');
+}
+
+async function confirmarCompraPacote(){
+  if(!_pacoteParaComprar) return;
+  try {
+    const r = await fetch('/api/creditos/solicitar', {
+      method: 'POST', headers: Auth.headers(),
+      body: JSON.stringify({ pacoteId: _pacoteParaComprar.id, quantidade: _pacoteParaComprar.qtd, valor: _pacoteParaComprar.valor })
+    });
+    const d = await r.json();
+    if(!r.ok) throw new Error(d.erro);
+    document.getElementById('modalConfirmarCredito').classList.remove('open');
+    showToast('Solicitação enviada! Nossa equipe processará em breve. ✓', 'success');
+    _pacoteParaComprar = null;
+  } catch(e) { showToast('Erro: '+e.message, 'error'); }
+}
+
+// ══ BOLETOS (painel da imobiliária) ══
+async function abrirBoletos(){
+  document.getElementById('modalBoletos').classList.add('open');
+  try {
+    const r = await fetch('/api/boletos', { headers: Auth.headers() });
+    const data = await r.json();
+    const boletos = data.boletos || [];
+    const proximo = data.proximo || null;
+
+    // Próximo boleto
+    const prox = document.getElementById('proximoBoleto');
+    if(proximo) {
+      const statusColor = {pago:'b-green',a_vencer:'b-blue',vencido:'b-red',cancelado:'b-gray'};
+      const statusLabel = {pago:'Pago',a_vencer:'A vencer',vencido:'Vencido',cancelado:'Cancelado'};
+      prox.innerHTML = `
+        <div style="background:var(--brand-soft);border:1.5px solid var(--brand);border-radius:14px;padding:20px 24px">
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
+            <div>
+              <div style="font-size:12px;color:var(--ink-2);font-weight:600;text-transform:uppercase;letter-spacing:.4px">Próximo boleto</div>
+              <div style="font-family:'Sora',sans-serif;font-size:28px;font-weight:800;color:var(--brand)">R$ ${(proximo.valor||0).toFixed(2).replace('.',',')}</div>
+              <div style="font-size:13px;color:var(--ink-2);margin-top:4px">Vencimento: ${proximo.vencimento ? new Date(proximo.vencimento).toLocaleDateString('pt-BR') : '—'}</div>
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <span class="badge ${statusColor[proximo.status]||'b-gray'}">${statusLabel[proximo.status]||proximo.status}</span>
+              ${proximo.codigo?`<button class="btn btn-ghost" style="padding:7px 14px;font-size:13px" onclick="navigator.clipboard?.writeText('${proximo.codigo}');showToast('Código copiado!','success')">📋 Copiar código</button>`:''}
+            </div>
+          </div>
+        </div>`;
+    } else {
+      prox.innerHTML = '<p style="color:var(--ink-3);font-size:13.5px;padding:12px 0">Nenhum boleto pendente no momento.</p>';
+    }
+
+    // Resumo financeiro
+    const totalPago = boletos.filter(b=>b.status==='pago').reduce((s,b)=>s+(b.valor||0),0);
+    const pendentes = boletos.filter(b=>b.status==='a_vencer').length;
+    const proxVenc  = boletos.filter(b=>b.status==='a_vencer').sort((a,b)=>new Date(a.vencimento)-new Date(b.vencimento))[0];
+    document.getElementById('resumoFinanceiro').innerHTML = [
+      {l:'Total pago', n:'R$ '+totalPago.toFixed(2).replace('.',','), s:'histórico completo', c:'k-gold'},
+      {l:'Pendentes',  n:pendentes, s:'boletos a vencer', c:pendentes?'k-red':''},
+      {l:'Próx. vencimento', n:proxVenc?new Date(proxVenc.vencimento).toLocaleDateString('pt-BR'):'—', s:'data do próximo', c:''},
+    ].map(x=>`<div class="kpi ${x.c}"><div class="k-label">${x.l}</div><div class="k-num" style="font-size:18px">${x.n}</div><div class="k-sub">${x.s}</div></div>`).join('');
+
+    // Histórico
+    const statusColor = {pago:'b-green',a_vencer:'b-blue',vencido:'b-red',cancelado:'b-gray'};
+    const statusLabel = {pago:'Pago',a_vencer:'A vencer',vencido:'Vencido',cancelado:'Cancelado'};
+    document.getElementById('boletosHistoricoBody').innerHTML = boletos.map(b=>`<tr>
+      <td>${b.competencia||'—'}</td>
+      <td>R$ ${(b.valor||0).toFixed(2).replace('.',',')}</td>
+      <td>${b.vencimento?new Date(b.vencimento).toLocaleDateString('pt-BR'):'—'}</td>
+      <td>${b.pagamentoEm?new Date(b.pagamentoEm).toLocaleDateString('pt-BR'):'—'}</td>
+      <td><span class="badge ${statusColor[b.status]||'b-gray'}">${statusLabel[b.status]||b.status}</span></td>
+      <td>${b.codigo?`<button class="btn btn-ghost" style="padding:5px 10px;font-size:12px" onclick="navigator.clipboard?.writeText('${b.codigo}');showToast('Copiado!','success')">📋</button>`:''}</td>
+    </tr>`).join('') || '<tr><td colspan="6" style="text-align:center;color:var(--ink-3);padding:16px">Nenhum boleto no histórico.</td></tr>';
+  } catch(e) { showToast('Erro ao carregar boletos.','error'); }
+}
+
+// ══ SUPER ADMIN — BOLETOS ══
+let _saBoletosLista = [];
+
+async function carregarBoletosSA(){
+  try {
+    const r = await fetch('/api/admin/boletos', { headers: Auth.headers() });
+    const data = await r.json();
+    _saBoletosLista = data.boletos || [];
+
+    // KPIs
+    const totalEmitido = _saBoletosLista.reduce((s,b)=>s+(b.valor||0),0);
+    const totalRecebido = _saBoletosLista.filter(b=>b.status==='pago').reduce((s,b)=>s+(b.valor||0),0);
+    const inadimplentes = _saBoletosLista.filter(b=>b.status==='vencido').length;
+    const agora = new Date(); const mesInicio = new Date(agora.getFullYear(),agora.getMonth(),1);
+    const mrr = _saBoletosLista.filter(b=>b.status==='pago'&&new Date(b.pagamentoEm||b.criadoEm)>=mesInicio).reduce((s,b)=>s+(b.valor||0),0);
+    document.getElementById('saBoletoKpis').innerHTML = [
+      {l:'Total emitido', n:'R$ '+totalEmitido.toFixed(2).replace('.',','), c:''},
+      {l:'Total recebido', n:'R$ '+totalRecebido.toFixed(2).replace('.',','), c:'k-gold'},
+      {l:'Inadimplentes', n:inadimplentes, c:inadimplentes?'k-red':''},
+      {l:'MRR do mês', n:'R$ '+mrr.toFixed(2).replace('.',','), c:'k-green'},
+    ].map(x=>`<div class="kpi ${x.c}"><div class="k-label">${x.l}</div><div class="k-num">${x.n}</div></div>`).join('');
+
+    filtrarBoletos();
+  } catch(e) { console.error(e); }
+}
+
+function filtrarBoletos(){
+  const search  = document.getElementById('saBoletoSearch')?.value.toLowerCase() || '';
+  const status  = document.getElementById('saBoletoFiltroStatus')?.value || '';
+  const periodo = document.getElementById('saBoletoFiltroPeriodo')?.value || '';
+  const agora   = new Date();
+
+  let lista = _saBoletosLista.filter(b => {
+    if(search  && !b.imobiliariaNome?.toLowerCase().includes(search)) return false;
+    if(status  && b.status !== status) return false;
+    if(periodo) {
+      const d = new Date(b.criadoEm);
+      if(periodo === 'mes_atual' && !(d.getMonth()===agora.getMonth() && d.getFullYear()===agora.getFullYear())) return false;
+      if(periodo === 'mes_anterior') { const ant=new Date(agora.getFullYear(),agora.getMonth()-1,1); if(!(d.getMonth()===ant.getMonth() && d.getFullYear()===ant.getFullYear())) return false; }
+      if(periodo === '3_meses' && d < new Date(agora.getFullYear(),agora.getMonth()-3,1)) return false;
+    }
+    return true;
+  });
+
+  const sColor={pago:'b-green',a_vencer:'b-blue',vencido:'b-red',cancelado:'b-gray'};
+  const sLabel={pago:'Pago',a_vencer:'A vencer',vencido:'Vencido',cancelado:'Cancelado'};
+  document.getElementById('saBoletosBody').innerHTML = lista.map(b=>`<tr>
+    <td><div class="prop">${b.imobiliariaNome||'—'}</div><div class="sub">${b.planoNome||'—'}</div></td>
+    <td><span class="badge ${b.planoNome?'b-green':'b-gray'}">${b.planoNome||'—'}</span></td>
+    <td style="font-weight:700">R$ ${(b.valor||0).toFixed(2).replace('.',',')}</td>
+    <td>${b.competencia||'—'}</td>
+    <td>${b.vencimento?new Date(b.vencimento).toLocaleDateString('pt-BR'):'—'}</td>
+    <td>${b.pagamentoEm?new Date(b.pagamentoEm).toLocaleDateString('pt-BR'):'—'}</td>
+    <td><span class="badge ${sColor[b.status]||'b-gray'}">${sLabel[b.status]||b.status}</span></td>
+    <td style="white-space:nowrap">
+      ${b.status!=='pago'?`<button class="icon-btn" title="Marcar como pago" onclick="marcarBoletoSA('${b._id}','pago')">✅</button>`:''}
+      ${b.status!=='cancelado'?`<button class="icon-btn" title="Cancelar" onclick="marcarBoletoSA('${b._id}','cancelado')">✕</button>`:''}
+      <button class="icon-btn" title="Reenviar" onclick="reenviarBoletoSA('${b._id}')">📧</button>
+    </td>
+  </tr>`).join('') || '<tr><td colspan="8" style="text-align:center;color:var(--ink-3);padding:16px">Nenhum boleto encontrado.</td></tr>';
+}
+
+async function marcarBoletoSA(id, status){
+  try {
+    const r = await fetch(`/api/admin/boletos/${id}/status`, {
+      method: 'PATCH', headers: Auth.headers(), body: JSON.stringify({ status })
+    });
+    if(!r.ok) throw new Error((await r.json()).erro);
+    showToast('Status atualizado!','success');
+    carregarBoletosTA();
+    carregarBoletosTA = carregarBoletosSA;
+    carregarBoletosTA();
+  } catch(e) { showToast('Erro: '+e.message,'error'); }
+}
+
+async function reenviarBoletoSA(id){
+  showToast('Funcionalidade de reenvio será integrada com gateway de pagamento.','success');
+}
+
+async function abrirModalEmitirBoleto(){
+  // Carrega lista de imobiliárias
+  try {
+    const r = await fetch('/api/admin/imobiliarias', { headers: Auth.headers() });
+    const lista = await r.json();
+    document.getElementById('eb_imobId').innerHTML = lista.map(i=>`<option value="${i._id}">${i.nome}</option>`).join('');
+  } catch(e) {}
+  // Data padrão vencimento = 10 dias
+  const venc = new Date(); venc.setDate(venc.getDate()+10);
+  document.getElementById('eb_venc').value = venc.toISOString().split('T')[0];
+  const now = new Date();
+  document.getElementById('eb_comp').value = now.toLocaleDateString('pt-BR',{month:'long',year:'numeric'}).replace(/^./,c=>c.toUpperCase());
+  document.getElementById('modalEmitirBoleto').classList.add('open');
+}
+
+async function emitirBoleto(){
+  const imobId = document.getElementById('eb_imobId').value;
+  const valor  = parseFloat(document.getElementById('eb_valor').value);
+  const venc   = document.getElementById('eb_venc').value;
+  const comp   = document.getElementById('eb_comp').value.trim();
+  const obs    = document.getElementById('eb_obs').value.trim();
+  if(!imobId||!valor||!venc||!comp){ showToast('Preencha todos os campos obrigatórios.','error'); return; }
+  try {
+    const r = await fetch('/api/admin/boletos', {
+      method: 'POST', headers: Auth.headers(),
+      body: JSON.stringify({ imobiliariaId:imobId, valor, vencimento:venc, competencia:comp, observacao:obs })
+    });
+    const d = await r.json();
+    if(!r.ok) throw new Error(d.erro);
+    document.getElementById('modalEmitirBoleto').classList.remove('open');
+    showToast('Boleto emitido com sucesso! ✓','success');
+    carregarBoletosTA = carregarBoletosSA;
+    carregarBoletosTA();
+  } catch(e) { showToast('Erro: '+e.message,'error'); }
+}
+
+// Intercepta saTrocaAba para carregar boletos
+const _saTrocaAbaOrig = saTrocaAba;
+function saTrocaAba(aba){
+  _saTrocaAbaOrig(aba);
+  if(aba==='boletos') carregarBoletosSA();
+}
+// Fix saTrocaAba to include boletos
+function saTrocaAba(aba){
+  ['dashboard','clientes','planos','boletos'].forEach(a=>{
+    document.getElementById('sa-aba-'+a)?.classList.toggle('hidden', a!==aba);
+    document.getElementById('tab-'+a)?.classList.toggle('on', a===aba);
+  });
+  if(aba==='clientes') carregarSubscriptions();
+  if(aba==='planos')   carregarPlanosSA();
+  if(aba==='boletos')  carregarBoletosTA();
+}
+function carregarBoletosTA(){ carregarBoletosSA(); }
 
 // ── Inserir novas autorizações manualmente ──
 function abrirInserirAutorizacao(){

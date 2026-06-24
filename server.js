@@ -34,6 +34,7 @@ const db = {
   subscriptions:       Datastore.create({ filename: path.join(DATA_DIR, 'subscriptions.db'),       autoload: true }),
   subscription_history:Datastore.create({ filename: path.join(DATA_DIR, 'subscription_history.db'),autoload: true }),
   billing_transactions:Datastore.create({ filename: path.join(DATA_DIR, 'billing_transactions.db'),autoload: true }),
+  boletos:             Datastore.create({ filename: path.join(DATA_DIR, 'boletos.db'),             autoload: true }),
   config:              Datastore.create({ filename: path.join(DATA_DIR, 'config.db'),              autoload: true }),
   logs:                Datastore.create({ filename: path.join(DATA_DIR, 'logs.db'),                autoload: true })
 };
@@ -1160,6 +1161,136 @@ app.post('/api/admin/subscriptions/:imobId/iniciar', authMiddleware(['super_admi
     const { planoId, status } = req.body;
     const sub = await SubscriptionService.criar(req.params.imobId, planoId, status||'trial');
     res.json({ ok: true, sub });
+  } catch(e) { res.status(500).json({ erro: e.message }); }
+});
+
+// ═══════════════════════════════════════════════════════
+// BOLETOS — Imobiliária
+// ═══════════════════════════════════════════════════════
+
+// Gera código de boleto fictício (para simulação antes de gateway)
+function gerarCodigoBoleto() {
+  return '34191.' + Math.random().toString().slice(2,7) + ' ' +
+         Math.random().toString().slice(2,12) + ' ' +
+         Math.random().toString().slice(2,12) + ' ' +
+         Math.floor(Math.random()*9) + ' ' +
+         Date.now().toString().slice(-13);
+}
+
+// Listar boletos da imobiliária logada
+app.get('/api/boletos', authMiddleware(['admin','corretor']), async (req, res) => {
+  try {
+    const boletos = await db.boletos.find({ imobiliariaId: req.user.imobiliariaId }).sort({ criadoEm: -1 });
+    const agora = new Date();
+    // Atualiza status de vencidos automaticamente
+    for (const b of boletos) {
+      if (b.status === 'a_vencer' && new Date(b.vencimento) < agora) {
+        await db.boletos.update({ _id: b._id }, { $set: { status: 'vencido', atualizadoEm: agora.toISOString() } });
+        b.status = 'vencido';
+      }
+    }
+    const proximo = boletos.find(b => b.status === 'a_vencer') || null;
+    res.json({ boletos, proximo });
+  } catch(e) { res.status(500).json({ erro: e.message }); }
+});
+
+// ═══════════════════════════════════════════════════════
+// BOLETOS — Super Admin
+// ═══════════════════════════════════════════════════════
+
+// Listar todos os boletos (super admin)
+app.get('/api/admin/boletos', authMiddleware(['super_admin']), async (req, res) => {
+  try {
+    const boletos = await db.boletos.find({}).sort({ criadoEm: -1 });
+    // Enriquecer com nome da imobiliária
+    const enriquecidos = await Promise.all(boletos.map(async b => {
+      const imob = b.imobiliariaId ? await db.imobiliarias.findOne({ _id: b.imobiliariaId }) : null;
+      return { ...b, imobiliariaNome: imob?.nome || '—', planoNome: imob?.planoNome || '—' };
+    }));
+    res.json({ boletos: enriquecidos });
+  } catch(e) { res.status(500).json({ erro: e.message }); }
+});
+
+// Emitir novo boleto (super admin)
+app.post('/api/admin/boletos', authMiddleware(['super_admin']), async (req, res) => {
+  try {
+    const { imobiliariaId, valor, vencimento, competencia, observacao } = req.body;
+    if (!imobiliariaId || !valor || !vencimento || !competencia) {
+      return res.status(422).json({ erro: 'Campos obrigatórios: imobiliariaId, valor, vencimento, competencia.' });
+    }
+    const imob = await db.imobiliarias.findOne({ _id: imobiliariaId });
+    const boleto = await db.boletos.insert({
+      imobiliariaId,
+      imobiliariaNome: imob?.nome || '—',
+      planoNome:       imob?.planoNome || '—',
+      valor:           parseFloat(valor),
+      vencimento,
+      competencia,
+      observacao:      observacao || '',
+      codigo:          gerarCodigoBoleto(),
+      status:          'a_vencer',
+      criadoEm:        new Date().toISOString(),
+      atualizadoEm:    new Date().toISOString()
+    });
+    await log('boleto', `Boleto emitido: ${imob?.nome||'—'} — R$${valor} — ${competencia}`);
+    res.json({ ok: true, boleto });
+  } catch(e) { res.status(500).json({ erro: e.message }); }
+});
+
+// Alterar status de um boleto (super admin)
+app.patch('/api/admin/boletos/:id/status', authMiddleware(['super_admin']), async (req, res) => {
+  try {
+    const { status } = req.body;
+    const valid = ['pago','a_vencer','vencido','cancelado'];
+    if (!valid.includes(status)) return res.status(422).json({ erro: 'Status inválido.' });
+    const upd = { status, atualizadoEm: new Date().toISOString() };
+    if (status === 'pago') upd.pagamentoEm = new Date().toISOString();
+    await db.boletos.update({ _id: req.params.id }, { $set: upd });
+    // Se marcado como pago, reativa subscription e renova créditos
+    if (status === 'pago') {
+      const boleto = await db.boletos.findOne({ _id: req.params.id });
+      if (boleto?.imobiliariaId) {
+        const sub = await db.subscriptions.findOne({ imobiliariaId: boleto.imobiliariaId });
+        if (sub) {
+          const renewal = new Date(); renewal.setMonth(renewal.getMonth()+1);
+          await db.subscriptions.update({ _id: sub._id }, { $set: {
+            status: 'active', usedAutorizacoes: 0, renewalDate: renewal.toISOString(), atualizadoEm: new Date().toISOString()
+          }});
+          await db.imobiliarias.update({ _id: boleto.imobiliariaId }, { $set: { subscriptionStatus:'active', atualizadoEm: new Date().toISOString() } });
+        }
+        await log('boleto', `Boleto ${req.params.id} marcado como pago — créditos renovados`);
+      }
+    }
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ erro: e.message }); }
+});
+
+// ═══════════════════════════════════════════════════════
+// CRÉDITOS — Solicitação de compra (imobiliária)
+// ═══════════════════════════════════════════════════════
+app.post('/api/creditos/solicitar', authMiddleware(['admin','corretor']), async (req, res) => {
+  try {
+    const { pacoteId, quantidade, valor } = req.body;
+    const compra = await db.compras.insert({
+      imobiliariaId: req.user.imobiliariaId,
+      pacoteId:      pacoteId || null,
+      tipo:          'solicitacao',
+      quantidade:    parseInt(quantidade),
+      valor:         parseFloat(valor||0),
+      motivo:        `Solicitação de ${quantidade} créditos via painel`,
+      statusPagamento: 'pendente',
+      criadoEm:      new Date().toISOString()
+    });
+    await log('credito', `Solicitação de créditos: ${req.user.imobiliariaId} — ${quantidade} créditos`, null, req.user.imobiliariaId);
+    res.json({ ok: true, compra });
+  } catch(e) { res.status(500).json({ erro: e.message }); }
+});
+
+// Histórico de créditos da imobiliária
+app.get('/api/creditos/historico', authMiddleware(['admin','corretor']), async (req, res) => {
+  try {
+    const hist = await db.compras.find({ imobiliariaId: req.user.imobiliariaId }).sort({ criadoEm: -1 });
+    res.json(hist);
   } catch(e) { res.status(500).json({ erro: e.message }); }
 });
 
