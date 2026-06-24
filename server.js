@@ -548,9 +548,36 @@ app.post('/api/admin/planos', authMiddleware(['super_admin']), async (req, res) 
 });
 
 app.put('/api/admin/planos/:id', authMiddleware(['super_admin']), async (req, res) => {
-  const { nome, limite, valor, ativo } = req.body;
-  await db.planos.update({ _id: req.params.id }, { $set: { nome, limite: parseInt(limite), valor: parseFloat(valor||0), ativo, atualizadoEm: new Date().toISOString() } });
-  res.json({ ok: true });
+  try {
+    const { nome, limite, valorMensal, maxUsuarios, ativo } = req.body;
+    if (!nome || limite === undefined) return res.status(422).json({ erro: 'Nome e limite são obrigatórios.' });
+    const update = {
+      nome,
+      limite:       parseInt(limite),
+      valorMensal:  parseFloat(valorMensal || 0),
+      maxUsuarios:  parseInt(maxUsuarios  || 1),
+      ativo:        ativo !== undefined ? ativo : true,
+      atualizadoEm: new Date().toISOString()
+    };
+    await db.planos.update({ _id: req.params.id }, { $set: update });
+    // Propagar preço/limite atualizado para todas as subscriptions com esse plano
+    const subs = await db.subscriptions.find({ planoId: req.params.id });
+    for (const sub of subs) {
+      await db.subscriptions.update({ _id: sub._id }, { $set: {
+        planoNome:          nome,
+        valorMensal:        parseFloat(valorMensal || 0),
+        limiteAutorizacoes: parseInt(limite),
+        atualizadoEm:       new Date().toISOString()
+      }});
+      await db.imobiliarias.update({ _id: sub.imobiliariaId }, { $set: {
+        planoNome:          nome,
+        limiteAutorizacoes: parseInt(limite),
+        atualizadoEm:       new Date().toISOString()
+      }});
+    }
+    await log('admin', `Plano atualizado: ${nome} (limite:${limite}, valor:${valorMensal}, maxUsuarios:${maxUsuarios})`);
+    res.json({ ok: true, propagados: subs.length });
+  } catch(e) { res.status(500).json({ erro: e.message }); }
 });
 
 app.delete('/api/admin/planos/:id', authMiddleware(['super_admin']), async (req, res) => {
@@ -1133,6 +1160,44 @@ app.post('/api/admin/subscriptions/:imobId/iniciar', authMiddleware(['super_admi
     const { planoId, status } = req.body;
     const sub = await SubscriptionService.criar(req.params.imobId, planoId, status||'trial');
     res.json({ ok: true, sub });
+  } catch(e) { res.status(500).json({ erro: e.message }); }
+});
+
+// ═══════════════════════════════════════════════════════
+// MODO SUPORTE — Super Admin acessa conta de imobiliária
+// ═══════════════════════════════════════════════════════
+
+// Gera token temporário de suporte para uma imobiliária
+app.post('/api/admin/suporte/:imobId', authMiddleware(['super_admin']), async (req, res) => {
+  try {
+    const imob = await db.imobiliarias.findOne({ _id: req.params.imobId });
+    if (!imob) return res.status(404).json({ erro: 'Imobiliária não encontrada.' });
+
+    // Busca o admin principal da imobiliária
+    const adminUser = await db.usuarios.findOne({ imobiliariaId: req.params.imobId, role: 'admin', ativo: true });
+    if (!adminUser) return res.status(404).json({ erro: 'Admin da imobiliária não encontrado.' });
+
+    // Token de suporte — válido 2h, carrega flag modoSuporte
+    const tokenSuporte = jwt.sign({
+      userId:            adminUser._id,
+      nome:              adminUser.nome,
+      email:             adminUser.email,
+      role:              'admin',
+      imobiliariaId:     imob._id,
+      imobiliariaSlug:   imob.slug,
+      imobiliariaNome:   imob.nome,
+      modoSuporte:       true,
+      superAdminId:      req.user.userId,
+      superAdminEmail:   req.user.email
+    }, JWT_SECRET, { expiresIn: '2h' });
+
+    await log('suporte', `Super admin ${req.user.email} entrou em modo suporte: ${imob.nome}`, null, imob._id);
+
+    res.json({
+      ok: true,
+      token: tokenSuporte,
+      imobiliaria: { nome: imob.nome, slug: imob.slug, email: imob.email }
+    });
   } catch(e) { res.status(500).json({ erro: e.message }); }
 });
 
