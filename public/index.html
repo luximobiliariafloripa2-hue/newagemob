@@ -308,12 +308,6 @@ label{display:block;font-size:13px;font-weight:600;color:var(--ink-2);margin-bot
         style="flex:1;min-width:200px;padding:9px 13px;border:1.5px solid var(--line);border-radius:9px;font-size:13.5px">
       <select id="saFiltroPlano" onchange="filtrarSubscriptions()" style="padding:9px 12px;border:1.5px solid var(--line);border-radius:9px;font-size:13px">
         <option value="">Todos os planos</option>
-        <option value="trial">Trial</option>
-        <option value="start">Start</option>
-        <option value="pro">Pro</option>
-        <option value="prime">Prime</option>
-        <option value="scale">Scale</option>
-        <option value="corporate">Corporate</option>
       </select>
       <select id="saFiltroStatus" onchange="filtrarSubscriptions()" style="padding:9px 12px;border:1.5px solid var(--line);border-radius:9px;font-size:13px">
         <option value="">Todos os status</option>
@@ -1965,6 +1959,20 @@ async function carregarMetricasSuperAdmin(){
 }
 
 async function carregarSubscriptions(){
+  // Popula o select de planos com dados reais do banco (só se ainda tiver apenas o default)
+  const selPlano = document.getElementById('saFiltroPlano');
+  if(selPlano && selPlano.options.length <= 1){
+    try {
+      const rp = await fetch('/api/admin/planos', { headers: Auth.headers() });
+      const planos = await rp.json();
+      const valorAtual = selPlano.value;
+      selPlano.innerHTML = '<option value="">Todos os planos</option>' +
+        planos.filter(p => p.ativo).map(p =>
+          `<option value="${p.slug}">${p.nome}</option>`
+        ).join('');
+      selPlano.value = valorAtual; // preserva seleção atual
+    } catch(e) { /* não bloqueia se falhar */ }
+  }
   try{
     const plano=document.getElementById('saFiltroPlano')?.value||'';
     const status=document.getElementById('saFiltroStatus')?.value||'';
@@ -2124,13 +2132,13 @@ async function salvarPlano(){
     const r=await fetch(url,{method,headers:Auth.headers(),body:JSON.stringify({nome,limite:parseInt(limite),valorMensal:parseFloat(valor||0),maxUsuarios:parseInt(usuarios||1),ativo:true})});
     if(!r.ok) throw new Error((await r.json()).erro);
     document.getElementById('modalPlano').classList.remove('open');
-    showToast('Plano salvo!','success'); carregarPlanosSA();
+    showToast('Plano salvo!','success'); carregarPlanosSA(); _resetFiltroPlanos();
   }catch(e){showToast('Erro: '+e.message,'error');}
 }
 async function excluirPlano(id){
   if(!confirm('Excluir este plano?')) return;
   await fetch(`/api/admin/planos/${id}`,{method:'DELETE',headers:Auth.headers()});
-  showToast('Plano excluído.','success'); carregarPlanosSA();
+  showToast('Plano excluído.','success'); carregarPlanosSA(); _resetFiltroPlanos();
 }
 
 /* Cadastro novo cliente */
@@ -2595,6 +2603,12 @@ function sairModoSuporte(){
     }
   }
 })();
+
+// Reseta select de planos para forçar recarga no próximo acesso à aba Clientes
+function _resetFiltroPlanos(){
+  const sel = document.getElementById('saFiltroPlano');
+  if(sel) sel.innerHTML = '<option value="">Todos os planos</option>';
+}
 
 // Verifica autenticação ao carregar — apenas fora do fluxo do proprietário
 if(!isRotaProprietario()){
