@@ -25,14 +25,17 @@ const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
 fs.mkdirSync(DATA_DIR, { recursive: true });
 
 const db = {
-  imobiliarias:  Datastore.create({ filename: path.join(DATA_DIR, 'imobiliarias.db'),  autoload: true }),
-  usuarios:      Datastore.create({ filename: path.join(DATA_DIR, 'usuarios.db'),      autoload: true }),
-  autorizacoes:  Datastore.create({ filename: path.join(DATA_DIR, 'autorizacoes.db'),  autoload: true }),
-  planos:        Datastore.create({ filename: path.join(DATA_DIR, 'planos.db'),        autoload: true }),
-  pacotes:       Datastore.create({ filename: path.join(DATA_DIR, 'pacotes.db'),       autoload: true }),
-  compras:       Datastore.create({ filename: path.join(DATA_DIR, 'compras.db'),       autoload: true }),
-  config:        Datastore.create({ filename: path.join(DATA_DIR, 'config.db'),        autoload: true }),
-  logs:          Datastore.create({ filename: path.join(DATA_DIR, 'logs.db'),          autoload: true })
+  imobiliarias:        Datastore.create({ filename: path.join(DATA_DIR, 'imobiliarias.db'),        autoload: true }),
+  usuarios:            Datastore.create({ filename: path.join(DATA_DIR, 'usuarios.db'),            autoload: true }),
+  autorizacoes:        Datastore.create({ filename: path.join(DATA_DIR, 'autorizacoes.db'),        autoload: true }),
+  planos:              Datastore.create({ filename: path.join(DATA_DIR, 'planos.db'),              autoload: true }),
+  pacotes:             Datastore.create({ filename: path.join(DATA_DIR, 'pacotes.db'),             autoload: true }),
+  compras:             Datastore.create({ filename: path.join(DATA_DIR, 'compras.db'),             autoload: true }),
+  subscriptions:       Datastore.create({ filename: path.join(DATA_DIR, 'subscriptions.db'),       autoload: true }),
+  subscription_history:Datastore.create({ filename: path.join(DATA_DIR, 'subscription_history.db'),autoload: true }),
+  billing_transactions:Datastore.create({ filename: path.join(DATA_DIR, 'billing_transactions.db'),autoload: true }),
+  config:              Datastore.create({ filename: path.join(DATA_DIR, 'config.db'),              autoload: true }),
+  logs:                Datastore.create({ filename: path.join(DATA_DIR, 'logs.db'),                autoload: true })
 };
 
 const STORAGE_BASE = process.env.STORAGE_DIR || path.join(__dirname, 'storage');
@@ -57,11 +60,15 @@ async function seed() {
   const planoCount = await db.planos.count({});
   if (planoCount === 0) {
     for (const p of [
-      { slug:'basic', nome:'Basic', limite:15, valor:0, ativo:true },
-      { slug:'pro', nome:'Pro', limite:30, valor:0, ativo:true },
-      { slug:'premium', nome:'Premium', limite:50, valor:0, ativo:true },
-      { slug:'enterprise', nome:'Enterprise', limite:100, valor:0, ativo:true },
-      { slug:'unlimited', nome:'Unlimited', limite:-1, valor:0, ativo:true }
+      { slug:'trial',     nome:'Trial',     limite:1,   valorMensal:0,     maxUsuarios:1,  ativo:true },
+      { slug:'start',     nome:'Start',     limite:10,  valorMensal:29.90, maxUsuarios:1,  ativo:true },
+      { slug:'pro',       nome:'Pro',       limite:25,  valorMensal:59.90, maxUsuarios:1,  ativo:true },
+      { slug:'prime',     nome:'Prime',     limite:50,  valorMensal:99.90, maxUsuarios:5,  ativo:true },
+      { slug:'scale',     nome:'Scale',     limite:100, valorMensal:179.90,maxUsuarios:15, ativo:true },
+      { slug:'corporate', nome:'Corporate', limite:500, valorMensal:0,     maxUsuarios:-1, ativo:true },
+      { slug:'basic',     nome:'Basic',     limite:15,  valorMensal:0,     maxUsuarios:1,  ativo:true },
+      { slug:'enterprise',nome:'Enterprise',limite:100, valorMensal:0,     maxUsuarios:-1, ativo:true },
+      { slug:'unlimited', nome:'Unlimited', limite:-1,  valorMensal:0,     maxUsuarios:-1, ativo:true }
     ]) await db.planos.insert({ ...p, criadoEm: new Date().toISOString() });
     console.log('  ✓ Planos criados');
   }
@@ -308,6 +315,175 @@ app.get('/api/admin/imobiliarias/:id/usuarios', authMiddleware(['super_admin']),
   const lista = await db.usuarios.find({ imobiliariaId: req.params.id });
   res.json(lista.map(({ senha, ...u }) => u));
 });
+
+// ═══════════════════════════════════════════════════════
+// SUBSCRIPTION SERVICE — Entidade separada de assinatura
+// ═══════════════════════════════════════════════════════
+const SubscriptionService = {
+
+  async criar(imobiliariaId, planoId, status='trial') {
+    const plano = await db.planos.findOne({ _id: planoId });
+    if (!plano) throw new Error('Plano não encontrado.');
+    const now = new Date();
+    const renewal = new Date(now); renewal.setMonth(renewal.getMonth() + 1);
+    const trialExp = status === 'trial' ? new Date(now.getTime() + 7*24*60*60*1000).toISOString() : null;
+    const sub = await db.subscriptions.insert({
+      imobiliariaId,
+      planoId,
+      planoSlug:            plano.slug,
+      planoNome:            plano.nome,
+      status,                             // trial | active | suspended | canceled | delinquent
+      billingType:          'monthly',
+      valorMensal:          plano.valorMensal || 0,
+      limiteAutorizacoes:   plano.limite,
+      usedAutorizacoes:     0,
+      extraAutorizacoes:    0,
+      renewalDate:          renewal.toISOString(),
+      trialExpiration:      trialExp,
+      criadoEm:             now.toISOString(),
+      atualizadoEm:         now.toISOString()
+    });
+    // Sync back to imobiliaria for backward compat
+    await db.imobiliarias.update({ _id: imobiliariaId }, { $set: {
+      subscriptionId:       sub._id,
+      planoId,
+      planoSlug:            plano.slug,
+      planoNome:            plano.nome,
+      limiteAutorizacoes:   plano.limite,
+      subscriptionStatus:   status,
+      atualizadoEm:         now.toISOString()
+    }});
+    return sub;
+  },
+
+  async get(imobiliariaId) {
+    return db.subscriptions.findOne({ imobiliariaId });
+  },
+
+  async alterarPlano(imobiliariaId, novoPlanoId, motivo, changedBy) {
+    const sub = await this.get(imobiliariaId);
+    const novoPlano = await db.planos.findOne({ _id: novoPlanoId });
+    if (!novoPlano) throw new Error('Plano não encontrado.');
+    // Histórico
+    if (sub) {
+      await db.subscription_history.insert({
+        imobiliariaId,
+        previousPlanId:   sub.planoId,
+        previousPlanNome: sub.planoNome,
+        newPlanId:        novoPlanoId,
+        newPlanNome:      novoPlano.nome,
+        changedBy:        changedBy || 'system',
+        motivo:           motivo || '',
+        criadoEm:         new Date().toISOString()
+      });
+    }
+    const renewal = new Date(); renewal.setMonth(renewal.getMonth() + 1);
+    const upd = {
+      planoId:            novoPlanoId,
+      planoSlug:          novoPlano.slug,
+      planoNome:          novoPlano.nome,
+      valorMensal:        novoPlano.valorMensal || 0,
+      limiteAutorizacoes: novoPlano.limite,
+      status:             'active',
+      renewalDate:        renewal.toISOString(),
+      atualizadoEm:       new Date().toISOString()
+    };
+    if (sub) {
+      await db.subscriptions.update({ imobiliariaId }, { $set: upd });
+    } else {
+      await this.criar(imobiliariaId, novoPlanoId, 'active');
+      return;
+    }
+    // Sync imobiliaria
+    await db.imobiliarias.update({ _id: imobiliariaId }, { $set: {
+      planoId: novoPlanoId, planoSlug: novoPlano.slug, planoNome: novoPlano.nome,
+      limiteAutorizacoes: novoPlano.limite, subscriptionStatus: 'active', atualizadoEm: new Date().toISOString()
+    }});
+  },
+
+  async resetarConsumo(imobiliariaId) {
+    await db.subscriptions.update({ imobiliariaId }, { $set: { usedAutorizacoes: 0, atualizadoEm: new Date().toISOString() } });
+  },
+
+  async adicionarCreditos(imobiliariaId, quantidade, motivo, adminId) {
+    await db.subscriptions.update({ imobiliariaId }, { $inc: { extraAutorizacoes: quantidade } });
+    await db.imobiliarias.update({ _id: imobiliariaId }, { $inc: { creditosExtras: quantidade } });
+    await db.billing_transactions.insert({
+      imobiliariaId, tipo: 'extra_credits', quantidade,
+      valor: 0, status: 'approved', motivo: motivo||'Manual admin',
+      adminId: adminId||null, criadoEm: new Date().toISOString()
+    });
+  },
+
+  async alterarStatus(imobiliariaId, novoStatus) {
+    await db.subscriptions.update({ imobiliariaId }, { $set: { status: novoStatus, atualizadoEm: new Date().toISOString() } });
+    await db.imobiliarias.update({ _id: imobiliariaId }, { $set: { subscriptionStatus: novoStatus, ativo: novoStatus==='active'||novoStatus==='trial', atualizadoEm: new Date().toISOString() } });
+  }
+};
+
+// ═══════════════════════════════════════════════════════
+// BILLING SERVICE — Transações e MRR
+// ═══════════════════════════════════════════════════════
+const BillingService = {
+
+  async registrarPagamento(imobiliariaId, valor, tipo, metodo) {
+    return db.billing_transactions.insert({
+      imobiliariaId, valor: parseFloat(valor), tipo,
+      metodo: metodo||'manual', status: 'approved',
+      criadoEm: new Date().toISOString()
+    });
+  },
+
+  async calcularMRR() {
+    const subs = await db.subscriptions.find({ status: 'active' });
+    return subs.reduce((s, sub) => s + (sub.valorMensal || 0), 0);
+  },
+
+  async metricas() {
+    const subs      = await db.subscriptions.find({});
+    const imobs     = await db.imobiliarias.find({});
+    const now       = new Date();
+    const mesInicio = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+
+    const ativos     = subs.filter(s => s.status === 'active');
+    const trials     = subs.filter(s => s.status === 'trial');
+    const suspensos  = subs.filter(s => s.status === 'suspended');
+    const cancelados = subs.filter(s => s.status === 'canceled');
+    const inadim     = subs.filter(s => s.status === 'delinquent');
+
+    const mrr = ativos.reduce((s, sub) => s + (sub.valorMensal || 0), 0);
+    const arr = mrr * 12;
+
+    // Autorizações do mês
+    const autMes = await db.autorizacoes.count({ criadoEm: { $gte: mesInicio } });
+    // Churn: cancelados no mês atual
+    const churnMes = cancelados.filter(s => s.atualizadoEm >= mesInicio).length;
+
+    // Por plano
+    const porPlano = {};
+    for (const s of subs) {
+      const slug = s.planoSlug || 'pro';
+      if (!porPlano[slug]) porPlano[slug] = { nome: s.planoNome||slug, count: 0, mrr: 0 };
+      porPlano[slug].count++;
+      if (s.status === 'active') porPlano[slug].mrr += (s.valorMensal || 0);
+    }
+
+    return {
+      totalContas:         subs.length,
+      imobiliariasAtivas:  imobs.filter(i => i.tipoCliente==='imobiliaria' && i.ativo).length,
+      corretoresAtivos:    imobs.filter(i => i.tipoCliente==='corretor' && i.ativo).length,
+      assinaturasAtivas:   ativos.length,
+      trialsAtivos:        trials.length,
+      suspensos:           suspensos.length,
+      inadimplentes:       inadim.length,
+      churnMes,
+      mrr:                 Math.round(mrr * 100) / 100,
+      arr:                 Math.round(arr * 100) / 100,
+      autorizacoesMes:     autMes,
+      porPlano
+    };
+  }
+};
 
 // ═══════════════════════════════════════════════════════
 // HELPERS SAAS — Controle de limite e créditos
@@ -582,6 +758,8 @@ app.post('/api/cadastro', async (req, res) => {
     });
 
     await log('cadastro', `Nova imobiliaria via landing: ${nome} (${email})`);
+    // Cria subscription trial
+    try { await SubscriptionService.criar(imob._id, plano?._id, 'trial'); } catch(e) { /* non-fatal */ }
 
     const token = jwt.sign({
       userId:imob._id, nome:responsavel, email:email.toLowerCase().trim(),
@@ -688,6 +866,39 @@ app.post('/api/autorizacoes/rascunho', authMiddleware(['admin','corretor']), asy
   } catch(e) { res.status(500).json({ erro: e.message }); }
 });
 
+// Inserir autorização manualmente (pelo corretor/admin no painel)
+app.post('/api/autorizacoes/manual', async (req, res) => {
+  try {
+    const token = req.headers.authorization?.slice(7);
+    let user = null;
+    try { user = require('jsonwebtoken').verify(token, JWT_SECRET); } catch(e) {}
+    if (!user) return res.status(401).json({ erro: 'Não autorizado.' });
+
+    const { proprietario, imovel, tipo, status, vencimento, corretor, inseridoManualmente } = req.body;
+    if (!proprietario?.nome || !imovel?.end) return res.status(422).json({ erro: 'Dados incompletos.' });
+
+    const codigo = genCode();
+    const aut = {
+      codigo,
+      proprietario,
+      imovel,
+      tipo:              tipo || 'simples',
+      status:            status || 'assinado',
+      vencimento:        vencimento || '—',
+      corretorNome:      corretor || user.nome,
+      corretorId:        user.userId,
+      imobiliariaId:     user.imobiliariaId,
+      imobiliariaSlug:   user.imobiliariaSlug,
+      inseridoManualmente: !!inseridoManualmente,
+      criadoEm:          new Date().toISOString(),
+      atualizadoEm:      new Date().toISOString()
+    };
+    await db.autorizacoes.insert(aut);
+    await log('autorizacao', `Inserida manualmente: ${codigo} (${proprietario.nome})`, null, user.imobiliariaId);
+    res.json({ ok: true, codigo });
+  } catch(e) { res.status(500).json({ erro: e.message }); }
+});
+
 // Salvar autorização assinada (chamado pelo proprietário — sem auth)
 app.post('/api/autorizacoes/assinar', async (req, res) => {
   try {
@@ -783,6 +994,146 @@ app.get('/api/fluxo-config-publico/:slug', async (req, res) => {
   if (!imob) return res.json(null);
   const doc = await db.config.findOne({ _key: `fluxo_${imob._id}` });
   res.json(doc ? doc.valor : null);
+});
+
+// ═══════════════════════════════════════════════════════
+// BILLING & SUBSCRIPTION ROUTES
+// ═══════════════════════════════════════════════════════
+
+// Métricas billing completas para super admin
+app.get('/api/admin/billing/metricas', authMiddleware(['super_admin']), async (_req, res) => {
+  try { res.json(await BillingService.metricas()); }
+  catch(e) { res.status(500).json({ erro: e.message }); }
+});
+
+// Listar todas as subscriptions com dados enriquecidos
+app.get('/api/admin/subscriptions', authMiddleware(['super_admin']), async (req, res) => {
+  try {
+    const { plano, status, tipo, search } = req.query;
+    let imobs = await db.imobiliarias.find({});
+    if (tipo)   imobs = imobs.filter(i => i.tipoCliente === tipo);
+    if (search) imobs = imobs.filter(i => i.nome?.toLowerCase().includes(search.toLowerCase()) || i.email?.toLowerCase().includes(search.toLowerCase()));
+
+    const now = new Date();
+    const mesInicio = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+
+    const result = await Promise.all(imobs.map(async imob => {
+      const sub = await db.subscriptions.findOne({ imobiliariaId: imob._id });
+      const usadas = await db.autorizacoes.count({ imobiliariaId: imob._id, criadoEm: { $gte: mesInicio } });
+      const limite  = sub?.limiteAutorizacoes ?? imob.limiteAutorizacoes ?? 0;
+      const extras  = sub?.extraAutorizacoes  ?? imob.creditosExtras     ?? 0;
+      const disponiveis = limite === -1 ? -1 : Math.max(0, limite + extras - usadas);
+      const pct = limite > 0 ? Math.min(Math.round(usadas / limite * 100), 100) : 0;
+      return {
+        _id:           imob._id,
+        nome:          imob.nome,
+        email:         imob.email,
+        tipoCliente:   imob.tipoCliente || 'imobiliaria',
+        cnpj:          imob.cnpj || '',
+        cpf:           imob.cpf  || '',
+        planoSlug:     sub?.planoSlug   || imob.planoSlug   || 'pro',
+        planoNome:     sub?.planoNome   || imob.planoNome   || 'Pro',
+        valorMensal:   sub?.valorMensal || 0,
+        status:        sub?.status      || imob.subscriptionStatus || 'active',
+        billingType:   sub?.billingType || 'monthly',
+        limite,
+        usadas,
+        extras,
+        disponiveis,
+        pct,
+        renewalDate:      sub?.renewalDate || null,
+        trialExpiration:  sub?.trialExpiration || null,
+        subscriptionId:   sub?._id || null,
+        criadoEm:         imob.criadoEm
+      };
+    }));
+
+    let filtered = result;
+    if (plano)  filtered = filtered.filter(r => r.planoSlug === plano);
+    if (status) filtered = filtered.filter(r => r.status === status);
+
+    res.json(filtered.sort((a,b) => new Date(b.criadoEm) - new Date(a.criadoEm)));
+  } catch(e) { res.status(500).json({ erro: e.message }); }
+});
+
+// Alterar plano de uma conta
+app.patch('/api/admin/subscriptions/:imobId/plano', authMiddleware(['super_admin']), async (req, res) => {
+  try {
+    const { planoId, motivo } = req.body;
+    await SubscriptionService.alterarPlano(req.params.imobId, planoId, motivo, req.user.userId);
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ erro: e.message }); }
+});
+
+// Alterar status (suspender, reativar, cancelar, trial, delinquent)
+app.patch('/api/admin/subscriptions/:imobId/status', authMiddleware(['super_admin']), async (req, res) => {
+  try {
+    const { status } = req.body;
+    const valid = ['trial','active','suspended','canceled','delinquent'];
+    if (!valid.includes(status)) return res.status(422).json({ erro: 'Status inválido.' });
+    await SubscriptionService.alterarStatus(req.params.imobId, status);
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ erro: e.message }); }
+});
+
+// Adicionar créditos
+app.post('/api/admin/subscriptions/:imobId/creditos', authMiddleware(['super_admin']), async (req, res) => {
+  try {
+    const { quantidade, motivo } = req.body;
+    if (!quantidade || quantidade < 1) return res.status(422).json({ erro: 'Quantidade inválida.' });
+    await SubscriptionService.adicionarCreditos(req.params.imobId, parseInt(quantidade), motivo, req.user.userId);
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ erro: e.message }); }
+});
+
+// Resetar consumo do mês
+app.patch('/api/admin/subscriptions/:imobId/resetar', authMiddleware(['super_admin']), async (req, res) => {
+  try {
+    await SubscriptionService.resetarConsumo(req.params.imobId);
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ erro: e.message }); }
+});
+
+// Editar limite manual
+app.patch('/api/admin/subscriptions/:imobId/limite', authMiddleware(['super_admin']), async (req, res) => {
+  try {
+    const { limite } = req.body;
+    await db.subscriptions.update({ imobiliariaId: req.params.imobId }, { $set: { limiteAutorizacoes: parseInt(limite), atualizadoEm: new Date().toISOString() } });
+    await db.imobiliarias.update({ _id: req.params.imobId }, { $set: { limiteAutorizacoes: parseInt(limite), atualizadoEm: new Date().toISOString() } });
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ erro: e.message }); }
+});
+
+// Histórico de mudanças de plano
+app.get('/api/admin/subscriptions/:imobId/historico', authMiddleware(['super_admin']), async (req, res) => {
+  const hist = await db.subscription_history.find({ imobiliariaId: req.params.imobId }).sort({ criadoEm: -1 });
+  res.json(hist);
+});
+
+// Subscription do cliente logado (para painel da imobiliária)
+app.get('/api/minha-assinatura', authMiddleware(['admin','corretor']), async (req, res) => {
+  try {
+    const sub = await SubscriptionService.get(req.user.imobiliariaId);
+    const now = new Date();
+    const mesInicio = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+    const usadas = await db.autorizacoes.count({ imobiliariaId: req.user.imobiliariaId, criadoEm: { $gte: mesInicio } });
+    const limite = sub?.limiteAutorizacoes ?? 0;
+    const extras = sub?.extraAutorizacoes  ?? 0;
+    const disponiveis = limite === -1 ? -1 : Math.max(0, limite + extras - usadas);
+    const pct = limite > 0 ? Math.min(Math.round(usadas / limite * 100), 100) : 0;
+    res.json({ sub, usadas, limite, extras, disponiveis, pct,
+      alerta: pct >= 100 ? 'critico' : pct >= 90 ? 'urgente' : pct >= 80 ? 'aviso' : null });
+  } catch(e) { res.status(500).json({ erro: e.message }); }
+});
+
+// Hook: criar subscription quando imobiliária é criada via auto-cadastro
+// (já tratado no /api/cadastro, mas garantindo para cadastros do super admin)
+app.post('/api/admin/subscriptions/:imobId/iniciar', authMiddleware(['super_admin']), async (req, res) => {
+  try {
+    const { planoId, status } = req.body;
+    const sub = await SubscriptionService.criar(req.params.imobId, planoId, status||'trial');
+    res.json({ ok: true, sub });
+  } catch(e) { res.status(500).json({ erro: e.message }); }
 });
 
 // ═══════════════════════════════════════════════════════

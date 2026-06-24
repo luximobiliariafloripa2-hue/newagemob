@@ -256,51 +256,145 @@ label{display:block;font-size:13px;font-weight:600;color:var(--ink-2);margin-bot
   <div class="page-head">
     <div>
       <h1>⚡ Super Admin AGEMOB</h1>
-      <p>Gerencie todas as imobiliárias da plataforma</p>
+      <p>Gerencie clientes, planos, billing e métricas da plataforma</p>
     </div>
-    <button class="btn btn-primary btn-lg" onclick="abrirModalNovaImob()">+ Nova Imobiliária</button>
+    <div style="display:flex;gap:10px">
+      <button class="btn btn-ghost btn-lg" onclick="voltarSuperAdmin()">← Painel</button>
+      <button class="btn btn-primary btn-lg" onclick="abrirModalNovaImob()">+ Novo Cliente</button>
+    </div>
   </div>
 
-  <!-- Métricas globais -->
-  <div class="kpis" id="saKpis"></div>
-
-  <!-- Lista de imobiliárias -->
-  <!-- Alertas de limite -->
-  <div id="saAlertas" style="margin-bottom:14px"></div>
-
-  <!-- Ranking -->
-  <div class="panel" style="margin-bottom:14px">
-    <h2>🏆 Ranking de utilização (mês atual)</h2>
-    <div id="saRanking"></div>
+  <!-- Abas do Super Admin -->
+  <div style="display:flex;gap:8px;margin-bottom:20px;border-bottom:1px solid var(--line);padding-bottom:0">
+    <button class="sa-tab on" id="tab-dashboard" onclick="saTrocaAba('dashboard')">📊 Dashboard</button>
+    <button class="sa-tab" id="tab-clientes" onclick="saTrocaAba('clientes')">👥 Clientes</button>
+    <button class="sa-tab" id="tab-planos" onclick="saTrocaAba('planos')">📋 Planos</button>
   </div>
 
-  <div class="panel">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-      <h2>Clientes cadastrados</h2>
-      <div style="display:flex;gap:8px">
-        <select id="saFiltroTipo" onchange="filtrarClientes()" style="padding:8px 12px;border:1.5px solid var(--line);border-radius:8px;font-size:13px">
-          <option value="">Todos os tipos</option>
-          <option value="imobiliaria">Imobiliárias</option>
-          <option value="corretor">Corretores</option>
-        </select>
-        <select id="saFiltroStatus" onchange="filtrarClientes()" style="padding:8px 12px;border:1.5px solid var(--line);border-radius:8px;font-size:13px">
-          <option value="">Todos os status</option>
-          <option value="ativo">Ativos</option>
-          <option value="suspenso">Suspensos</option>
-          <option value="inativo">Inativos</option>
-        </select>
+  <!-- ABA: DASHBOARD -->
+  <div id="sa-aba-dashboard">
+    <!-- KPIs de Billing -->
+    <div class="kpis" id="saKpis" style="grid-template-columns:repeat(4,1fr)"></div>
+    <div class="kpis" id="saKpis2" style="grid-template-columns:repeat(4,1fr);margin-top:0"></div>
+
+    <!-- Alertas -->
+    <div id="saAlertas" style="margin-top:14px"></div>
+
+    <div class="two-col" style="margin-top:14px">
+      <!-- Distribuição por plano -->
+      <div class="panel">
+        <h2>Distribuição por plano</h2>
+        <div id="saPorPlano" style="margin-top:12px"></div>
+      </div>
+      <!-- Ranking -->
+      <div class="panel">
+        <h2>🏆 Ranking de utilização</h2>
+        <div id="saRanking"></div>
       </div>
     </div>
-    <div class="tbl-scroll">
-      <table class="tbl">
-        <thead><tr>
-          <th>Cliente</th><th>Tipo</th><th>CPF/CNPJ</th><th>Plano</th><th>Uso do mês</th><th>Créditos</th><th>Status</th><th>Ações</th>
-        </tr></thead>
-        <tbody id="saTableBody"></tbody>
-      </table>
+  </div>
+
+  <!-- ABA: CLIENTES -->
+  <div id="sa-aba-clientes" class="hidden">
+    <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+      <input id="saSearch" placeholder="🔍 Buscar por nome ou e-mail..." oninput="filtrarSubscriptions()"
+        style="flex:1;min-width:200px;padding:9px 13px;border:1.5px solid var(--line);border-radius:9px;font-size:13.5px">
+      <select id="saFiltroPlano" onchange="filtrarSubscriptions()" style="padding:9px 12px;border:1.5px solid var(--line);border-radius:9px;font-size:13px">
+        <option value="">Todos os planos</option>
+        <option value="trial">Trial</option>
+        <option value="start">Start</option>
+        <option value="pro">Pro</option>
+        <option value="prime">Prime</option>
+        <option value="scale">Scale</option>
+        <option value="corporate">Corporate</option>
+      </select>
+      <select id="saFiltroStatus" onchange="filtrarSubscriptions()" style="padding:9px 12px;border:1.5px solid var(--line);border-radius:9px;font-size:13px">
+        <option value="">Todos os status</option>
+        <option value="trial">Trial</option>
+        <option value="active">Ativo</option>
+        <option value="suspended">Suspenso</option>
+        <option value="delinquent">Inadimplente</option>
+        <option value="canceled">Cancelado</option>
+      </select>
+      <select id="saFiltroTipo" onchange="filtrarSubscriptions()" style="padding:9px 12px;border:1.5px solid var(--line);border-radius:9px;font-size:13px">
+        <option value="">Todos os tipos</option>
+        <option value="imobiliaria">Imobiliária</option>
+        <option value="corretor">Corretor</option>
+      </select>
+    </div>
+    <div class="panel" style="padding:0;overflow:hidden">
+      <div class="tbl-scroll">
+        <table class="tbl">
+          <thead><tr>
+            <th>Cliente</th><th>Tipo</th><th>Plano</th><th>Status</th>
+            <th>Uso do mês</th><th>Extras</th><th>MRR</th><th>Renovação</th><th>Ações</th>
+          </tr></thead>
+          <tbody id="saTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ABA: PLANOS -->
+  <div id="sa-aba-planos" class="hidden">
+    <div class="panel">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+        <h2>Planos cadastrados</h2>
+        <button class="btn btn-primary" onclick="abrirModalPlano()">+ Novo plano</button>
+      </div>
+      <div class="tbl-scroll">
+        <table class="tbl">
+          <thead><tr><th>Nome</th><th>Limite/mês</th><th>Preço/mês</th><th>Usuários</th><th>Ativo</th><th>Ações</th></tr></thead>
+          <tbody id="saPlanoBody"></tbody>
+        </table>
+      </div>
     </div>
   </div>
 </main>
+
+<!-- MODAL: Alterar Plano -->
+<div class="overlay" id="modalAlterarPlano">
+  <div class="modal" style="max-width:440px">
+    <h2>Alterar plano</h2>
+    <p style="color:var(--ink-2);font-size:13.5px;margin-bottom:16px">Cliente: <b id="apClienteNome"></b></p>
+    <div class="field"><label>Novo plano *</label><select id="ap_planoId"></select></div>
+    <div class="field"><label>Motivo</label><input id="ap_motivo" placeholder="Ex.: Upgrade solicitado pelo cliente"></div>
+    <div class="nav-row" style="margin-top:16px">
+      <button class="btn btn-ghost" onclick="document.getElementById('modalAlterarPlano').classList.remove('open')">Cancelar</button>
+      <button class="btn btn-primary" onclick="confirmarAlterarPlano()">Alterar ✓</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Editar Limite Manual -->
+<div class="overlay" id="modalLimiteManual">
+  <div class="modal" style="max-width:380px">
+    <h2>Editar limite manual</h2>
+    <p style="color:var(--ink-2);font-size:13.5px;margin-bottom:16px">Sobrescreve o limite do plano para <b id="lmClienteNome"></b>.</p>
+    <div class="field"><label>Limite de autorizações/mês *</label><input id="lm_limite" type="number" min="1" placeholder="Ex.: 80"></div>
+    <div class="nav-row" style="margin-top:16px">
+      <button class="btn btn-ghost" onclick="document.getElementById('modalLimiteManual').classList.remove('open')">Cancelar</button>
+      <button class="btn btn-primary" onclick="confirmarLimiteManual()">Salvar ✓</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Novo/Editar Plano -->
+<div class="overlay" id="modalPlano">
+  <div class="modal" style="max-width:420px">
+    <h2 id="modalPlanoTitle">Novo plano</h2>
+    <div class="grid2">
+      <div class="field" style="grid-column:1/-1"><label>Nome *</label><input id="pl_nome" placeholder="Ex.: Prime"></div>
+      <div class="field"><label>Limite/mês *</label><input id="pl_limite" type="number" placeholder="50 (-1 = ilimitado)"></div>
+      <div class="field"><label>Preço/mês (R$) *</label><input id="pl_valor" type="number" step="0.01" placeholder="99.90"></div>
+      <div class="field"><label>Máx. usuários</label><input id="pl_usuarios" type="number" placeholder="5 (-1 = ilimitado)"></div>
+    </div>
+    <div class="nav-row" style="margin-top:16px">
+      <button class="btn btn-ghost" onclick="document.getElementById('modalPlano').classList.remove('open')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarPlano()">Salvar ✓</button>
+    </div>
+  </div>
+</div>
 
 <!-- MODAL: Novo Cliente (Imobiliária ou Corretor) -->
 <div class="overlay" id="modalNovaImob">
@@ -1548,313 +1642,378 @@ function isRotaProprietario(){
 }
 
 // ═══════════════════════════════════════════════════════
-// SUPER ADMIN — Funções de gerenciamento SaaS completo
+// SUPER ADMIN — Billing Dashboard Completo
 // ═══════════════════════════════════════════════════════
 
-/* Máscaras */
 function maskCNPJ(el){ el.value=el.value.replace(/\D/g,'').slice(0,14).replace(/(\d{2})(\d)/,'$1.$2').replace(/(\d{3})(\d)/,'$1.$2').replace(/(\d{3})(\d)/,'$1/$2').replace(/(\d{4})(\d{1,2})$/,'$1-$2'); }
 
 let _saImobiliariaList = [];
+let _saSubscriptionList = [];
 let _saTipoCliente = 'imobiliaria';
 let _saCreditosImobId = null;
+let _saAlterarPlanoId = null;
+let _saLimiteManualId = null;
+let _saPlanoEditId = null;
 
-function setTipoCliente(tipo){
-  _saTipoCliente = tipo;
-  document.getElementById('tc_imob').classList.toggle('sel', tipo==='imobiliaria');
-  document.getElementById('tc_corretor').classList.toggle('sel', tipo==='corretor');
-  document.getElementById('ni_campos_imob').classList.toggle('hidden', tipo!=='imobiliaria');
-  document.getElementById('ni_campos_corretor').classList.toggle('hidden', tipo!=='corretor');
+/* Tabs */
+function saTrocaAba(aba){
+  ['dashboard','clientes','planos'].forEach(a=>{
+    document.getElementById('sa-aba-'+a)?.classList.toggle('hidden', a!==aba);
+    document.getElementById('tab-'+a)?.classList.toggle('on', a===aba);
+  });
+  if(aba==='clientes') carregarSubscriptions();
+  if(aba==='planos')   carregarPlanosSA();
 }
 
 async function buscarCEPAdmin(){
-  const raw = document.getElementById('ni_cep').value.replace(/\D/g,'');
-  if(raw.length!==8){ showToast('CEP inválido.','error'); return; }
-  try {
-    const r = await fetch(`https://viacep.com.br/ws/${raw}/json/`);
-    const d = await r.json();
-    if(d.erro){ showToast('CEP não encontrado.','error'); return; }
-    if(d.logradouro) document.getElementById('ni_logradouro').value = d.logradouro;
-    if(d.bairro) document.getElementById('ni_bairro').value = d.bairro;
-    if(d.localidade) document.getElementById('ni_cidade').value = d.localidade;
-    if(d.uf) document.getElementById('ni_estado').value = d.uf;
+  const raw=document.getElementById('ni_cep').value.replace(/\D/g,'');
+  if(raw.length!==8){showToast('CEP inválido.','error');return;}
+  try{
+    const r=await fetch(`https://viacep.com.br/ws/${raw}/json/`);const d=await r.json();
+    if(d.erro){showToast('CEP não encontrado.','error');return;}
+    if(d.logradouro) document.getElementById('ni_logradouro').value=d.logradouro;
+    if(d.bairro) document.getElementById('ni_bairro').value=d.bairro;
+    if(d.localidade) document.getElementById('ni_cidade').value=d.localidade;
+    if(d.uf) document.getElementById('ni_estado').value=d.uf;
     showToast('Endereço preenchido!','success');
-  } catch(e){ showToast('Erro ao buscar CEP.','error'); }
+  }catch(e){showToast('Erro ao buscar CEP.','error');}
+}
+
+function setTipoCliente(tipo){
+  _saTipoCliente=tipo;
+  document.getElementById('tc_imob').classList.toggle('sel',tipo==='imobiliaria');
+  document.getElementById('tc_corretor').classList.toggle('sel',tipo==='corretor');
+  document.getElementById('ni_campos_imob').classList.toggle('hidden',tipo!=='imobiliaria');
+  document.getElementById('ni_campos_corretor').classList.toggle('hidden',tipo!=='corretor');
 }
 
 function mostrarBotaoSuperAdmin(){
-  const head = document.querySelector('#viewAdmin .page-head');
-  if(!head || document.getElementById('btnSuperAdmin')) return;
-  const b = document.createElement('button');
-  b.id = 'btnSuperAdmin';
-  b.className = 'btn btn-ghost btn-lg';
-  b.innerHTML = '⚡ Super Admin';
-  b.onclick = abrirSuperAdmin;
-  head.insertBefore(b, head.firstChild);
+  const head=document.querySelector('#viewAdmin .page-head');
+  if(!head||document.getElementById('btnSuperAdmin'))return;
+  const b=document.createElement('button');
+  b.id='btnSuperAdmin';b.className='btn btn-ghost btn-lg';
+  b.innerHTML='⚡ Super Admin';b.onclick=abrirSuperAdmin;
+  head.insertBefore(b,head.firstChild);
 }
 
 function abrirSuperAdmin(){
   document.getElementById('viewAdmin').classList.add('hidden');
   document.getElementById('viewSuperAdmin').classList.remove('hidden');
+  saTrocaAba('dashboard');
   carregarMetricasSuperAdmin();
-  carregarImobiliarias();
 }
 
 function voltarSuperAdmin(){
   document.getElementById('viewSuperAdmin').classList.add('hidden');
   document.getElementById('viewAdmin').classList.remove('hidden');
+  iniciarAtualizacaoRealtime();
 }
 
+const BRL = v => typeof v === 'number' ? v.toLocaleString('pt-BR',{style:'currency',currency:'BRL'}) : '—';
+
 async function carregarMetricasSuperAdmin(){
-  try {
-    const r = await fetch('/api/admin/metricas', { headers: Auth.headers() });
-    const d = await r.json();
-    document.getElementById('saKpis').innerHTML = [
-      { l:'Imobiliárias ativas', n: d.imobiliariasAtivas||0, s:'PJ cadastradas', c:'k-green' },
-      { l:'Corretores ativos', n: d.corretoresAtivos||0, s:'PF cadastrados', c:'k-green' },
-      { l:'Clientes totais', n: d.clientesAtivos||0, s:'contas ativas', c:'' },
-      { l:'Suspensos', n: d.clientesSuspensos||0, s:'requerem atenção', c:'k-red' },
-      { l:'Autorizações total', n: d.autorizacoesTotal||0, s:'todas as contas', c:'' },
-      { l:'Assinadas', n: d.autorizacoesAssinadas||0, s:'documentos concluídos', c:'k-gold' },
-      { l:'Últimos 30 dias', n: d.autorizacoesUltimos30Dias||0, s:'novas autorizações', c:'' },
+  try{
+    const r=await fetch('/api/admin/billing/metricas',{headers:Auth.headers()});
+    const d=await r.json();
+
+    const statusColor={active:'b-green',trial:'b-blue',suspended:'b-gold',delinquent:'b-red',canceled:'b-gray'};
+
+    document.getElementById('saKpis').innerHTML=[
+      {l:'MRR',         n:BRL(d.mrr),            s:'receita mensal recorrente', c:'k-gold'},
+      {l:'ARR',         n:BRL(d.arr),             s:'receita anual projetada',   c:''},
+      {l:'Assinaturas', n:d.assinaturasAtivas,    s:'contas ativas',            c:'k-green'},
+      {l:'Trials',      n:d.trialsAtivos,         s:'em período de teste',      c:''},
     ].map(x=>`<div class="kpi ${x.c}"><div class="k-label">${x.l}</div><div class="k-num">${x.n}</div><div class="k-sub">${x.s}</div></div>`).join('');
 
-    // Distribuição por plano
-    const porPlano = d.porPlano||{};
-    const planoHtml = Object.entries(porPlano).map(([slug,qtd])=>
-      `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--line);font-size:13.5px"><span style="font-weight:600;text-transform:capitalize">${slug}</span><b>${qtd} cliente${qtd!==1?'s':''}</b></div>`
-    ).join('');
+    document.getElementById('saKpis2').innerHTML=[
+      {l:'Imobiliárias', n:d.imobiliariasAtivas,  s:'PJ cadastradas',           c:''},
+      {l:'Corretores',   n:d.corretoresAtivos,     s:'PF cadastrados',           c:''},
+      {l:'Inadimplentes',n:d.inadimplentes,        s:'requerem ação',            c:d.inadimplentes>0?'k-red':''},
+      {l:'Autorizações', n:d.autorizacoesMes,      s:'criadas este mês',         c:''},
+    ].map(x=>`<div class="kpi ${x.c}"><div class="k-label">${x.l}</div><div class="k-num">${x.n}</div><div class="k-sub">${x.s}</div></div>`).join('');
 
-    // Alertas de limite
-    const alertas = d.alertasLimite||[];
-    document.getElementById('saAlertas').innerHTML = alertas.length ? `
+    // Por plano
+    const porPlano=d.porPlano||{};
+    document.getElementById('saPorPlano').innerHTML=Object.entries(porPlano).map(([slug,p])=>`
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--line)">
+        <div><span style="font-weight:700;text-transform:capitalize">${p.nome||slug}</span></div>
+        <div style="display:flex;gap:12px;align-items:center">
+          <span style="font-size:13px;color:var(--ink-2)">${p.count} cliente${p.count!==1?'s':''}</span>
+          <span style="font-size:13px;font-weight:600;color:var(--gold)">${BRL(p.mrr)}/mês</span>
+        </div>
+      </div>`).join('') || '<p style="color:var(--ink-3);font-size:13px">Nenhum dado ainda.</p>';
+
+    // Alertas
+    const rr=await fetch('/api/admin/ranking',{headers:Auth.headers()});
+    const ranking=await rr.json();
+    const alertas=ranking.filter(r=>r.pct>=80);
+    document.getElementById('saAlertas').innerHTML=alertas.length?`
       <div class="panel" style="border-color:var(--gold);background:var(--gold-soft)">
         <h2 style="color:var(--gold);font-size:14px;margin-bottom:10px">⚠ Clientes próximos do limite</h2>
         ${alertas.map(a=>`<div style="display:flex;justify-content:space-between;font-size:13.5px;padding:4px 0">
-          <span>${a.nome}</span>
-          <span class="badge ${a.pct>=100?'b-red':a.pct>=90?'b-gold':'b-blue'}">${a.pct}% (${a.usadas}/${a.limite})</span>
-        </div>`).join('')}
-      </div>` : '';
+          <span>${a.nome}</span><span class="badge ${a.pct>=100?'b-red':a.pct>=90?'b-gold':'b-blue'}">${a.pct}%</span></div>`).join('')}
+      </div>`:'';
 
     // Ranking
-    const rr = await fetch('/api/admin/ranking', { headers: Auth.headers() });
-    const ranking = await rr.json();
-    document.getElementById('saRanking').innerHTML = ranking.length ?
+    document.getElementById('saRanking').innerHTML=ranking.length?
       ranking.map((r,i)=>`<div style="display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid var(--line)">
         <span style="font-size:18px;font-weight:800;color:var(--ink-3);min-width:28px">${i+1}º</span>
-        <div style="flex:1"><div style="font-weight:600;font-size:13.5px">${r.nome}</div><div style="font-size:12px;color:var(--ink-3)">${r.plano} · ${r.usadas} utilizadas</div></div>
+        <div style="flex:1"><div style="font-weight:600;font-size:13.5px">${r.nome}</div>
+        <div style="font-size:12px;color:var(--ink-3)">${r.plano} · ${r.usadas} utilizadas</div></div>
         <div style="text-align:right">
           <div style="font-size:13px;font-weight:700;color:${r.pct>=90?'var(--red)':r.pct>=80?'var(--gold)':'var(--brand)'}">${r.pct}%</div>
-          <div style="width:80px;height:6px;background:var(--line);border-radius:99px;margin-top:4px"><div style="height:100%;border-radius:99px;background:${r.pct>=90?'var(--red)':r.pct>=80?'var(--gold)':'var(--brand)'};width:${Math.min(r.pct,100)}%"></div></div>
-        </div>
-      </div>`).join('') : '<p style="color:var(--ink-3);font-size:13px">Nenhum dado ainda.</p>';
-
-  } catch(e) { console.error(e); }
+          <div style="width:80px;height:6px;background:var(--line);border-radius:99px;margin-top:4px">
+            <div style="height:100%;border-radius:99px;background:${r.pct>=90?'var(--red)':r.pct>=80?'var(--gold)':'var(--brand)'};width:${Math.min(r.pct,100)}%"></div></div>
+        </div></div>`).join(''):'<p style="color:var(--ink-3);font-size:13px">Nenhum dado ainda.</p>';
+  }catch(e){console.error(e);}
 }
 
-async function carregarImobiliarias(){
-  try {
-    const r = await fetch('/api/admin/imobiliarias', { headers: Auth.headers() });
-    _saImobiliariaList = await r.json();
-    filtrarClientes();
-  } catch(e) { console.error(e); }
+async function carregarSubscriptions(){
+  try{
+    const plano=document.getElementById('saFiltroPlano')?.value||'';
+    const status=document.getElementById('saFiltroStatus')?.value||'';
+    const tipo=document.getElementById('saFiltroTipo')?.value||'';
+    const search=document.getElementById('saSearch')?.value||'';
+    const params=new URLSearchParams({plano,status,tipo,search});
+    const r=await fetch('/api/admin/subscriptions?'+params,{headers:Auth.headers()});
+    _saSubscriptionList=await r.json();
+    renderSubscriptions();
+  }catch(e){console.error(e);}
 }
 
-function filtrarClientes(){
-  const tipo   = document.getElementById('saFiltroTipo')?.value   || '';
-  const status = document.getElementById('saFiltroStatus')?.value || '';
-  const lista  = _saImobiliariaList.filter(i =>
-    (!tipo   || i.tipoCliente === tipo) &&
-    (!status || i.status === status)
-  );
-  const planoColor = { basic:'b-gray', pro:'b-green', premium:'b-blue', enterprise:'b-gold', unlimited:'b-gold' };
-  const statusColor = { ativo:'b-green', suspenso:'b-gold', inativo:'b-red' };
-  document.getElementById('saTableBody').innerHTML = lista.map(imob => {
-    const pct = imob.limiteAutorizacoes && imob.limiteAutorizacoes > 0
-      ? Math.min(Math.round((imob._stats?.total||0) / imob.limiteAutorizacoes * 100), 100) : 0;
-    const barColor = pct>=100?'var(--red)':pct>=80?'var(--gold)':'var(--brand)';
-    const doc = imob.tipoCliente==='corretor' ? (imob.cpf||'—') : (imob.cnpj||'—');
+function filtrarSubscriptions(){ carregarSubscriptions(); }
+
+const subStatusLabel={trial:'Trial',active:'Ativo',suspended:'Suspenso',delinquent:'Inadimplente',canceled:'Cancelado'};
+const subStatusBadge={trial:'b-blue',active:'b-green',suspended:'b-gold',delinquent:'b-red',canceled:'b-gray'};
+const planoColors={trial:'b-gray',start:'b-gray',pro:'b-green',prime:'b-gold',scale:'b-blue',corporate:'b-red',basic:'b-gray',enterprise:'b-gold'};
+
+function renderSubscriptions(){
+  const lista=_saSubscriptionList;
+  document.getElementById('saTableBody').innerHTML=lista.map(s=>{
+    const barColor=s.pct>=100?'var(--red)':s.pct>=90?'var(--gold)':'var(--brand)';
+    const renovacao=s.renewalDate?new Date(s.renewalDate).toLocaleDateString('pt-BR'):'—';
+    const trial=s.trialExpiration?`<div style="font-size:11px;color:var(--ink-3)">Trial até ${new Date(s.trialExpiration).toLocaleDateString('pt-BR')}</div>`:'';
     return `<tr>
+      <td><div class="prop">${s.nome}</div><div class="sub">${s.email}</div></td>
+      <td><span class="badge ${s.tipoCliente==='corretor'?'b-blue':'b-gray'}">${s.tipoCliente==='corretor'?'Corretor':'Imobiliária'}</span></td>
+      <td><span class="badge ${planoColors[s.planoSlug]||'b-gray'}">${s.planoNome}</span></td>
+      <td><span class="badge ${subStatusBadge[s.status]||'b-gray'}">${subStatusLabel[s.status]||s.status}</span>${trial}</td>
       <td>
-        <div class="prop">${imob.nome}</div>
-        <div class="sub">${imob.email}</div>
+        <div style="font-size:12.5px;margin-bottom:3px">${s.usadas}/${s.limite===-1?'∞':s.limite}</div>
+        ${s.limite>0?`<div style="width:90px;height:5px;background:var(--line);border-radius:99px">
+          <div style="height:100%;border-radius:99px;background:${barColor};width:${Math.min(s.pct,100)}%"></div></div>`:''}
       </td>
-      <td><span class="badge ${imob.tipoCliente==='corretor'?'b-blue':'b-gray'}">${imob.tipoCliente==='corretor'?'Corretor':'Imobiliária'}</span></td>
-      <td style="font-family:monospace;font-size:12px">${doc}</td>
-      <td><span class="badge ${planoColor[imob.planoSlug]||'b-gray'}">${imob.planoNome||imob.planoSlug||'Pro'}</span></td>
-      <td>
-        <div style="font-size:12.5px;margin-bottom:4px">${imob._stats?.total||0} / ${imob.limiteAutorizacoes===-1?'∞':imob.limiteAutorizacoes||0}</div>
-        ${imob.limiteAutorizacoes>0?`<div style="width:100px;height:5px;background:var(--line);border-radius:99px"><div style="height:100%;border-radius:99px;background:${barColor};width:${pct}%"></div></div>`:''}
-      </td>
-      <td><span class="badge b-blue">${imob.creditosExtras||0}</span></td>
-      <td><span class="badge ${statusColor[imob.status]||'b-gray'}">${imob.status||'ativo'}</span></td>
+      <td><span class="badge b-blue">${s.extras}</span></td>
+      <td style="font-weight:600;color:var(--gold)">${s.valorMensal>0?BRL(s.valorMensal)+'/mês':'Grátis'}</td>
+      <td style="font-size:12px;color:var(--ink-2)">${renovacao}</td>
       <td style="white-space:nowrap">
-        <button class="icon-btn" title="Créditos" onclick="abrirModalCreditos('${imob._id}','${imob.nome.replace(/'/g,'')}')">💰</button>
-        <button class="icon-btn" title="${imob.status==='ativo'?'Suspender':'Ativar'}" onclick="toggleImob('${imob._id}','${imob.status==='ativo'?'suspenso':'ativo'}')">${imob.status==='ativo'?'⏸':'▶'}</button>
+        <div style="display:flex;flex-wrap:wrap;gap:4px">
+          <button class="icon-btn" title="Alterar plano" onclick="abrirAlterarPlano('${s._id}','${s.nome.replace(/'/g,'')}')">📋</button>
+          <button class="icon-btn" title="Créditos" onclick="abrirModalCreditos('${s._id}','${s.nome.replace(/'/g,'')}')">💰</button>
+          <button class="icon-btn" title="Limite manual" onclick="abrirLimiteManual('${s._id}','${s.nome.replace(/'/g,'')}')">✏️</button>
+          <button class="icon-btn" title="Resetar consumo" onclick="resetarConsumo('${s._id}')">🔄</button>
+          ${s.status==='active'||s.status==='trial'
+            ?`<button class="icon-btn" title="Suspender" onclick="alterarStatusSA('${s._id}','suspended')">⏸</button>`
+            :`<button class="icon-btn" title="Reativar" onclick="alterarStatusSA('${s._id}','active')">▶</button>`}
+        </div>
       </td>
     </tr>`;
-  }).join('') || '<tr><td colspan="8" style="text-align:center;color:var(--ink-3);padding:20px">Nenhum cliente encontrado.</td></tr>';
+  }).join('')||'<tr><td colspan="9" style="text-align:center;color:var(--ink-3);padding:20px">Nenhum resultado.</td></tr>';
 }
 
-function abrirModalNovaImob(){
-  document.getElementById('modalNovaImob').classList.add('open');
+async function abrirAlterarPlano(imobId, nome){
+  _saAlterarPlanoId=imobId;
+  document.getElementById('apClienteNome').textContent=nome;
+  const planos=await fetch('/api/admin/planos',{headers:Auth.headers()}).then(r=>r.json());
+  document.getElementById('ap_planoId').innerHTML=planos.filter(p=>p.ativo).map(p=>
+    `<option value="${p._id}">${p.nome} — ${p.limite===-1?'Ilimitado':p.limite+' auth/mês'} — ${p.valorMensal>0?BRL(p.valorMensal)+'/mês':'Grátis'}</option>`).join('');
+  document.getElementById('ap_motivo').value='';
+  document.getElementById('modalAlterarPlano').classList.add('open');
+}
+async function confirmarAlterarPlano(){
+  const planoId=document.getElementById('ap_planoId').value;
+  const motivo=document.getElementById('ap_motivo').value;
+  try{
+    const r=await fetch(`/api/admin/subscriptions/${_saAlterarPlanoId}/plano`,{method:'PATCH',headers:Auth.headers(),body:JSON.stringify({planoId,motivo})});
+    const d=await r.json(); if(!r.ok) throw new Error(d.erro);
+    document.getElementById('modalAlterarPlano').classList.remove('open');
+    showToast('Plano alterado com sucesso!','success');
+    carregarSubscriptions(); carregarMetricasSuperAdmin();
+  }catch(e){showToast('Erro: '+e.message,'error');}
 }
 
+function abrirLimiteManual(imobId, nome){
+  _saLimiteManualId=imobId;
+  document.getElementById('lmClienteNome').textContent=nome;
+  document.getElementById('lm_limite').value='';
+  document.getElementById('modalLimiteManual').classList.add('open');
+}
+async function confirmarLimiteManual(){
+  const limite=document.getElementById('lm_limite').value;
+  if(!limite||limite<1){showToast('Informe um limite válido.','error');return;}
+  try{
+    const r=await fetch(`/api/admin/subscriptions/${_saLimiteManualId}/limite`,{method:'PATCH',headers:Auth.headers(),body:JSON.stringify({limite})});
+    if(!r.ok) throw new Error((await r.json()).erro);
+    document.getElementById('modalLimiteManual').classList.remove('open');
+    showToast('Limite atualizado!','success');
+    carregarSubscriptions();
+  }catch(e){showToast('Erro: '+e.message,'error');}
+}
+
+async function resetarConsumo(imobId){
+  if(!confirm('Resetar consumo do mês para este cliente?')) return;
+  try{
+    await fetch(`/api/admin/subscriptions/${imobId}/resetar`,{method:'PATCH',headers:Auth.headers()});
+    showToast('Consumo resetado!','success'); carregarSubscriptions();
+  }catch(e){showToast('Erro ao resetar.','error');}
+}
+
+async function alterarStatusSA(imobId, status){
+  const labels={suspended:'Suspender',active:'Reativar',canceled:'Cancelar',delinquent:'Marcar como inadimplente',trial:'Colocar em trial'};
+  if(!confirm(`${labels[status]||'Alterar status'} desta conta?`)) return;
+  try{
+    const r=await fetch(`/api/admin/subscriptions/${imobId}/status`,{method:'PATCH',headers:Auth.headers(),body:JSON.stringify({status})});
+    if(!r.ok) throw new Error((await r.json()).erro);
+    showToast('Status atualizado!','success'); carregarSubscriptions(); carregarMetricasSuperAdmin();
+  }catch(e){showToast('Erro: '+e.message,'error');}
+}
+
+/* Créditos */
+function abrirModalCreditos(id, nome){
+  _saCreditosImobId=id;
+  document.getElementById('creditosImobNome').textContent=nome;
+  document.getElementById('cr_qtd').value='';
+  document.getElementById('cr_motivo').value='';
+  document.getElementById('modalCreditos').classList.add('open');
+}
+async function confirmarCreditos(){
+  const qtd=parseInt(document.getElementById('cr_qtd').value);
+  const motivo=document.getElementById('cr_motivo').value.trim();
+  if(!qtd||qtd<1){showToast('Informe uma quantidade válida.','error');return;}
+  try{
+    const r=await fetch(`/api/admin/subscriptions/${_saCreditosImobId}/creditos`,{method:'POST',headers:Auth.headers(),body:JSON.stringify({quantidade:qtd,motivo})});
+    const d=await r.json(); if(!r.ok) throw new Error(d.erro);
+    document.getElementById('modalCreditos').classList.remove('open');
+    showToast(`${qtd} crédito${qtd>1?'s':''} adicionado${qtd>1?'s':''}!`,'success');
+    carregarSubscriptions();
+  }catch(e){showToast('Erro: '+e.message,'error');}
+}
+
+/* Planos CRUD */
+async function carregarPlanosSA(){
+  const lista=await fetch('/api/admin/planos',{headers:Auth.headers()}).then(r=>r.json());
+  document.getElementById('saPlanoBody').innerHTML=lista.map(p=>`<tr>
+    <td><b>${p.nome}</b></td>
+    <td>${p.limite===-1?'Ilimitado':p.limite}</td>
+    <td>${p.valorMensal>0?BRL(p.valorMensal):'Grátis'}</td>
+    <td>${p.maxUsuarios===-1?'Ilimitado':(p.maxUsuarios||1)}</td>
+    <td><span class="badge ${p.ativo?'b-green':'b-red'}">${p.ativo?'Ativo':'Inativo'}</span></td>
+    <td><button class="icon-btn" onclick="editarPlano('${p._id}','${p.nome}',${p.limite},${p.valorMensal||0},${p.maxUsuarios||1})">✏️</button>
+        <button class="icon-btn" onclick="excluirPlano('${p._id}')">🗑</button></td>
+  </tr>`).join('');
+}
+
+function abrirModalPlano(){ _saPlanoEditId=null; document.getElementById('modalPlanoTitle').textContent='Novo plano'; ['pl_nome','pl_limite','pl_valor','pl_usuarios'].forEach(id=>document.getElementById(id).value=''); document.getElementById('modalPlano').classList.add('open'); }
+function editarPlano(id,nome,limite,valor,usuarios){ _saPlanoEditId=id; document.getElementById('modalPlanoTitle').textContent='Editar plano'; document.getElementById('pl_nome').value=nome; document.getElementById('pl_limite').value=limite; document.getElementById('pl_valor').value=valor; document.getElementById('pl_usuarios').value=usuarios; document.getElementById('modalPlano').classList.add('open'); }
+async function salvarPlano(){
+  const nome=document.getElementById('pl_nome').value.trim();
+  const limite=document.getElementById('pl_limite').value;
+  const valor=document.getElementById('pl_valor').value;
+  const usuarios=document.getElementById('pl_usuarios').value;
+  if(!nome||!limite){showToast('Nome e limite obrigatórios.','error');return;}
+  const url=_saPlanoEditId?`/api/admin/planos/${_saPlanoEditId}`:'/api/admin/planos';
+  const method=_saPlanoEditId?'PUT':'POST';
+  try{
+    const r=await fetch(url,{method,headers:Auth.headers(),body:JSON.stringify({nome,limite:parseInt(limite),valorMensal:parseFloat(valor||0),maxUsuarios:parseInt(usuarios||1),ativo:true})});
+    if(!r.ok) throw new Error((await r.json()).erro);
+    document.getElementById('modalPlano').classList.remove('open');
+    showToast('Plano salvo!','success'); carregarPlanosSA();
+  }catch(e){showToast('Erro: '+e.message,'error');}
+}
+async function excluirPlano(id){
+  if(!confirm('Excluir este plano?')) return;
+  await fetch(`/api/admin/planos/${id}`,{method:'DELETE',headers:Auth.headers()});
+  showToast('Plano excluído.','success'); carregarPlanosSA();
+}
+
+/* Cadastro novo cliente */
 function abrirModalNovaImob(){
-  // Carrega planos disponíveis
-  fetch('/api/admin/planos', { headers: Auth.headers() }).then(r=>r.json()).then(planos=>{
-    const sel = document.getElementById('ni_planoId');
-    sel.innerHTML = planos.filter(p=>p.ativo).map(p=>`<option value="${p._id}">${p.nome} (${p.limite===-1?'Ilimitado':p.limite+' auth/mês'})</option>`).join('');
+  fetch('/api/admin/planos',{headers:Auth.headers()}).then(r=>r.json()).then(planos=>{
+    const sel=document.getElementById('ni_planoId');
+    sel.innerHTML=planos.filter(p=>p.ativo).map(p=>`<option value="${p._id}">${p.nome} (${p.limite===-1?'Ilimitado':p.limite+' auth/mês'})</option>`).join('');
   }).catch(()=>{});
   document.getElementById('modalNovaImob').classList.add('open');
 }
 
 async function criarImobiliaria(){
-  const tipo = _saTipoCliente;
-  const email = document.getElementById(tipo==='corretor'?'ni_email_corr':'ni_email').value.trim();
-  const nome  = tipo==='corretor'
-    ? document.getElementById('ni_nome_corr').value.trim()
-    : document.getElementById('ni_razao').value.trim();
-
-  const payload = {
-    tipoCliente:  tipo,
-    corPrimaria:  document.getElementById('ni_cor').value,
-    planoId:      document.getElementById('ni_planoId').value,
-    status:       document.getElementById('ni_status').value,
-    adminEmail:   document.getElementById('ni_adminEmail').value.trim(),
-    adminSenha:   document.getElementById('ni_adminSenha').value,
-    endereco: {
-      cep:         document.getElementById('ni_cep').value,
-      logradouro:  document.getElementById('ni_logradouro').value,
-      numero:      document.getElementById('ni_num').value,
-      complemento: document.getElementById('ni_comp').value,
-      bairro:      document.getElementById('ni_bairro').value,
-      cidade:      document.getElementById('ni_cidade').value,
-      estado:      document.getElementById('ni_estado').value
-    }
+  const tipo=_saTipoCliente;
+  const email=document.getElementById(tipo==='corretor'?'ni_email_corr':'ni_email').value.trim();
+  const nome=tipo==='corretor'?document.getElementById('ni_nome_corr').value.trim():document.getElementById('ni_razao').value.trim();
+  const payload={
+    tipoCliente:tipo, corPrimaria:document.getElementById('ni_cor').value,
+    planoId:document.getElementById('ni_planoId').value,
+    status:document.getElementById('ni_status').value,
+    adminEmail:document.getElementById('ni_adminEmail').value.trim(),
+    adminSenha:document.getElementById('ni_adminSenha').value,
+    endereco:{cep:document.getElementById('ni_cep').value,logradouro:document.getElementById('ni_logradouro').value,
+      numero:document.getElementById('ni_num').value,complemento:document.getElementById('ni_comp').value,
+      bairro:document.getElementById('ni_bairro').value,cidade:document.getElementById('ni_cidade').value,estado:document.getElementById('ni_estado').value}
   };
-
-  if (tipo === 'imobiliaria') {
-    Object.assign(payload, {
-      nome:        document.getElementById('ni_razao').value.trim(),
-      razaoSocial: document.getElementById('ni_razao').value.trim(),
-      nomeFantasia:document.getElementById('ni_fantasia').value.trim(),
-      cnpj:        document.getElementById('ni_cnpj').value.trim(),
-      creci:       document.getElementById('ni_creci').value.trim(),
-      telefone:    document.getElementById('ni_tel').value,
-      whatsapp:    document.getElementById('ni_zap').value,
-      email:       document.getElementById('ni_email').value.trim(),
-      site:        document.getElementById('ni_site').value,
-      responsavel: {
-        nome:    document.getElementById('ni_respNome').value.trim(),
-        cpf:     document.getElementById('ni_respCpf').value.trim(),
-        creci:   document.getElementById('ni_respCreci').value.trim(),
-        telefone:document.getElementById('ni_respTel').value,
-        email:   document.getElementById('ni_respEmail').value.trim()
-      }
-    });
-  } else {
-    Object.assign(payload, {
-      nome:     document.getElementById('ni_nome_corr').value.trim(),
-      cpf:      document.getElementById('ni_cpf_corr').value.trim(),
-      creci:    document.getElementById('ni_creci_corr').value.trim(),
-      telefone: document.getElementById('ni_tel_corr').value,
-      whatsapp: document.getElementById('ni_zap_corr').value,
-      email:    document.getElementById('ni_email_corr').value.trim()
-    });
-  }
-
-  if(!payload.nome||!email||!payload.adminEmail||!payload.adminSenha){
-    showToast('Preencha todos os campos obrigatórios (*).','error'); return;
-  }
-
-  try {
-    const r = await fetch('/api/admin/imobiliarias', {
-      method: 'POST', headers: Auth.headers(), body: JSON.stringify(payload)
-    });
-    const d = await r.json();
-    if(!r.ok) throw new Error(d.erro);
+  if(tipo==='imobiliaria'){Object.assign(payload,{nome:document.getElementById('ni_razao').value.trim(),razaoSocial:document.getElementById('ni_razao').value.trim(),nomeFantasia:document.getElementById('ni_fantasia').value.trim(),cnpj:document.getElementById('ni_cnpj').value.trim(),creci:document.getElementById('ni_creci').value.trim(),telefone:document.getElementById('ni_tel').value,whatsapp:document.getElementById('ni_zap').value,email:document.getElementById('ni_email').value.trim(),site:document.getElementById('ni_site').value,responsavel:{nome:document.getElementById('ni_respNome').value.trim(),cpf:document.getElementById('ni_respCpf').value.trim(),creci:document.getElementById('ni_respCreci').value.trim(),telefone:document.getElementById('ni_respTel').value,email:document.getElementById('ni_respEmail').value.trim()}});}
+  else{Object.assign(payload,{nome:document.getElementById('ni_nome_corr').value.trim(),cpf:document.getElementById('ni_cpf_corr').value.trim(),creci:document.getElementById('ni_creci_corr').value.trim(),telefone:document.getElementById('ni_tel_corr').value,whatsapp:document.getElementById('ni_zap_corr').value,email:document.getElementById('ni_email_corr').value.trim()});}
+  if(!payload.nome||!email||!payload.adminEmail||!payload.adminSenha){showToast('Preencha todos os campos obrigatórios (*).','error');return;}
+  try{
+    const r=await fetch('/api/admin/imobiliarias',{method:'POST',headers:Auth.headers(),body:JSON.stringify(payload)});
+    const d=await r.json(); if(!r.ok) throw new Error(d.erro);
+    // Cria subscription automaticamente
+    if(d.imobiliaria?._id && payload.planoId){
+      await fetch(`/api/admin/subscriptions/${d.imobiliaria._id}/iniciar`,{method:'POST',headers:Auth.headers(),body:JSON.stringify({planoId:payload.planoId,status:payload.status||'trial'})}).catch(()=>{});
+    }
     document.getElementById('modalNovaImob').classList.remove('open');
-    showToast(`Cliente "${payload.nome}" criado com sucesso! ✓`, 'success');
-    carregarImobiliarias();
+    showToast(`Cliente "${payload.nome}" criado! ✓`,'success');
     carregarMetricasSuperAdmin();
-  } catch(e) { showToast('Erro: '+e.message, 'error'); }
+  }catch(e){showToast('Erro: '+e.message,'error');}
 }
 
-async function toggleImob(id, novoStatus){
-  try {
-    await fetch(`/api/admin/imobiliarias/${id}/status`, {
-      method: 'PATCH', headers: Auth.headers(),
-      body: JSON.stringify({ ativo: novoStatus === 'ativo', status: novoStatus })
-    });
-    showToast('Status atualizado.', 'success');
-    carregarImobiliarias();
-    carregarMetricasSuperAdmin();
-  } catch(e) { showToast('Erro ao alterar status.', 'error'); }
-}
-
-function abrirModalCreditos(id, nome){
-  _saCreditosImobId = id;
-  document.getElementById('creditosImobNome').textContent = nome;
-  document.getElementById('cr_qtd').value = '';
-  document.getElementById('cr_motivo').value = '';
-  document.getElementById('modalCreditos').classList.add('open');
-}
-
-async function confirmarCreditos(){
-  const qtd = parseInt(document.getElementById('cr_qtd').value);
-  const motivo = document.getElementById('cr_motivo').value.trim();
-  if(!qtd||qtd<1){ showToast('Informe uma quantidade válida.','error'); return; }
-  try {
-    const r = await fetch(`/api/admin/imobiliarias/${_saCreditosImobId}/creditos`, {
-      method: 'POST', headers: Auth.headers(),
-      body: JSON.stringify({ quantidade: qtd, motivo })
-    });
-    const d = await r.json();
-    if(!r.ok) throw new Error(d.erro);
-    document.getElementById('modalCreditos').classList.remove('open');
-    showToast(`${qtd} crédito${qtd>1?'s':''} adicionado${qtd>1?'s':''}! Novo saldo: ${d.novoSaldo}`, 'success');
-    carregarImobiliarias();
-  } catch(e) { showToast('Erro: '+e.message,'error'); }
-}
-
-/* ── Barra de consumo do plano (painel da imobiliária) ── */
+/* Barra de consumo do painel da imobiliária */
 async function carregarUsoPlaino(){
-  try {
-    const r = await fetch('/api/uso-plano', { headers: Auth.headers() });
+  try{
+    const r=await fetch('/api/minha-assinatura',{headers:Auth.headers()});
     if(!r.ok) return;
-    const d = await r.json();
-    const banner = document.getElementById('usoPlanoBanner');
-    if(!banner) return;
-    const cor = d.pct>=100?'var(--red)':d.pct>=90?'#DC6803':d.pct>=80?'var(--gold)':'var(--brand)';
-    const bgAlerta = d.alerta==='critico'?'#FEF3F2':d.alerta==='urgente'?'#FFF6ED':d.alerta==='aviso'?'var(--gold-soft)':'var(--brand-soft)';
-    const bordAlerta = d.alerta==='critico'?'var(--red)':d.alerta==='urgente'?'#DC6803':d.alerta==='aviso'?'var(--gold)':'var(--brand)';
-    banner.innerHTML = `<div style="background:${bgAlerta};border:1.5px solid ${bordAlerta};border-radius:14px;padding:16px 20px;margin-bottom:4px">
+    const d=await r.json();
+    const banner=document.getElementById('usoPlanoBanner'); if(!banner) return;
+    const cor=d.pct>=100?'var(--red)':d.pct>=90?'#DC6803':d.pct>=80?'var(--gold)':'var(--brand)';
+    const bgAlerta=d.alerta==='critico'?'#FEF3F2':d.alerta==='urgente'?'#FFF6ED':d.alerta==='aviso'?'var(--gold-soft)':'var(--brand-soft)';
+    const bordAlerta=d.alerta==='critico'?'var(--red)':d.alerta==='urgente'?'#DC6803':d.alerta==='aviso'?'var(--gold)':'var(--brand)';
+    const sub=d.sub||{};
+    const renovacao=sub.renewalDate?new Date(sub.renewalDate).toLocaleDateString('pt-BR'):'—';
+    banner.innerHTML=`<div style="background:${bgAlerta};border:1.5px solid ${bordAlerta};border-radius:14px;padding:16px 20px;margin-bottom:4px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px">
         <div>
-          <b style="font-family:'Sora',sans-serif;font-size:14px">Plano ${d.planoNome}</b>
+          <b style="font-family:'Sora',sans-serif;font-size:14px">Plano ${sub.planoNome||'—'}</b>
           <span style="margin-left:10px;font-size:13px;color:var(--ink-2)">${d.usadas} de ${d.limite===-1?'∞':d.limite} utilizadas este mês</span>
         </div>
         <div style="display:flex;gap:8px;align-items:center">
-          ${d.creditosExtras>0?`<span class="badge b-blue">💰 ${d.creditosExtras} crédito${d.creditosExtras>1?'s':''} extra${d.creditosExtras>1?'s':''}</span>`:''}
+          ${d.extras>0?`<span class="badge b-blue">💰 ${d.extras} extra${d.extras>1?'s':''}</span>`:''}
+          <span style="font-size:12px;color:var(--ink-3)">Renova ${renovacao}</span>
           <span style="font-weight:700;font-size:15px;color:${cor}">${d.pct}%</span>
         </div>
       </div>
       <div style="height:8px;background:rgba(0,0,0,.08);border-radius:99px">
         <div style="height:100%;border-radius:99px;background:${cor};width:${Math.min(d.pct,100)}%;transition:width .6s"></div>
       </div>
-      ${d.alerta?`<p style="margin-top:8px;font-size:13px;font-weight:600;color:${cor}">${
-        d.alerta==='critico'?'🔴 Seu limite foi atingido. Adquira créditos extras ou faça upgrade do plano.':
-        d.alerta==='urgente'?'🟠 Você está próximo do limite do seu plano.':
-        '🟡 Você já utilizou 80% das autorizações do seu plano.'
-      }</p>`:''}
+      ${d.alerta?`<p style="margin-top:8px;font-size:13px;font-weight:600;color:${cor}">${d.alerta==='critico'?'🔴 Limite atingido. Adquira créditos extras ou faça upgrade.':d.alerta==='urgente'?'🟠 Você está próximo do limite do seu plano.':'🟡 Você já utilizou 80% das autorizações do seu plano.'}</p>`:''}
     </div>`;
-  } catch(e) {}
+  }catch(e){}
 }
+
+function tratarErroLimite(d){ showToast(d.erro||'Limite atingido.','error'); carregarUsoPlaino(); }
 
 // Verifica autenticação ao carregar — apenas fora do fluxo do proprietário
 if(!isRotaProprietario()){
   checkAuth();
 }
+
 </script>
 <!-- ════════════════════════════════════════════════════════════════════
      AGEMOB v2 · CAMADA DE SEGURANÇA JURÍDICA (100% ADITIVA)
@@ -1921,6 +2080,9 @@ if(!isRotaProprietario()){
 .v2-pct{font-size:40px;font-weight:800;font-family:'Sora',sans-serif;text-align:center}
 .v2-validation-ok{text-align:center;padding:10px 0}
 .v2-validation-ok .seal-big{margin:0 auto 14px}
+.sa-tab{background:none;border:none;border-bottom:2.5px solid transparent;padding:10px 18px;font-size:14px;font-weight:600;color:var(--ink-2);cursor:pointer;transition:.15s;margin-bottom:-1px}
+.sa-tab.on{border-bottom-color:var(--brand);color:var(--brand)}
+.sa-tab:hover{color:var(--brand)}
 </style>
 
 <!-- ───────── MODAL: CONFIGURAÇÃO DO FLUXO (ADMIN) ───────── -->
