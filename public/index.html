@@ -516,7 +516,10 @@ label{display:block;font-size:13px;font-weight:600;color:var(--ink-2);margin-bot
       <h1>Painel da Imobiliária</h1>
       <p>Lux House Imóveis Ltda. · CNPJ 48.192.939/0001-21 · Jurerê Internacional, Florianópolis/SC</p>
     </div>
-    <button class="btn btn-primary btn-lg" onclick="novaAutorizacao()">+ NOVA AUTORIZAÇÃO</button>
+    <div style="display:flex;gap:10px">
+      <button class="btn btn-ghost btn-lg" onclick="abrirInserirAutorizacao()">+ Inserir Novas Autorizações</button>
+      <button class="btn btn-primary btn-lg" onclick="novaAutorizacao()">+ NOVA AUTORIZAÇÃO</button>
+    </div>
   </div>
 
   <!-- Barra de consumo do plano -->
@@ -826,6 +829,68 @@ label{display:block;font-size:13px;font-weight:600;color:var(--ink-2);margin-bot
   </section>
 </main>
 
+
+<!-- ====================== MODAL: INSERIR NOVAS AUTORIZAÇÕES ====================== -->
+<div class="overlay" id="modalInserirAutorizacao">
+  <div class="modal" style="max-width:620px;max-height:90vh;overflow-y:auto">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <h2>Inserir nova autorização</h2>
+      <button class="btn btn-ghost" style="padding:6px 12px" onclick="document.getElementById('modalInserirAutorizacao').classList.remove('open')">✕</button>
+    </div>
+    <p style="color:var(--ink-2);font-size:13.5px;margin-bottom:20px">Cadastre manualmente uma autorização de venda com todos os dados do proprietário e do imóvel.</p>
+
+    <h3 style="font-size:13px;color:var(--ink-3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Dados do proprietário</h3>
+    <div class="grid2">
+      <div class="field" style="grid-column:1/-1"><label>Nome completo *</label><input id="ia_nome" placeholder="Ex.: João da Silva"></div>
+      <div class="field"><label>CPF *</label><input id="ia_cpf" placeholder="000.000.000-00" oninput="maskCPF(this)" maxlength="14"></div>
+      <div class="field"><label>RG</label><input id="ia_rg" placeholder="Número do RG"></div>
+      <div class="field"><label>WhatsApp *</label><input id="ia_zap" placeholder="(48) 9 9999-9999" oninput="maskTel(this)" maxlength="16"></div>
+      <div class="field"><label>E-mail *</label><input id="ia_email" type="email" placeholder="proprietario@email.com"></div>
+      <div class="field"><label>Estado civil</label>
+        <select id="ia_civil"><option>Solteiro(a)</option><option>Casado(a)</option><option>Divorciado(a)</option><option>Viúvo(a)</option><option>União estável</option></select>
+      </div>
+      <div class="field"><label>Profissão</label><input id="ia_prof" placeholder="Ex.: Empresário"></div>
+    </div>
+
+    <h3 style="font-size:13px;color:var(--ink-3);text-transform:uppercase;letter-spacing:.5px;margin:16px 0 10px">Dados do imóvel</h3>
+    <div class="grid2">
+      <div class="field"><label>Tipo de imóvel *</label>
+        <select id="ia_itipo"><option>Casa</option><option>Apartamento</option><option>Terreno</option><option>Sala Comercial</option><option>Galpão</option><option>Fazenda</option><option>Sítio</option><option>Outro</option></select>
+      </div>
+      <div class="field"><label>Valor de venda *</label><input id="ia_ivalor" placeholder="R$ 0,00" oninput="maskMoney(this)"></div>
+      <div class="field" style="grid-column:1/-1"><label>Endereço *</label><input id="ia_iend" placeholder="Rua, avenida..."></div>
+      <div class="field"><label>Número</label><input id="ia_inum"></div>
+      <div class="field"><label>Complemento</label><input id="ia_icomp" placeholder="Apto, sala..."></div>
+      <div class="field"><label>Bairro *</label><input id="ia_ibairro" placeholder="Ex.: Jurerê Internacional"></div>
+      <div class="field"><label>Cidade / UF *</label><input id="ia_icidade" value="Florianópolis/SC"></div>
+    </div>
+
+    <h3 style="font-size:13px;color:var(--ink-3);text-transform:uppercase;letter-spacing:.5px;margin:16px 0 10px">Tipo e configurações</h3>
+    <div class="grid2">
+      <div class="field"><label>Tipo de autorização *</label>
+        <select id="ia_tipo">
+          <option value="exclusiva">⭐ Com exclusividade</option>
+          <option value="simples">Sem exclusividade</option>
+        </select>
+      </div>
+      <div class="field"><label>Status inicial</label>
+        <select id="ia_status">
+          <option value="assinado">Assinado</option>
+          <option value="aguardando">Aguardando assinatura</option>
+          <option value="rascunho">Rascunho</option>
+        </select>
+      </div>
+      <div class="field"><label>Data de vencimento</label><input id="ia_venc" type="date"></div>
+      <div class="field"><label>Corretor responsável</label><input id="ia_corretor" placeholder="Nome do corretor"></div>
+    </div>
+
+    <div class="nav-row" style="margin-top:20px">
+      <button class="btn btn-ghost" onclick="document.getElementById('modalInserirAutorizacao').classList.remove('open')">Cancelar</button>
+      <button class="btn btn-primary" onclick="confirmarInserirAutorizacao()">Inserir autorização ✓</button>
+    </div>
+  </div>
+</div>
+
 <button class="btn btn-ghost switch-view hidden" id="btnBack" onclick="backToAdmin()">↩ Painel da imobiliária</button>
 
 <script>
@@ -981,7 +1046,7 @@ const AG = {
   docs: {},
   autorizacoes: []
 };
-const BRL = v => v.toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+const BRL = v => typeof v === 'number' ? v.toLocaleString('pt-BR',{style:'currency',currency:'BRL'}) : '—';
 
 /* ================= BUSCA AUTORIZAÇÕES DO SERVIDOR ================= */
 async function carregarAutorizacoes(){
@@ -1688,12 +1753,7 @@ function setTipoCliente(tipo){
 }
 
 function mostrarBotaoSuperAdmin(){
-  const head=document.querySelector('#viewAdmin .page-head');
-  if(!head||document.getElementById('btnSuperAdmin'))return;
-  const b=document.createElement('button');
-  b.id='btnSuperAdmin';b.className='btn btn-ghost btn-lg';
-  b.innerHTML='⚡ Super Admin';b.onclick=abrirSuperAdmin;
-  head.insertBefore(b,head.firstChild);
+  /* botão Super Admin removido do painel da imobiliária — acesso somente via login específico */
 }
 
 function abrirSuperAdmin(){
@@ -1709,7 +1769,7 @@ function voltarSuperAdmin(){
   iniciarAtualizacaoRealtime();
 }
 
-const BRL = v => typeof v === 'number' ? v.toLocaleString('pt-BR',{style:'currency',currency:'BRL'}) : '—';
+// BRL: já declarado acima
 
 async function carregarMetricasSuperAdmin(){
   try{
@@ -2008,6 +2068,76 @@ async function carregarUsoPlaino(){
 }
 
 function tratarErroLimite(d){ showToast(d.erro||'Limite atingido.','error'); carregarUsoPlaino(); }
+
+// ── Inserir novas autorizações manualmente ──
+function abrirInserirAutorizacao(){
+  // Preenche data de vencimento padrão (365 dias)
+  const venc = new Date(); venc.setDate(venc.getDate()+365);
+  document.getElementById('ia_venc').value = venc.toISOString().split('T')[0];
+  document.getElementById('modalInserirAutorizacao').classList.add('open');
+}
+
+async function confirmarInserirAutorizacao(){
+  const nome   = document.getElementById('ia_nome').value.trim();
+  const cpf    = document.getElementById('ia_cpf').value.trim();
+  const zap    = document.getElementById('ia_zap').value.trim();
+  const email  = document.getElementById('ia_email').value.trim();
+  const iend   = document.getElementById('ia_iend').value.trim();
+  const ibairro= document.getElementById('ia_ibairro').value.trim();
+  const icidade= document.getElementById('ia_icidade').value.trim();
+  const ivalorRaw = document.getElementById('ia_ivalor').value.replace(/\D/g,'');
+
+  if(!nome||!cpf||!zap||!email||!iend||!ibairro||!ivalorRaw){
+    showToast('Preencha todos os campos obrigatórios (*).','error'); return;
+  }
+
+  const tipo   = document.getElementById('ia_tipo').value;
+  const status = document.getElementById('ia_status').value;
+  const venc   = document.getElementById('ia_venc').value;
+  const corretor = document.getElementById('ia_corretor').value.trim() || Auth.user?.nome || 'Lux House';
+
+  const payload = {
+    proprietario: {
+      nome, cpf,
+      rg:    document.getElementById('ia_rg').value.trim(),
+      email, zap,
+      civil: document.getElementById('ia_civil').value,
+      prof:  document.getElementById('ia_prof').value.trim()
+    },
+    imovel: {
+      tipo:   document.getElementById('ia_itipo').value,
+      valor:  parseInt(ivalorRaw,10)/100,
+      end:    iend,
+      num:    document.getElementById('ia_inum').value.trim(),
+      comp:   document.getElementById('ia_icomp').value.trim(),
+      bairro: ibairro,
+      cidade: icidade
+    },
+    tipo, status,
+    vencimento: venc ? new Date(venc).toLocaleDateString('pt-BR') : '—',
+    corretor,
+    inseridoManualmente: true
+  };
+
+  try {
+    const r = await fetch('/api/autorizacoes/manual', {
+      method: 'POST',
+      headers: Auth.headers(),
+      body: JSON.stringify(payload)
+    });
+    const d = await r.json();
+    if(!r.ok) throw new Error(d.erro || 'Falha ao inserir.');
+    document.getElementById('modalInserirAutorizacao').classList.remove('open');
+    showToast('Autorização inserida com sucesso! ✓','success');
+    // Limpa campos
+    ['ia_nome','ia_cpf','ia_rg','ia_zap','ia_email','ia_prof','ia_ivalor','ia_iend','ia_inum','ia_icomp','ia_ibairro','ia_corretor']
+      .forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
+    document.getElementById('ia_icidade').value='Florianópolis/SC';
+    carregarAutorizacoes();
+  } catch(e) {
+    showToast('Erro: '+e.message,'error');
+  }
+}
 
 // Verifica autenticação ao carregar — apenas fora do fluxo do proprietário
 if(!isRotaProprietario()){
@@ -2355,15 +2485,7 @@ function v2SalvarFluxo(){
   showToast('Fluxo de assinatura salvo com sucesso.', 'success');
   v2CloseFluxo();
 }
-/* botão no painel admin — injetado sem alterar o HTML existente */
-(function(){
-  const head = document.querySelector('#viewAdmin .page-head');
-  if(!head) return;
-  const b = document.createElement('button');
-  b.className='btn btn-ghost btn-lg'; b.id='v2ConfigBtn';
-  b.innerHTML='⚙ Fluxo de assinatura'; b.onclick=v2AbrirFluxo;
-  head.insertBefore(b, head.querySelector('button'));
-})();
+/* botão Fluxo de Assinatura removido do painel da imobiliária — gerenciado via Super Admin */
 
 /* ════════════ MOTOR DE ETAPAS DINÂMICAS (FLUXO DO PROPRIETÁRIO) ════════════ */
 let v2Fila = [];        // etapas de validação antes da assinatura
@@ -3614,15 +3736,7 @@ async function v2TestarWhats(){
   const ok = await v2EnviarWhatsReal(num, 'AGEMOB · Mensagem de teste da conexão WhatsApp. Sua integração está funcionando. ✓');
   showToast(ok?'Teste enviado! Confira seu WhatsApp. ✓':'Falha no envio. Verifique credenciais, número e se o provedor permite requisições do navegador (CORS).', ok?'success':'error');
 }
-/* botão de configuração no painel admin */
-(function(){
-  const head = document.querySelector('#viewAdmin .page-head');
-  if(!head || document.getElementById('v2WhatsBtn')) return;
-  const b = document.createElement('button');
-  b.className='btn btn-ghost btn-lg'; b.id='v2WhatsBtn';
-  b.innerHTML='💬 WhatsApp (OTP)'; b.onclick=v2AbrirWhats;
-  head.insertBefore(b, document.getElementById('v2ConfigBtn'));
-})();
+/* botão WhatsApp (OTP) removido do painel — configuração preservada mas sem botão visível */
 /* modal de configuração */
 (function(){
   const d = document.createElement('div');
