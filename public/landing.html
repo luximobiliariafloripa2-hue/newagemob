@@ -170,7 +170,7 @@ footer a{color:var(--gold2);font-weight:600}
   <h1>Autorizações de venda<br><span>digitais, seguras e rápidas</span></h1>
   <p>O proprietário recebe um link, preenche, assina e você tem um documento com validade jurídica em menos de 5 minutos.</p>
   <div class="hero-btns">
-    <button class="btn btn-gold btn-lg" onclick="abrirCadastro()">Começar teste grátis</button>
+    <button class="btn btn-gold btn-lg" onclick="SoundManager.click();abrirCadastro()">Começar teste grátis</button>
     <button class="btn btn-lg" onclick="document.getElementById('como-funciona').scrollIntoView({behavior:'smooth',block:'start'})" style="background:rgba(255,255,255,.12);color:#fff;border:1.5px solid rgba(255,255,255,.25)">Ver como funciona</button>
   </div>
   <div class="hero-stats">
@@ -547,6 +547,32 @@ footer a{color:var(--gold2);font-weight:600}
 </div>
 
 <script>
+// SoundManager inline para landing
+const SoundManager=(()=>{
+  const CFG={enabled:true,masterVolume:1.0,volumes:{click:.12,success:.20,error:.15}};
+  let ctx=null,unlocked=false;
+  function unlock(){if(unlocked)return;try{ctx=new(window.AudioContext||window.webkitAudioContext)();unlocked=true;}catch(e){}}
+  document.addEventListener('click',unlock,{once:true});
+  function tone(p){
+    if(!CFG.enabled||!unlocked||!ctx)return;
+    try{
+      const g=ctx.createGain(),now=ctx.currentTime,v=(p.vol||.2)*CFG.masterVolume;
+      g.connect(ctx.destination);g.gain.setValueAtTime(0,now);
+      g.gain.linearRampToValueAtTime(v,now+(p.attack||.005));
+      g.gain.exponentialRampToValueAtTime(.001,now+p.duration);
+      const o=ctx.createOscillator();o.type=p.type||'sine';
+      o.frequency.setValueAtTime(p.freq,now);
+      if(p.freqEnd)o.frequency.exponentialRampToValueAtTime(p.freqEnd,now+p.duration);
+      o.connect(g);o.start(now);o.stop(now+p.duration+.05);
+    }catch(e){}
+  }
+  return{
+    click(){tone({freq:880,duration:.08,attack:.002,vol:CFG.volumes.click*CFG.masterVolume})},
+    success(){[523,659,784].forEach((f,i)=>setTimeout(()=>tone({freq:f,duration:.25,vol:CFG.volumes.success*CFG.masterVolume}),i*80))},
+    error(){tone({freq:380,freqEnd:260,duration:.18,vol:CFG.volumes.error*CFG.masterVolume})},
+  };
+})();
+
 let _tokenCadastro = null;
 
 function abrirCadastro(plano){
@@ -618,9 +644,9 @@ async function cadastrar(tipo){
     _tokenCadastro=d.token;
     localStorage.setItem('agemob_token',d.token);
     localStorage.setItem('agemob_user',JSON.stringify(d.user||{nome:payload.responsavel,email:payload.email,role:'admin'}));
-    mostrar('sucessoCadastro');
+    SoundManager.success(); mostrar('sucessoCadastro');
   } catch(e){
-    erroEl.textContent=e.message; erroEl.style.display='block';
+    erroEl.textContent=e.message; erroEl.style.display='block'; SoundManager.error();
   } finally {
     btn.disabled=false; btn.textContent='Criar minha conta →';
   }
