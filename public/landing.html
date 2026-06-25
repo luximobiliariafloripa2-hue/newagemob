@@ -160,7 +160,7 @@ footer a{color:var(--gold2);font-weight:600}
     <div class="logo"><div class="seal">A</div>AGEMOB</div>
     <div class="spacer"></div>
     <a href="/index.html" class="btn btn-ghost nav-login" style="margin-right:4px">Entrar</a>
-    <button class="btn btn-primary" onclick="abrirCadastro()">Teste grátis →</button>
+    <button class="btn btn-primary" onclick="abrirCadastro()">Começar grátis →</button>
   </div>
 </nav>
 
@@ -171,13 +171,13 @@ footer a{color:var(--gold2);font-weight:600}
   <p>O proprietário recebe um link, preenche, assina e você tem um documento com validade jurídica em menos de 5 minutos.</p>
   <div class="hero-btns">
     <button class="btn btn-gold btn-lg" onclick="abrirCadastro()">Começar teste grátis</button>
-    <a href="#como-funciona" onclick="document.getElementById('como-funciona').scrollIntoView({behavior:'smooth',block:'start'});return false;" class="btn btn-lg" style="background:rgba(255,255,255,.12);color:#fff;border:1.5px solid rgba(255,255,255,.25)">Ver como funciona</a>
+    <button class="btn btn-lg" onclick="document.getElementById('como-funciona').scrollIntoView({behavior:'smooth',block:'start'})" style="background:rgba(255,255,255,.12);color:#fff;border:1.5px solid rgba(255,255,255,.25)">Ver como funciona</button>
   </div>
   <div class="hero-stats">
-    <div class="hero-stat"><b>100%</b><span>Online</span></div>
-    <div class="hero-stat"><b>&lt;5min</b><span>Assinatura rápida</span></div>
-    <div class="hero-stat"><b>Segurança Completa</b><span>Proteção dos documentos</span></div>
-    <div class="hero-stat"><b>Válido em Lei</b><span>Validade jurídica garantida</span></div>
+    <div class="hero-stat"><b>100%</b><span>Digital e sem papel</span></div>
+    <div class="hero-stat"><b>&lt;5min</b><span>Para o proprietário assinar</span></div>
+    <div class="hero-stat"><b>SHA-256</b><span>Hash criptográfico no documento</span></div>
+    <div class="hero-stat"><b>MP 2.200</b><span>Validade jurídica garantida</span></div>
   </div>
 </section>
 
@@ -347,7 +347,7 @@ footer a{color:var(--gold2);font-weight:600}
     <h2 class="section-title text-center">Escolha o plano ideal<br>para sua operação</h2>
     <p class="section-sub text-center">Planos para corretores autônomos, pequenas imobiliárias e grandes operações.</p>
 
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-top:48px;align-items:start">
+    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:16px;margin-top:48px;align-items:start">
 
       <!-- START -->
       <div style="background:#fff;border:1.5px solid var(--line);border-radius:18px;padding:26px 22px;transition:.2s;box-shadow:0 1px 3px rgba(0,0,0,.06)" onmouseover="this.style.transform='translateY(-4px)';this.style.boxShadow='0 12px 40px rgba(0,0,0,.12)'" onmouseout="this.style.transform='';this.style.boxShadow='0 1px 3px rgba(0,0,0,.06)'">
@@ -357,45 +357,57 @@ footer a{color:var(--gold2);font-weight:600}
         <ul style="list-style:none;display:flex;flex-direction:column;gap:9px;margin-bottom:24px">
           <li style="font-size:13.5px;display:flex;gap:8px;align-items:center"><span style="color:var(--navy);font-weight:800">✓</span> 10 autorizações/mês</li>
           <li style="font-size:13.5px;display:flex;gap:8px;align-items:center"><span style="color:var(--navy);font-weight:800">✓</span> 1 usuário</li>
-          <li style="font-size:13.5px;display:flex;gap:8px;align-items:center"><span style="color:var(--navy);font-weight:800">✓</span> Dashboard gerencial</li>
-          <li style="font-size:13.5px;display:flex;gap:8px;align-items:center"><span style="color:var(--navy);font-weight:800">✓</span> Relatórios</li>
-          <li style="font-size:13.5px;display:flex;gap:8px;align-items:center"><span style="color:var(--navy);font-weight:800">✓</span> Gestão de equipe</li>
           <li style="font-size:13.5px;display:flex;gap:8px;align-items:center"><span style="color:var(--navy);font-weight:800">✓</span> Assinatura digital</li>
+          <li style="font-size:13.5px;display:flex;gap:8px;align-items:center"><span style="color:var(--navy);font-weight:800">✓</span> PDF jurídico</li>
+          <li style="font-size:13.5px;display:flex;gap:8px;align-items:center"><span style="color:var(--navy);font-weight:800">✓</span> Suporte WhatsApp</li>
         </ul>
-        <button onclick="abrirCadastro()" class="btn" style="width:100%;background:var(--paper);border:1.5px solid var(--navy);color:var(--navy);border-radius:10px;padding:11px">Teste grátis →</button>
+        <button onclick="abrirCadastro()" class="btn" style="width:100%;background:var(--paper);border:1.5px solid var(--navy);color:var(--navy);border-radius:10px;padding:11px">Começar →</button>
       </div>
 
-      <!-- PRO — DESTAQUE -->
+      <!-- PRO -->
+      <div style="background:#fff;border:1.5px solid var(--line);border-radius:18px;padding:26px 22px;transition:.2s;box-shadow:0 1px 3px rgba(0,0,0,.06)" onmouseover="this.style.transform='translateY(-4px)';this.style.boxShadow='0 12px 40px rgba(0,0,0,.12)'" onmouseout="this.style.transform='';this.style.boxShadow='0 1px 3px rgba(0,0,0,.06)'">
+        <div style="font-size:12px;font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Pro</div>
+        <div style="font-family:'Sora',sans-serif;font-size:32px;font-weight:800;color:var(--navy)">R$&nbsp;59<span style="font-size:16px;font-weight:600">,90/mês</span></div>
+        <div style="font-size:13px;color:var(--ink-2);margin:8px 0 20px">Corretor ou imobiliária pequena</div>
+        <ul style="list-style:none;display:flex;flex-direction:column;gap:9px;margin-bottom:24px">
+          <li style="font-size:13.5px;display:flex;gap:8px;align-items:center"><span style="color:var(--navy);font-weight:800">✓</span> 25 autorizações/mês</li>
+          <li style="font-size:13.5px;display:flex;gap:8px;align-items:center"><span style="color:var(--navy);font-weight:800">✓</span> 1 usuário</li>
+          <li style="font-size:13.5px;display:flex;gap:8px;align-items:center"><span style="color:var(--navy);font-weight:800">✓</span> Histórico completo</li>
+          <li style="font-size:13.5px;display:flex;gap:8px;align-items:center"><span style="color:var(--navy);font-weight:800">✓</span> Logo personalizada</li>
+          <li style="font-size:13.5px;display:flex;gap:8px;align-items:center"><span style="color:var(--navy);font-weight:800">✓</span> Suporte WhatsApp</li>
+        </ul>
+        <button onclick="abrirCadastro()" class="btn" style="width:100%;background:var(--paper);border:1.5px solid var(--navy);color:var(--navy);border-radius:10px;padding:11px">Começar →</button>
+      </div>
+
+      <!-- PRIME — DESTAQUE -->
       <div style="background:linear-gradient(145deg,var(--navy),#0d4a6e);border:2px solid var(--gold);border-radius:18px;padding:26px 22px;transform:scale(1.04);box-shadow:0 20px 60px rgba(4,39,59,.35);position:relative">
         <div style="position:absolute;top:-14px;left:50%;transform:translateX(-50%);background:var(--gold);color:#fff;border-radius:99px;padding:5px 16px;font-size:12px;font-weight:800;white-space:nowrap">⭐ Mais vendido</div>
-        <div style="font-size:12px;font-weight:700;color:rgba(255,255,255,.6);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Pro</div>
-        <div style="font-family:'Sora',sans-serif;font-size:32px;font-weight:800;color:#fff">R$&nbsp;49<span style="font-size:16px;font-weight:600">,90/mês</span></div>
-        <div style="font-size:13px;color:rgba(255,255,255,.65);margin:8px 0 20px">Corretor ou imobiliária pequena</div>
+        <div style="font-size:12px;font-weight:700;color:rgba(255,255,255,.6);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Prime</div>
+        <div style="font-family:'Sora',sans-serif;font-size:32px;font-weight:800;color:#fff">R$&nbsp;99<span style="font-size:16px;font-weight:600">,90/mês</span></div>
+        <div style="font-size:13px;color:rgba(255,255,255,.65);margin:8px 0 20px">Imobiliária com equipe</div>
         <ul style="list-style:none;display:flex;flex-direction:column;gap:9px;margin-bottom:24px">
-          <li style="font-size:13.5px;display:flex;gap:8px;align-items:center;color:#fff"><span style="color:var(--gold2);font-weight:800">✓</span> 25 autorizações/mês</li>
-          <li style="font-size:13.5px;display:flex;gap:8px;align-items:center;color:#fff"><span style="color:var(--gold2);font-weight:800">✓</span> 2 usuários</li>
+          <li style="font-size:13.5px;display:flex;gap:8px;align-items:center;color:#fff"><span style="color:var(--gold2);font-weight:800">✓</span> 50 autorizações/mês</li>
+          <li style="font-size:13.5px;display:flex;gap:8px;align-items:center;color:#fff"><span style="color:var(--gold2);font-weight:800">✓</span> Até 5 usuários</li>
           <li style="font-size:13.5px;display:flex;gap:8px;align-items:center;color:#fff"><span style="color:var(--gold2);font-weight:800">✓</span> Dashboard gerencial</li>
           <li style="font-size:13.5px;display:flex;gap:8px;align-items:center;color:#fff"><span style="color:var(--gold2);font-weight:800">✓</span> Relatórios</li>
           <li style="font-size:13.5px;display:flex;gap:8px;align-items:center;color:#fff"><span style="color:var(--gold2);font-weight:800">✓</span> Gestão de equipe</li>
-          <li style="font-size:13.5px;display:flex;gap:8px;align-items:center;color:#fff"><span style="color:var(--gold2);font-weight:800">✓</span> Assinatura digital</li>
         </ul>
-        <button onclick="abrirCadastro()" class="btn btn-gold" style="width:100%;border-radius:10px;padding:12px;font-size:15px">Teste grátis →</button>
+        <button onclick="abrirCadastro()" class="btn btn-gold" style="width:100%;border-radius:10px;padding:12px;font-size:15px">Começar →</button>
       </div>
 
-      <!-- PRIME -->
+      <!-- SCALE -->
       <div style="background:#fff;border:1.5px solid var(--line);border-radius:18px;padding:26px 22px;transition:.2s;box-shadow:0 1px 3px rgba(0,0,0,.06)" onmouseover="this.style.transform='translateY(-4px)';this.style.boxShadow='0 12px 40px rgba(0,0,0,.12)'" onmouseout="this.style.transform='';this.style.boxShadow='0 1px 3px rgba(0,0,0,.06)'">
-        <div style="font-size:12px;font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Prime</div>
-        <div style="font-family:'Sora',sans-serif;font-size:32px;font-weight:800;color:var(--navy)">R$&nbsp;79<span style="font-size:16px;font-weight:600">,90/mês</span></div>
-        <div style="font-size:13px;color:var(--ink-2);margin:8px 0 20px">Imobiliária com equipe</div>
+        <div style="font-size:12px;font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Scale</div>
+        <div style="font-family:'Sora',sans-serif;font-size:32px;font-weight:800;color:var(--navy)">R$&nbsp;179<span style="font-size:16px;font-weight:600">,90/mês</span></div>
+        <div style="font-size:13px;color:var(--ink-2);margin:8px 0 20px">Operação de médio porte</div>
         <ul style="list-style:none;display:flex;flex-direction:column;gap:9px;margin-bottom:24px">
-          <li style="font-size:13.5px;display:flex;gap:8px;align-items:center"><span style="color:var(--navy);font-weight:800">✓</span> 40 autorizações/mês</li>
-          <li style="font-size:13.5px;display:flex;gap:8px;align-items:center"><span style="color:var(--navy);font-weight:800">✓</span> Até 5 usuários</li>
-          <li style="font-size:13.5px;display:flex;gap:8px;align-items:center"><span style="color:var(--navy);font-weight:800">✓</span> Dashboard gerencial</li>
-          <li style="font-size:13.5px;display:flex;gap:8px;align-items:center"><span style="color:var(--navy);font-weight:800">✓</span> Relatórios</li>
-          <li style="font-size:13.5px;display:flex;gap:8px;align-items:center"><span style="color:var(--navy);font-weight:800">✓</span> Gestão de equipe</li>
-          <li style="font-size:13.5px;display:flex;gap:8px;align-items:center"><span style="color:var(--navy);font-weight:800">✓</span> Assinatura digital</li>
+          <li style="font-size:13.5px;display:flex;gap:8px;align-items:center"><span style="color:var(--navy);font-weight:800">✓</span> 100 autorizações/mês</li>
+          <li style="font-size:13.5px;display:flex;gap:8px;align-items:center"><span style="color:var(--navy);font-weight:800">✓</span> Até 15 usuários</li>
+          <li style="font-size:13.5px;display:flex;gap:8px;align-items:center"><span style="color:var(--navy);font-weight:800">✓</span> Métricas avançadas</li>
+          <li style="font-size:13.5px;display:flex;gap:8px;align-items:center"><span style="color:var(--navy);font-weight:800">✓</span> Suporte prioritário</li>
+          <li style="font-size:13.5px;display:flex;gap:8px;align-items:center"><span style="color:var(--navy);font-weight:800">✓</span> Integrações</li>
         </ul>
-        <button onclick="abrirCadastro()" class="btn" style="width:100%;background:var(--paper);border:1.5px solid var(--navy);color:var(--navy);border-radius:10px;padding:11px">Teste grátis →</button>
+        <button onclick="abrirCadastro()" class="btn" style="width:100%;background:var(--paper);border:1.5px solid var(--navy);color:var(--navy);border-radius:10px;padding:11px">Começar →</button>
       </div>
 
       <!-- CORPORATE -->
@@ -404,12 +416,11 @@ footer a{color:var(--gold2);font-weight:600}
         <div style="font-family:'Sora',sans-serif;font-size:28px;font-weight:800;color:var(--navy);line-height:1.2;margin-bottom:4px">Sob<br>consulta</div>
         <div style="font-size:13px;color:var(--ink-2);margin:8px 0 20px">Grande rede ou franquia</div>
         <ul style="list-style:none;display:flex;flex-direction:column;gap:9px;margin-bottom:24px">
-          <li style="font-size:13.5px;display:flex;gap:8px;align-items:center"><span style="color:var(--navy);font-weight:800">✓</span> 40+ autorizações/mês</li>
+          <li style="font-size:13.5px;display:flex;gap:8px;align-items:center"><span style="color:var(--navy);font-weight:800">✓</span> 500+ autorizações</li>
           <li style="font-size:13.5px;display:flex;gap:8px;align-items:center"><span style="color:var(--navy);font-weight:800">✓</span> Usuários ilimitados</li>
-          <li style="font-size:13.5px;display:flex;gap:8px;align-items:center"><span style="color:var(--navy);font-weight:800">✓</span> Dashboard gerencial</li>
-          <li style="font-size:13.5px;display:flex;gap:8px;align-items:center"><span style="color:var(--navy);font-weight:800">✓</span> Relatórios</li>
-          <li style="font-size:13.5px;display:flex;gap:8px;align-items:center"><span style="color:var(--navy);font-weight:800">✓</span> Gestão de equipe</li>
-          <li style="font-size:13.5px;display:flex;gap:8px;align-items:center"><span style="color:var(--navy);font-weight:800">✓</span> Assinatura digital</li>
+          <li style="font-size:13.5px;display:flex;gap:8px;align-items:center"><span style="color:var(--navy);font-weight:800">✓</span> API disponível</li>
+          <li style="font-size:13.5px;display:flex;gap:8px;align-items:center"><span style="color:var(--navy);font-weight:800">✓</span> White label</li>
+          <li style="font-size:13.5px;display:flex;gap:8px;align-items:center"><span style="color:var(--navy);font-weight:800">✓</span> Atendimento dedicado</li>
         </ul>
         <a href="https://wa.me/5548999999999?text=Olá, tenho interesse no plano Corporate do AGEMOB" target="_blank" class="btn" style="display:flex;width:100%;background:var(--paper);border:1.5px solid var(--navy);color:var(--navy);border-radius:10px;padding:11px;justify-content:center">Falar com consultor →</a>
       </div>
@@ -419,6 +430,8 @@ footer a{color:var(--gold2);font-weight:600}
       /* responsivo handled via JS below */
     }
 
+    <!-- Créditos extras -->
+    
     <!-- FAQ -->
     <div style="margin-top:56px;max-width:640px;margin-left:auto;margin-right:auto">
       <h3 style="font-family:'Sora',sans-serif;font-size:22px;font-weight:800;color:var(--navy);text-align:center;margin-bottom:24px">Dúvidas frequentes</h3>
@@ -440,55 +453,11 @@ footer a{color:var(--gold2);font-weight:600}
   </div>
 </section>
 
-<!-- SEGURANÇA JURÍDICA -->
-<section style="padding:80px 24px;background:#fff">
-  <div class="container">
-    <div class="text-center" style="margin-bottom:8px"><span class="section-tag">Segurança jurídica</span></div>
-    <h2 class="section-title text-center">Proteção total para<br>imobiliárias e corretores</h2>
-    <p class="section-sub text-center">Cada autorização gerada no AGEMOB possui um conjunto completo de evidências jurídicas, tornando o documento robusto e com ampla validade legal.</p>
-    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:20px;margin-top:48px">
-      <div style="background:var(--paper);border:1px solid var(--line);border-radius:var(--radius);padding:28px;text-align:center">
-        <div style="width:52px;height:52px;border-radius:12px;background:linear-gradient(135deg,var(--navy),#0d4a6e);display:flex;align-items:center;justify-content:center;font-size:24px;margin:0 auto 16px">✍️</div>
-        <h3 style="font-size:16px;font-weight:700;color:var(--navy);margin-bottom:8px">Assinatura digital válida</h3>
-        <p style="font-size:14px;color:var(--ink-2);line-height:1.6">Assinatura eletrônica com validade jurídica nos termos da MP 2.200-2/2001 e Lei 14.063/2020.</p>
-      </div>
-      <div style="background:var(--paper);border:1px solid var(--line);border-radius:var(--radius);padding:28px;text-align:center">
-        <div style="width:52px;height:52px;border-radius:12px;background:linear-gradient(135deg,var(--navy),#0d4a6e);display:flex;align-items:center;justify-content:center;font-size:24px;margin:0 auto 16px">🔐</div>
-        <h3 style="font-size:16px;font-weight:700;color:var(--navy);margin-bottom:8px">Hash SHA-256</h3>
-        <p style="font-size:14px;color:var(--ink-2);line-height:1.6">Cada documento recebe um hash criptográfico único que garante integridade e detecta qualquer alteração posterior.</p>
-      </div>
-      <div style="background:var(--paper);border:1px solid var(--line);border-radius:var(--radius);padding:28px;text-align:center">
-        <div style="width:52px;height:52px;border-radius:12px;background:linear-gradient(135deg,var(--navy),#0d4a6e);display:flex;align-items:center;justify-content:center;font-size:24px;margin:0 auto 16px">📋</div>
-        <h3 style="font-size:16px;font-weight:700;color:var(--navy);margin-bottom:8px">Trilha de auditoria</h3>
-        <p style="font-size:14px;color:var(--ink-2);line-height:1.6">Registro cronológico de todos os eventos: abertura do link, preenchimento, validação e assinatura.</p>
-      </div>
-      <div style="background:var(--paper);border:1px solid var(--line);border-radius:var(--radius);padding:28px;text-align:center">
-        <div style="width:52px;height:52px;border-radius:12px;background:linear-gradient(135deg,var(--navy),#0d4a6e);display:flex;align-items:center;justify-content:center;font-size:24px;margin:0 auto 16px">🕐</div>
-        <h3 style="font-size:16px;font-weight:700;color:var(--navy);margin-bottom:8px">Registro de data e hora</h3>
-        <p style="font-size:14px;color:var(--ink-2);line-height:1.6">Data, hora, fuso horário e IP registrados no exato momento da assinatura, com precisão UTC.</p>
-      </div>
-      <div style="background:var(--paper);border:1px solid var(--line);border-radius:var(--radius);padding:28px;text-align:center">
-        <div style="width:52px;height:52px;border-radius:12px;background:linear-gradient(135deg,var(--navy),#0d4a6e);display:flex;align-items:center;justify-content:center;font-size:24px;margin:0 auto 16px">🪪</div>
-        <h3 style="font-size:16px;font-weight:700;color:var(--navy);margin-bottom:8px">Validação de identidade</h3>
-        <p style="font-size:14px;color:var(--ink-2);line-height:1.6">OTP por e-mail ou WhatsApp, selfie e reconhecimento facial opcionais para fortalecer a identificação do signatário.</p>
-      </div>
-      <div style="background:var(--paper);border:1px solid var(--line);border-radius:var(--radius);padding:28px;text-align:center">
-        <div style="width:52px;height:52px;border-radius:12px;background:linear-gradient(135deg,var(--navy),#0d4a6e);display:flex;align-items:center;justify-content:center;font-size:24px;margin:0 auto 16px">📄</div>
-        <h3 style="font-size:16px;font-weight:700;color:var(--navy);margin-bottom:8px">Histórico documental</h3>
-        <p style="font-size:14px;color:var(--ink-2);line-height:1.6">PDF completo com certificado de assinatura, evidências técnicas e QR Code para verificação de autenticidade.</p>
-      </div>
-    </div>
-    <div style="margin-top:40px;background:linear-gradient(135deg,var(--navy),#0a3d5c);border-radius:var(--radius);padding:32px;text-align:center;color:#fff">
-      <p style="font-size:15px;color:rgba(255,255,255,.85);max-width:600px;margin:0 auto">Assinatura eletrônica com validade jurídica nos termos da <b style="color:var(--gold2)">MP 2.200-2/2001</b> e <b style="color:var(--gold2)">Lei 14.063/2020</b>. O AGEMOB é uma plataforma de assinatura eletrônica qualificada, aceita em juízo e com presunção de autenticidade.</p>
-    </div>
-  </div>
-</section>
-
 <!-- CTA FINAL -->
 <section class="cta-final">
   <div class="container">
     <h2>Pronto para modernizar<br>sua captação?</h2>
-    <p>Comece agora com um teste grátis.<br>Sem cartão de crédito. Sem compromisso.</p>
+    <p>Comece agora com 1 autorização de teste grátis.<br>Sem cartão de crédito. Sem compromisso.</p>
     <button class="btn btn-gold btn-lg" onclick="abrirCadastro()" style="font-size:17px;padding:17px 40px">
       Cadastrar minha imobiliária →
     </button>
@@ -518,17 +487,17 @@ footer a{color:var(--gold2);font-weight:600}
           <div style="width:48px;height:48px;border-radius:12px;background:linear-gradient(135deg,var(--navy),#0d4a6e);display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0">🏢</div>
           <div>
             <div style="font-weight:700;font-size:15px;color:var(--navy)">Imobiliária</div>
-            <div style="font-size:13px;color:var(--ink-2);margin-top:2px">Pessoa jurídica com CNPJ e equipe de corretores</div>
+            <div style="font-size:13px;color:var(--ink2);margin-top:2px">Pessoa jurídica com CNPJ e equipe de corretores</div>
           </div>
-          <div style="margin-left:auto;font-size:20px;color:var(--ink-3)">›</div>
+          <div style="margin-left:auto;font-size:20px;color:var(--ink3)">›</div>
         </div>
         <div onclick="escolherTipo('corretor')" style="border:1.5px solid var(--line);border-radius:14px;padding:20px;cursor:pointer;transition:.15s;display:flex;align-items:center;gap:16px" onmouseover="this.style.borderColor='var(--navy)'" onmouseout="this.style.borderColor='var(--line)'">
           <div style="width:48px;height:48px;border-radius:12px;background:linear-gradient(135deg,var(--navy),#0d4a6e);display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0">👤</div>
           <div>
             <div style="font-weight:700;font-size:15px;color:var(--navy)">Corretor Autônomo</div>
-            <div style="font-size:13px;color:var(--ink-2);margin-top:2px">Pessoa física com CPF e CRECI próprio</div>
+            <div style="font-size:13px;color:var(--ink2);margin-top:2px">Pessoa física com CPF e CRECI próprio</div>
           </div>
-          <div style="margin-left:auto;font-size:20px;color:var(--ink-3)">›</div>
+          <div style="margin-left:auto;font-size:20px;color:var(--ink3)">›</div>
         </div>
       </div>
       <p style="text-align:center;font-size:13px;color:var(--ink3);margin-top:18px">
@@ -536,11 +505,11 @@ footer a{color:var(--gold2);font-weight:600}
       </p>
     </div>
 
-    <!-- TELA 1: Formulário Imobiliária -->
+    <!-- TELA 1: Imobiliária -->
     <div id="formImobiliaria" style="display:none">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">
         <div>
-          <button onclick="voltarEscolha()" style="border:none;background:none;font-size:13px;color:var(--navy);font-weight:600;cursor:pointer;padding:0;margin-bottom:6px">← Voltar</button>
+          <button onclick="mostrar('telaEscolha')" style="border:none;background:none;font-size:13px;color:var(--navy);font-weight:600;cursor:pointer;padding:0;margin-bottom:6px">← Voltar</button>
           <h2 style="margin:0">🏢 Imobiliária</h2>
         </div>
         <button onclick="fecharCadastro()" style="border:none;background:none;font-size:22px;cursor:pointer;color:var(--ink3);line-height:1">✕</button>
@@ -549,45 +518,22 @@ footer a{color:var(--gold2);font-weight:600}
       <div class="trial-badge">🎁 Teste grátis — sem cartão de crédito</div>
       <div class="erro-msg" id="erroMsgImob"></div>
       <div class="grid2">
-        <div class="field" style="grid-column:1/-1">
-          <label>Nome da imobiliária *</label>
-          <input id="c_nome" placeholder="Ex.: Imobiliária ABC">
-        </div>
-        <div class="field">
-          <label>CNPJ *</label>
-          <input id="c_cnpj" placeholder="00.000.000/0001-00" oninput="maskCNPJ(this)" maxlength="18">
-        </div>
-        <div class="field">
-          <label>CRECI *</label>
-          <input id="c_creci" placeholder="Ex.: 12345-J">
-        </div>
-        <div class="field" style="grid-column:1/-1">
-          <label>Nome do responsável *</label>
-          <input id="c_resp" placeholder="Nome completo">
-        </div>
-        <div class="field">
-          <label>Telefone do responsável *</label>
-          <input id="c_tel" placeholder="(48) 9 9999-9999" oninput="maskTel(this)" maxlength="16">
-        </div>
-        <div class="field">
-          <label>E-mail do responsável *</label>
-          <input id="c_email" type="email" placeholder="voce@imobiliaria.com.br">
-        </div>
-        <div class="field" style="grid-column:1/-1">
-          <label>Senha *</label>
-          <input id="c_senha" type="password" placeholder="Mínimo 6 caracteres">
-        </div>
+        <div class="field" style="grid-column:1/-1"><label>Nome da imobiliária *</label><input id="c_nome" placeholder="Ex.: Imobiliária ABC"></div>
+        <div class="field"><label>CNPJ *</label><input id="c_cnpj" placeholder="00.000.000/0001-00" oninput="maskCNPJ(this)" maxlength="18"></div>
+        <div class="field"><label>CRECI *</label><input id="c_creci" placeholder="Ex.: 12345-J"></div>
+        <div class="field" style="grid-column:1/-1"><label>Nome do responsável *</label><input id="c_resp" placeholder="Nome completo"></div>
+        <div class="field"><label>Telefone *</label><input id="c_tel" placeholder="(48) 9 9999-9999" oninput="maskTel(this)" maxlength="16"></div>
+        <div class="field"><label>E-mail *</label><input id="c_email" type="email" placeholder="voce@imobiliaria.com.br"></div>
+        <div class="field" style="grid-column:1/-1"><label>Senha *</label><input id="c_senha" type="password" placeholder="Mínimo 6 caracteres"></div>
       </div>
-      <button class="btn btn-primary" style="width:100%;padding:14px;font-size:16px;margin-top:8px;border-radius:12px" id="btnCadastrar" onclick="cadastrar('imobiliaria')">
-        Criar minha conta →
-      </button>
+      <button class="btn btn-primary" style="width:100%;padding:14px;font-size:16px;margin-top:8px;border-radius:12px" id="btnCadastrar" onclick="cadastrar('imobiliaria')">Criar minha conta →</button>
     </div>
 
-    <!-- TELA 2: Formulário Corretor Autônomo -->
+    <!-- TELA 2: Corretor Autônomo -->
     <div id="formCorretor" style="display:none">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">
         <div>
-          <button onclick="voltarEscolha()" style="border:none;background:none;font-size:13px;color:var(--navy);font-weight:600;cursor:pointer;padding:0;margin-bottom:6px">← Voltar</button>
+          <button onclick="mostrar('telaEscolha')" style="border:none;background:none;font-size:13px;color:var(--navy);font-weight:600;cursor:pointer;padding:0;margin-bottom:6px">← Voltar</button>
           <h2 style="margin:0">👤 Corretor Autônomo</h2>
         </div>
         <button onclick="fecharCadastro()" style="border:none;background:none;font-size:22px;cursor:pointer;color:var(--ink3);line-height:1">✕</button>
@@ -596,34 +542,14 @@ footer a{color:var(--gold2);font-weight:600}
       <div class="trial-badge">🎁 Teste grátis — sem cartão de crédito</div>
       <div class="erro-msg" id="erroMsgCorretor"></div>
       <div class="grid2">
-        <div class="field" style="grid-column:1/-1">
-          <label>Nome completo *</label>
-          <input id="cc_nome" placeholder="Ex.: João da Silva">
-        </div>
-        <div class="field">
-          <label>CPF *</label>
-          <input id="cc_cpf" placeholder="000.000.000-00" oninput="maskCPF(this)" maxlength="14">
-        </div>
-        <div class="field">
-          <label>CRECI *</label>
-          <input id="cc_creci" placeholder="Ex.: 12345-F">
-        </div>
-        <div class="field">
-          <label>Telefone *</label>
-          <input id="cc_tel" placeholder="(48) 9 9999-9999" oninput="maskTel(this)" maxlength="16">
-        </div>
-        <div class="field">
-          <label>E-mail *</label>
-          <input id="cc_email" type="email" placeholder="voce@email.com">
-        </div>
-        <div class="field" style="grid-column:1/-1">
-          <label>Senha *</label>
-          <input id="cc_senha" type="password" placeholder="Mínimo 6 caracteres">
-        </div>
+        <div class="field" style="grid-column:1/-1"><label>Nome completo *</label><input id="cc_nome" placeholder="Ex.: João da Silva"></div>
+        <div class="field"><label>CPF *</label><input id="cc_cpf" placeholder="000.000.000-00" oninput="maskCPF(this)" maxlength="14"></div>
+        <div class="field"><label>CRECI *</label><input id="cc_creci" placeholder="Ex.: 12345-F"></div>
+        <div class="field"><label>Telefone *</label><input id="cc_tel" placeholder="(48) 9 9999-9999" oninput="maskTel(this)" maxlength="16"></div>
+        <div class="field"><label>E-mail *</label><input id="cc_email" type="email" placeholder="corretor@email.com"></div>
+        <div class="field" style="grid-column:1/-1"><label>Senha *</label><input id="cc_senha" type="password" placeholder="Mínimo 6 caracteres"></div>
       </div>
-      <button class="btn btn-primary" style="width:100%;padding:14px;font-size:16px;margin-top:8px;border-radius:12px" id="btnCadastrarCorretor" onclick="cadastrar('corretor')">
-        Criar minha conta →
-      </button>
+      <button class="btn btn-primary" style="width:100%;padding:14px;font-size:16px;margin-top:8px;border-radius:12px" id="btnCadastrarCorretor" onclick="cadastrar('corretor')">Criar minha conta →</button>
     </div>
 
     <!-- Sucesso -->
@@ -631,9 +557,7 @@ footer a{color:var(--gold2);font-weight:600}
       <div class="check">✓</div>
       <h3>Conta criada com sucesso!</h3>
       <p>Sua conta está configurada.<br>Você tem um <b>teste grátis</b> disponível.</p>
-      <button class="btn btn-primary btn-lg" style="margin-top:24px;width:100%" onclick="irParaPainel()">
-        Acessar o painel →
-      </button>
+      <button class="btn btn-primary btn-lg" style="margin-top:24px;width:100%" onclick="irParaPainel()">Acessar o painel →</button>
     </div>
   </div>
 </div>
@@ -643,7 +567,6 @@ let _tokenCadastro = null;
 
 function abrirCadastro(){
   document.getElementById('modalCadastro').classList.add('open');
-  // Garante que começa na tela de escolha
   mostrar('telaEscolha');
 }
 function fecharCadastro(){ document.getElementById('modalCadastro').classList.remove('open'); }
@@ -654,12 +577,7 @@ function mostrar(id){
     if(el) el.style.display = i===id ? '' : 'none';
   });
 }
-
-function escolherTipo(tipo){
-  mostrar(tipo==='imobiliaria' ? 'formImobiliaria' : 'formCorretor');
-}
-
-function voltarEscolha(){ mostrar('telaEscolha'); }
+function escolherTipo(tipo){ mostrar(tipo==='imobiliaria'?'formImobiliaria':'formCorretor'); }
 
 document.getElementById('modalCadastro').addEventListener('click', e => {
   if(e.target === document.getElementById('modalCadastro')) fecharCadastro();
@@ -677,71 +595,60 @@ function maskTel(el){
     .replace(/(\d{2})(\d)/,'($1) $2')
     .replace(/(\d{5})(\d)/,'$1-$2');
 }
-function maskCPF(el){
-  el.value = el.value.replace(/\D/g,'').slice(0,11)
-    .replace(/(\d{3})(\d)/,'$1.$2')
-    .replace(/(\d{3})(\d)/,'$1.$2')
-    .replace(/(\d{3})(\d{1,2})$/,'$1-$2');
-}
 
 async function cadastrar(tipo){
   let payload, erroEl, btnId;
-
-  if(tipo === 'imobiliaria'){
-    erroEl = document.getElementById('erroMsgImob');
-    btnId  = 'btnCadastrar';
-    const nome  = document.getElementById('c_nome').value.trim();
-    const cnpj  = document.getElementById('c_cnpj').value.trim();
-    const creci = document.getElementById('c_creci').value.trim();
-    const resp  = document.getElementById('c_resp').value.trim();
-    const tel   = document.getElementById('c_tel').value.trim();
-    const email = document.getElementById('c_email').value.trim();
-    const senha = document.getElementById('c_senha').value;
-    erroEl.style.display = 'none';
-    if(!nome||!cnpj||!creci||!resp||!tel||!email||!senha){
-      erroEl.textContent='Preencha todos os campos obrigatórios.'; erroEl.style.display='block'; return;
-    }
-    if(senha.length<6){ erroEl.textContent='A senha deve ter pelo menos 6 caracteres.'; erroEl.style.display='block'; return; }
-    payload = { tipoCliente:'imobiliaria', nome, cnpj, creci, responsavel:resp, email, senha, telefone:tel, whatsapp:tel };
+  if(tipo==='imobiliaria'){
+    erroEl=document.getElementById('erroMsgImob'); btnId='btnCadastrar';
+    const nome=document.getElementById('c_nome').value.trim();
+    const cnpj=document.getElementById('c_cnpj').value.trim();
+    const creci=document.getElementById('c_creci').value.trim();
+    const resp=document.getElementById('c_resp').value.trim();
+    const tel=document.getElementById('c_tel').value.trim();
+    const email=document.getElementById('c_email').value.trim();
+    const senha=document.getElementById('c_senha').value;
+    erroEl.style.display='none';
+    if(!nome||!cnpj||!creci||!resp||!tel||!email||!senha){erroEl.textContent='Preencha todos os campos obrigatórios.';erroEl.style.display='block';return;}
+    if(senha.length<6){erroEl.textContent='A senha deve ter pelo menos 6 caracteres.';erroEl.style.display='block';return;}
+    payload={tipoCliente:'imobiliaria',nome,cnpj,creci,responsavel:resp,email,senha,telefone:tel,whatsapp:tel};
   } else {
-    erroEl = document.getElementById('erroMsgCorretor');
-    btnId  = 'btnCadastrarCorretor';
-    const nome  = document.getElementById('cc_nome').value.trim();
-    const cpf   = document.getElementById('cc_cpf').value.trim();
-    const creci = document.getElementById('cc_creci').value.trim();
-    const tel   = document.getElementById('cc_tel').value.trim();
-    const email = document.getElementById('cc_email').value.trim();
-    const senha = document.getElementById('cc_senha').value;
-    erroEl.style.display = 'none';
-    if(!nome||!cpf||!creci||!tel||!email||!senha){
-      erroEl.textContent='Preencha todos os campos obrigatórios.'; erroEl.style.display='block'; return;
-    }
-    if(senha.length<6){ erroEl.textContent='A senha deve ter pelo menos 6 caracteres.'; erroEl.style.display='block'; return; }
-    payload = { tipoCliente:'corretor', nome, cpf, creci, responsavel:nome, email, senha, telefone:tel, whatsapp:tel };
+    erroEl=document.getElementById('erroMsgCorretor'); btnId='btnCadastrarCorretor';
+    const nome=document.getElementById('cc_nome').value.trim();
+    const cpf=document.getElementById('cc_cpf').value.trim();
+    const creci=document.getElementById('cc_creci').value.trim();
+    const tel=document.getElementById('cc_tel').value.trim();
+    const email=document.getElementById('cc_email').value.trim();
+    const senha=document.getElementById('cc_senha').value;
+    erroEl.style.display='none';
+    if(!nome||!cpf||!creci||!tel||!email||!senha){erroEl.textContent='Preencha todos os campos obrigatórios.';erroEl.style.display='block';return;}
+    if(senha.length<6){erroEl.textContent='A senha deve ter pelo menos 6 caracteres.';erroEl.style.display='block';return;}
+    payload={tipoCliente:'corretor',nome,cpf,creci,responsavel:nome,email,senha,telefone:tel,whatsapp:tel};
   }
-
-  const btn = document.getElementById(btnId);
-  btn.disabled = true; btn.textContent = 'Criando conta…';
-
+  const btn=document.getElementById(btnId);
+  btn.disabled=true; btn.textContent='Criando conta…';
   try {
-    const r = await fetch('/api/cadastro', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-    const d = await r.json();
-    if(!r.ok) throw new Error(d.erro || 'Erro ao criar conta.');
-    _tokenCadastro = d.token;
-    localStorage.setItem('agemob_token', d.token);
-    localStorage.setItem('agemob_user', JSON.stringify(d.user || { nome:payload.responsavel, email:payload.email, role:'admin' }));
+    const r=await fetch('/api/cadastro',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    const d=await r.json();
+    if(!r.ok) throw new Error(d.erro||'Erro ao criar conta.');
+    _tokenCadastro=d.token;
+    localStorage.setItem('agemob_token',d.token);
+    localStorage.setItem('agemob_user',JSON.stringify(d.user||{nome:payload.responsavel,email:payload.email,role:'admin'}));
     mostrar('sucessoCadastro');
-  } catch(e) {
-    erroEl.textContent = e.message; erroEl.style.display = 'block';
+  } catch(e){
+    erroEl.textContent=e.message; erroEl.style.display='block';
   } finally {
-    btn.disabled = false; btn.textContent = 'Criar minha conta →';
+    btn.disabled=false; btn.textContent='Criar minha conta →';
   }
 }
 
-function irParaPainel(){ window.location.href = '/index.html'; }
+function irParaPainel(){
+  window.location.href = '/index.html';
+}
+
+// Atalho: Enter no último campo
+document.getElementById('c_senha').addEventListener('keydown', e => {
+  if(e.key === 'Enter') cadastrar();
+});
 </script>
 </body>
 </html>
