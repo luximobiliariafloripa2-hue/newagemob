@@ -3519,15 +3519,28 @@ assinar = async function(){
     corretor:'Lucas Siqueira', code:AG.code, hash:V2D.hash });
   notificarMudancaStatus();
 
-  /* registro permanente para validação por QR Code */
+  /* registro permanente no servidor para validação por QR Code */
   try{
-    const reg = JSON.parse(localStorage.getItem('agemob_validacao')||'{}');
-    reg[AG.code] = { status:'Documento válido · assinatura concluída', nome:V('p_nome'),
-      data:new Date().toLocaleString('pt-BR'), hash:V2D.hash, tipo:AG.tipo,
-      facial:V2D.facial?(V2D.facial.pendente?'análise manual':(V2D.facial.compatibilidade+'% '+(V2D.facial.aprovado?'aprovado':'reprovado'))):'não exigido',
-      liveness:V2D.liveness?(V2D.liveness.aprovado?'confirmada':'análise manual'):'não exigida' };
-    localStorage.setItem('agemob_validacao', JSON.stringify(reg));
-  }catch(e){}
+    await fetch('/api/autorizacoes/assinar', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        codigo:AG.code,
+        proprietario:{ nome:V('p_nome'), cpf:V('p_cpf'), email:V('p_email'), zap:V('p_zap'),
+          civil:V('p_civil'), prof:V('p_prof'), rg:V('p_rg')||'' },
+        imovel:{ tipo:V('i_tipo'), end:V('i_end'), num:V('i_num'), comp:V('i_comp')||'',
+          bairro:V('i_bairro'), cidade:V('i_cidade'), valor:moneyVal() },
+        tipo:AG.tipo,
+        hash:V2D.hash,
+        evidencias:V2D.evidAssinatura,
+        otp:Object.values(V2D.otp).filter(o=>o.validado).map(o=>({canal:o.canal,destino:o.destino,validadoEm:o.dataValidacao})),
+        facial:V2D.facial?{compatibilidade:V2D.facial.compatibilidade,aprovado:V2D.facial.aprovado}:null,
+        liveness:V2D.liveness?{aprovado:V2D.liveness.aprovado}:null,
+        uploads:Object.values(V2D.uploads).map(u=>({tipo:u.tipo,hash:u.hash})),
+        assinadoEm:new Date().toISOString()
+      })
+    });
+  }catch(e){ console.warn('Falha ao salvar validação no servidor:', e); }
 
   /* assinantes adicionais (cônjuge, coproprietários, testemunhas) */
   if(v2FilaPos.length){ v2RenderAssinantes(); return; }
@@ -3791,8 +3804,11 @@ gerarPDF = function(){
 
 /* ════════════ 14. PÁGINA DE VALIDAÇÃO (QR CODE / CÓDIGO) ════════════ */
 function v2AbrirValidacao(code){
+  // Abre a página pública de validação no servidor
+  window.open((window.AGEMOB_BASE_URL||window.location.origin)+'/validar/'+code, '_blank');
+}
+function v2AbrirValidacaoLegacy(code){
   let reg=null;
-  try{ reg = JSON.parse(localStorage.getItem('agemob_validacao')||'{}')[code]; }catch(e){}
   const body=document.getElementById('v2ValidarBody');
   if(reg){
     body.innerHTML=`<div class="v2-validation-ok">

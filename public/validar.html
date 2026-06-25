@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AGEMOB · Verificação de Autenticidade</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --navy:#04273B;--gold:#C9A227;--green:#067647;--red:#D92D20;
+  --ink:#101828;--ink2:#475467;--ink3:#98A2B3;
+  --line:#E4E7EC;--paper:#F8F9FB;--radius:16px;
+}
+body{font-family:'Inter',sans-serif;background:var(--paper);color:var(--ink);min-height:100vh;display:flex;flex-direction:column}
+header{background:var(--navy);padding:18px 24px;display:flex;align-items:center;gap:12px}
+.logo{display:flex;align-items:center;gap:10px;color:#fff;font-family:'Sora',sans-serif;font-weight:800;font-size:18px;text-decoration:none}
+.seal{width:32px;height:32px;border-radius:50%;background:var(--gold);color:var(--navy);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800}
+header p{color:rgba(255,255,255,.6);font-size:13px;margin-left:auto}
+main{flex:1;max-width:640px;margin:40px auto;padding:0 20px;width:100%}
+.card{background:#fff;border-radius:var(--radius);padding:32px;box-shadow:0 1px 4px rgba(0,0,0,.08);border:1px solid var(--line)}
+.status-ok{text-align:center;padding:20px 0 28px}
+.status-ok .icon{width:72px;height:72px;border-radius:50%;background:var(--green);color:#fff;font-size:32px;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;animation:pop .4s cubic-bezier(.2,.8,.2,1)}
+.status-ok h2{font-family:'Sora',sans-serif;font-size:22px;font-weight:800;color:var(--green);margin-bottom:6px}
+.status-ok p{color:var(--ink2);font-size:14px}
+.status-err{text-align:center;padding:20px 0 28px}
+.status-err .icon{width:72px;height:72px;border-radius:50%;background:var(--red);color:#fff;font-size:32px;display:flex;align-items:center;justify-content:center;margin:0 auto 16px}
+.status-err h2{font-family:'Sora',sans-serif;font-size:22px;font-weight:800;color:var(--red);margin-bottom:6px}
+.divider{border:none;border-top:1px solid var(--line);margin:20px 0}
+.row{display:flex;justify-content:space-between;align-items:flex-start;padding:10px 0;border-bottom:1px solid var(--paper);gap:16px;font-size:14px}
+.row:last-child{border-bottom:none}
+.row span{color:var(--ink3);font-size:13px;min-width:160px;flex-shrink:0}
+.row b{color:var(--ink);text-align:right;word-break:break-all}
+.hash-box{background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin-top:16px}
+.hash-box label{font-size:11px;font-weight:700;color:var(--ink3);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:6px}
+.hash-box code{font-family:monospace;font-size:11.5px;color:var(--navy);word-break:break-all;line-height:1.6}
+.badge{display:inline-block;padding:3px 10px;border-radius:99px;font-size:12px;font-weight:700}
+.b-green{background:#ECFDF3;color:var(--green)}
+.b-red{background:#FEF3F2;color:var(--red)}
+.b-gold{background:#FFFAEB;color:#B45309}
+.b-gray{background:#F2F4F7;color:var(--ink2)}
+.loading{text-align:center;padding:40px;color:var(--ink3)}
+.loading .spin{width:36px;height:36px;border:3px solid var(--line);border-top-color:var(--navy);border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 12px}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes pop{from{transform:scale(.8);opacity:0}to{transform:scale(1);opacity:1}}
+.legal{background:#F0FDF4;border:1px solid #A7F3D0;border-radius:10px;padding:14px 16px;margin-top:20px;font-size:13px;color:#065F46;line-height:1.6}
+.warning{background:#FFFAEB;border:1px solid #FCD34D;border-radius:10px;padding:14px 16px;margin-top:16px;font-size:13px;color:#92400E}
+footer{text-align:center;padding:24px;font-size:12px;color:var(--ink3)}
+footer a{color:var(--navy);font-weight:600;text-decoration:none}
+.manual-check{margin-top:28px}
+.manual-check label{font-size:13px;font-weight:600;color:var(--ink2);display:block;margin-bottom:8px}
+.manual-check .input-row{display:flex;gap:8px}
+.manual-check input{flex:1;padding:10px 14px;border:1.5px solid var(--line);border-radius:10px;font-size:14.5px;font-family:inherit;outline:none}
+.manual-check input:focus{border-color:var(--navy)}
+.manual-check button{padding:10px 20px;background:var(--navy);color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer}
+</style>
+</head>
+<body>
+<header>
+  <a href="/" class="logo"><div class="seal">A</div>AGEMOB</a>
+  <p>Verificação de autenticidade · Autorizações Imobiliárias</p>
+</header>
+
+<main>
+  <div class="card" id="card">
+    <div class="loading" id="loading">
+      <div class="spin"></div>
+      <p>Verificando autenticidade do documento...</p>
+    </div>
+    <div id="result" style="display:none"></div>
+
+    <!-- Busca manual (se acessou /validar sem código) -->
+    <div class="manual-check" id="manualCheck" style="display:none">
+      <label>Digite o código de validação do documento:</label>
+      <div class="input-row">
+        <input id="codigoInput" placeholder="Ex.: AB3X9KP2E" maxlength="12"
+               oninput="this.value=this.value.toUpperCase()"
+               onkeydown="if(event.key==='Enter') buscarManual()">
+        <button onclick="buscarManual()">Verificar</button>
+      </div>
+    </div>
+  </div>
+</main>
+
+<footer>
+  AGEMOB · Plataforma de Autorizações Imobiliárias · <a href="/">Início</a>
+  <br>Assinatura eletrônica com validade jurídica nos termos da MP 2.200-2/2001 e Lei 14.063/2020
+</footer>
+
+<script>
+const codigo = window.location.pathname.split('/validar/')[1]?.trim().toUpperCase() || '';
+
+async function verificar(code){
+  document.getElementById('loading').style.display='block';
+  document.getElementById('result').style.display='none';
+  document.getElementById('manualCheck').style.display='none';
+
+  try {
+    const r = await fetch('/api/validar/'+code);
+    const d = await r.json();
+    document.getElementById('loading').style.display='none';
+    document.getElementById('result').style.display='block';
+    renderResult(d, code);
+  } catch(e) {
+    document.getElementById('loading').style.display='none';
+    document.getElementById('result').style.display='block';
+    renderErro('Não foi possível verificar o documento. Verifique sua conexão e tente novamente.');
+  }
+}
+
+function renderResult(d, code){
+  const el = document.getElementById('result');
+  if(!d.valido){
+    el.innerHTML = renderErroHTML(code);
+    return;
+  }
+
+  const statusLabel = {
+    assinado:'Assinado · válido', ativa:'Ativo · válido', ativo:'Ativo · válido',
+    rascunho:'Rascunho · não assinado', cancelado:'Cancelado', aguardando:'Aguardando assinatura'
+  };
+  const statusBadge = {
+    assinado:'b-green', ativa:'b-green', ativo:'b-green',
+    rascunho:'b-gray', cancelado:'b-red', aguardando:'b-gold'
+  };
+  const isValido = ['assinado','ativa','ativo'].includes(d.status);
+  const tipoLabel = d.tipo==='exclusiva' ? '⭐ Com exclusividade' : 'Sem exclusividade';
+
+  el.innerHTML = `
+    ${isValido
+      ? `<div class="status-ok">
+           <div class="icon">✓</div>
+           <h2>Documento autêntico</h2>
+           <p>Esta autorização de venda é válida e foi assinada eletronicamente.</p>
+         </div>`
+      : `<div class="status-err">
+           <div class="icon">!</div>
+           <h2>Documento não assinado</h2>
+           <p>Este código existe no sistema, mas a autorização ainda não foi assinada pelo proprietário.</p>
+         </div>`
+    }
+    <hr class="divider">
+    <div class="row"><span>Código de validação</span><b>${code}</b></div>
+    <div class="row"><span>Status</span><b><span class="badge ${statusBadge[d.status]||'b-gray'}">${statusLabel[d.status]||d.status}</span></b></div>
+    <div class="row"><span>Proprietário</span><b>${d.proprietario.nome}</b></div>
+    <div class="row"><span>CPF (parcial)</span><b>${d.proprietario.cpf}</b></div>
+    <div class="row"><span>Imóvel</span><b>${d.imovel.tipo} · ${d.imovel.bairro}, ${d.imovel.cidade}</b></div>
+    <div class="row"><span>Modalidade</span><b>${tipoLabel}</b></div>
+    <div class="row"><span>Data da assinatura</span><b>${d.assinadoEm ? new Date(d.assinadoEm).toLocaleString('pt-BR') : '—'}</b></div>
+    <div class="row"><span>Validade</span><b>${d.vencimento || '365 dias a partir da assinatura'}</b></div>
+    ${d.imobiliaria?.nome ? `<div class="row"><span>Imobiliária</span><b>${d.imobiliaria.nome}</b></div>` : ''}
+
+    ${d.hash ? `
+    <div class="hash-box">
+      <label>Hash SHA-256 do documento</label>
+      <code>${d.hash}</code>
+    </div>
+    <p style="font-size:12px;color:var(--ink3);margin-top:8px">
+      Este código é único e gerado a partir do conteúdo do documento no momento da assinatura.
+      Qualquer alteração posterior produziria um hash diferente, tornando a fraude detectável.
+    </p>` : ''}
+
+    ${isValido ? `
+    <div class="legal">
+      ✅ <b>Validade jurídica confirmada.</b> Este documento possui assinatura eletrônica com validade nos termos
+      do art. 10, §2º da MP 2.200-2/2001 e da Lei nº 14.063/2020. A autenticidade é verificável por este link
+      a qualquer momento.
+    </div>` : `
+    <div class="warning">
+      ⚠️ Este documento ainda não foi assinado pelo proprietário.
+    </div>`}
+  `;
+}
+
+function renderErroHTML(code){
+  return `
+    <div class="status-err">
+      <div class="icon">✕</div>
+      <h2>Código não encontrado</h2>
+      <p>O código <b>${code}</b> não foi localizado em nossa base de dados.</p>
+    </div>
+    <hr class="divider">
+    <p style="font-size:13.5px;color:var(--ink2);line-height:1.7;margin-bottom:16px">
+      Isso pode ocorrer se o documento foi gerado em ambiente de teste ou se o código foi digitado incorretamente.
+      Verifique o código no PDF e tente novamente.
+    </p>
+    <div class="manual-check" style="display:block">
+      <label>Tentar outro código:</label>
+      <div class="input-row">
+        <input id="codigoInput" placeholder="Ex.: AB3X9KP2E" maxlength="12"
+               oninput="this.value=this.value.toUpperCase()"
+               onkeydown="if(event.key==='Enter') buscarManual()">
+        <button onclick="buscarManual()">Verificar</button>
+      </div>
+    </div>`;
+}
+
+function renderErro(msg){
+  document.getElementById('result').innerHTML = `
+    <div class="status-err">
+      <div class="icon">!</div>
+      <h2>Erro na verificação</h2>
+      <p>${msg}</p>
+    </div>`;
+}
+
+function buscarManual(){
+  const code = (document.getElementById('codigoInput')?.value||'').trim().toUpperCase();
+  if(!code){ return; }
+  window.history.pushState({}, '', '/validar/'+code);
+  verificar(code);
+}
+
+// Inicializa
+if(codigo){
+  verificar(codigo);
+} else {
+  document.getElementById('loading').style.display='none';
+  document.getElementById('manualCheck').style.display='block';
+}
+</script>
+</body>
+</html>

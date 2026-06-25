@@ -1165,6 +1165,41 @@ app.post('/api/admin/subscriptions/:imobId/iniciar', authMiddleware(['super_admi
 });
 
 // ═══════════════════════════════════════════════════════
+// VALIDAÇÃO PÚBLICA — QR Code / Link de verificação
+// ═══════════════════════════════════════════════════════
+
+// Rota pública — qualquer pessoa com o link pode verificar
+app.get('/api/validar/:codigo', async (req, res) => {
+  try {
+    const aut = await db.autorizacoes.findOne({ codigo: req.params.codigo });
+    if (!aut) return res.status(404).json({ valido: false, erro: 'Código não encontrado.' });
+
+    // Retorna apenas dados necessários para validação — sem dados sensíveis
+    res.json({
+      valido:     true,
+      codigo:     aut.codigo,
+      status:     aut.status,
+      tipo:       aut.tipo || 'simples',
+      hash:       aut.hash || null,
+      assinadoEm: aut.assinadoEm || aut.criadoEm,
+      vencimento: aut.vencimento || null,
+      proprietario: {
+        nome:  aut.proprietario?.nome || '—',
+        cpf:   aut.proprietario?.cpf  ? aut.proprietario.cpf.replace(/(\d{3})\.(\d{3})\.(\d{3})-(\d{2})/, '$1.***.***-$4') : '—'
+      },
+      imovel: {
+        tipo:   aut.imovel?.tipo   || '—',
+        bairro: aut.imovel?.bairro || '—',
+        cidade: aut.imovel?.cidade || '—'
+      },
+      imobiliaria: {
+        nome: aut.imobiliariaNome || null
+      }
+    });
+  } catch(e) { res.status(500).json({ valido: false, erro: 'Erro interno.' }); }
+});
+
+// ═══════════════════════════════════════════════════════
 // BOLETOS — Imobiliária
 // ═══════════════════════════════════════════════════════
 
@@ -1335,6 +1370,10 @@ app.post('/api/admin/suporte/:imobId', authMiddleware(['super_admin']), async (r
 // ═══════════════════════════════════════════════════════
 // SPA CATCH-ALL
 // ═══════════════════════════════════════════════════════
+app.get('/validar/:codigo', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'validar.html'));
+});
+
 app.get('/{*path}', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
