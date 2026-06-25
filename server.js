@@ -43,6 +43,43 @@ const STORAGE_BASE = process.env.STORAGE_DIR || path.join(__dirname, 'storage');
 ['originais','assinados'].forEach(d => fs.mkdirSync(path.join(STORAGE_BASE, d), { recursive: true }));
 
 // ═══════════════════════════════════════════════════════
+// SSE — Server-Sent Events para atualização em tempo real
+// ═══════════════════════════════════════════════════════
+const sseClients = new Map(); // imobiliariaId → Set of response objects
+
+function sseNotificar(imobiliariaId, evento, dados) {
+  const clientes = sseClients.get(imobiliariaId);
+  if (!clientes || clientes.size === 0) return;
+  const msg = `event: ${evento}\ndata: ${JSON.stringify(dados)}\n\n`;
+  for (const res of clientes) {
+    try { res.write(msg); } catch(e) { clientes.delete(res); }
+  }
+}
+
+// Rota SSE — painel da imobiliária se conecta aqui
+app.get('/api/sse', authMiddleware(['admin','corretor']), (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no'); // Nginx/Render: desativa buffer
+  res.flushHeaders();
+
+  const imobId = req.user.imobiliariaId;
+  if (!sseClients.has(imobId)) sseClients.set(imobId, new Set());
+  sseClients.get(imobId).add(res);
+
+  // Ping a cada 25s para manter conexão viva
+  const ping = setInterval(() => {
+    try { res.write(': ping\n\n'); } catch(e) { clearInterval(ping); }
+  }, 25000);
+
+  req.on('close', () => {
+    clearInterval(ping);
+    sseClients.get(imobId)?.delete(res);
+  });
+});
+
+// ═══════════════════════════════════════════════════════
 // SEED — Super Admin + Planos + Pacotes + Lux House
 // ═══════════════════════════════════════════════════════
 async function seed() {
@@ -148,9 +185,11 @@ app.use('/api', apiLimiter);
 function authMiddleware(roles = []) {
   return async (req, res, next) => {
     const header = req.headers.authorization;
-    if (!header?.startsWith('Bearer ')) return res.status(401).json({ erro: 'Token não fornecido.' });
+    // SSE/EventSource envia token via query string pois não suporta headers customizados
+    const token = header?.startsWith('Bearer ') ? header.slice(7) : req.query.token;
+    if (!token) return res.status(401).json({ erro: 'Token não fornecido.' });
     try {
-      const payload = jwt.verify(header.slice(7), JWT_SECRET);
+      const payload = jwt.verify(token, JWT_SECRET);
       req.user = payload;
       if (roles.length && !roles.includes(payload.role)) {
         return res.status(403).json({ erro: 'Acesso negado.' });
@@ -863,6 +902,7 @@ app.post('/api/autorizacoes', authMiddleware(['admin','corretor']), async (req, 
     const salvo = await db.autorizacoes.insert(aut);
     if (limite.tipo === 'credito_extra') await consumirCredito(req.user.imobiliariaId, 'credito_extra');
     await log('autorizacao', `Link vazio gerado: ${codigo}`, null, req.user.imobiliariaId);
+    sseNotificar(req.user.imobiliariaId, 'autorizacao_nova', { codigo, status: 'rascunho' });
     res.json(salvo);
   } catch(e) { res.status(500).json({ erro: e.message }); }
 });
@@ -890,6 +930,7 @@ app.post('/api/autorizacoes/rascunho', authMiddleware(['admin','corretor']), asy
     };
     await db.autorizacoes.insert(aut);
     await log('autorizacao', `Rascunho assistido: ${codigo} (${proprietario.nome})`, null, req.user.imobiliariaId);
+    sseNotificar(req.user.imobiliariaId, 'autorizacao_nova', { codigo, status: 'rascunho', proprietario: proprietario.nome });
     res.json({ ok: true, codigo, linkPublico });
   } catch(e) { res.status(500).json({ erro: e.message }); }
 });
@@ -957,6 +998,7 @@ app.post('/api/autorizacoes/assinar', async (req, res) => {
       await db.autorizacoes.insert(aut);
     }
     await log('autorizacao', `Assinada: ${codigo} (${proprietario.nome})`, null, aut.imobiliariaId);
+    if (aut.imobiliariaId) sseNotificar(aut.imobiliariaId, 'autorizacao_assinada', { codigo, proprietario: proprietario.nome, status: 'assinado' });
     res.json({ ok: true });
   } catch(e) {
     res.status(500).json({ erro: e.message });

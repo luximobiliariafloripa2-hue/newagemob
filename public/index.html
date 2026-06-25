@@ -636,7 +636,7 @@ label{display:block;font-size:13px;font-weight:600;color:var(--ink-2);margin-bot
       <div class="field"><label>CPF *</label><input id="a_cpf" placeholder="000.000.000-00" oninput="maskCPF(this)" maxlength="14"></div>
       <div class="field"><label>Data de nascimento</label><input id="a_nasc" type="date"></div>
       <div class="field"><label>Estado civil</label>
-        <select id="a_civil"><option>Solteiro(a)</option><option>Casado(a)</option><option>Divorciado(a)</option><option>Viúvo(a)</option><option>União estável</option></select>
+        <select id="a_civil"><option>Solteiro(a)</option><option>Casado(a)</option><option>Divorciado(a)</option><option>Viúvo(a)</option></select>
       </div>
       <div class="field"><label>Profissão</label><input id="a_prof" placeholder="Ex.: Empresário"></div>
       <div class="field"><label>WhatsApp *</label><input id="a_zap" placeholder="(48) 9 9999-9999" oninput="maskTel(this)" maxlength="16"></div>
@@ -704,7 +704,7 @@ label{display:block;font-size:13px;font-weight:600;color:var(--ink-2);margin-bot
       <div class="field"><label>CPF *</label><input id="p_cpf" placeholder="000.000.000-00" oninput="maskCPF(this)" maxlength="14"></div>
       <div class="field"><label>Data de nascimento</label><input id="p_nasc" type="date"></div>
       <div class="field"><label>Estado civil</label>
-        <select id="p_civil" onchange="toggleConjuge(this.value)"><option>Solteiro(a)</option><option>Casado(a)</option><option>Divorciado(a)</option><option>Viúvo(a)</option><option>União estável</option></select>
+        <select id="p_civil" onchange="toggleConjuge(this.value)"><option>Solteiro(a)</option><option>Casado(a)</option><option>Divorciado(a)</option><option>Viúvo(a)</option></select>
       </div>
       <div class="field"><label>Profissão</label><input id="p_prof" placeholder="Ex.: Empresário"></div>
       <!-- Cônjuge — aparece automaticamente se casado(a) ou união estável -->
@@ -737,14 +737,9 @@ label{display:block;font-size:13px;font-weight:600;color:var(--ink-2);margin-bot
         <select id="i_tipo"><option>Casa</option><option>Apartamento</option><option>Terreno</option><option>Sala Comercial</option><option>Galpão</option><option>Fazenda</option><option>Sítio</option><option>Outro</option></select>
       </div>
       <div class="field"><label>Valor de venda (incluindo a comissão) *</label><input id="i_valor" placeholder="R$ 0,00" oninput="maskMoney(this)"></div>
-      <div class="field"><label>Comissão de corretagem (%)</label>
-        <select id="i_comissao">
-          <option value="5">5%</option>
-          <option value="6" selected>6% (padrão)</option>
-          <option value="7">7%</option>
-          <option value="8">8%</option>
-          <option value="10">10%</option>
-        </select>
+      <div class="field"><label>Comissão de corretagem</label>
+        <div style="padding:10px 14px;border:1.5px solid var(--line);border-radius:10px;background:var(--paper);font-size:15px;color:var(--ink);font-weight:600">6% <span style="font-weight:400;color:var(--ink-2);font-size:13px">fixo — seis por cento</span></div>
+        <input type="hidden" id="i_comissao" value="6">
       </div>
     </div>
     <p style="font-size:13px;color:var(--ink-3);margin-top:-6px;margin-bottom:14px">Valor da imobiliária é 6% sobre o valor da venda.</p>
@@ -995,7 +990,7 @@ label{display:block;font-size:13px;font-weight:600;color:var(--ink-2);margin-bot
       <div class="field"><label>WhatsApp *</label><input id="ia_zap" placeholder="(48) 9 9999-9999" oninput="maskTel(this)" maxlength="16"></div>
       <div class="field"><label>E-mail *</label><input id="ia_email" type="email" placeholder="proprietario@email.com"></div>
       <div class="field"><label>Estado civil</label>
-        <select id="ia_civil"><option>Solteiro(a)</option><option>Casado(a)</option><option>Divorciado(a)</option><option>Viúvo(a)</option><option>União estável</option></select>
+        <select id="ia_civil"><option>Solteiro(a)</option><option>Casado(a)</option><option>Divorciado(a)</option><option>Viúvo(a)</option></select>
       </div>
       <div class="field"><label>Profissão</label><input id="ia_prof" placeholder="Ex.: Empresário"></div>
     </div>
@@ -1224,12 +1219,49 @@ async function carregarAutorizacoes(){
  * Também é chamado manualmente sempre que houver mudança de status.
  */
 let _realtimeInterval = null;
+let _sseConexao = null;
+
 function iniciarAtualizacaoRealtime(){
-  if(isRotaProprietario()) return; // nunca rodar no fluxo do proprietário
+  if(isRotaProprietario()) return;
   carregarAutorizacoes();
   carregarUsoPlaino();
+
+  // SSE — atualização instantânea quando proprietário assina
+  _conectarSSE();
+
+  // Fallback: polling a cada 30s (mantém dados sincronizados mesmo se SSE cair)
   clearInterval(_realtimeInterval);
-  _realtimeInterval = setInterval(()=>{ carregarAutorizacoes(); carregarUsoPlaino(); }, 15000);
+  _realtimeInterval = setInterval(()=>{ carregarAutorizacoes(); carregarUsoPlaino(); }, 30000);
+}
+
+function _conectarSSE(){
+  if(_sseConexao) { _sseConexao.close(); _sseConexao = null; }
+  if(!Auth.token) return;
+
+  try {
+    // SSE com token via URL (EventSource não suporta headers customizados)
+    _sseConexao = new EventSource('/api/sse?token='+Auth.token);
+
+    _sseConexao.addEventListener('autorizacao_nova', () => {
+      carregarAutorizacoes();
+      showToast('Nova autorização criada! ✓', 'success');
+    });
+
+    _sseConexao.addEventListener('autorizacao_assinada', (e) => {
+      const d = JSON.parse(e.data || '{}');
+      carregarAutorizacoes();
+      carregarUsoPlaino();
+      showToast((d.proprietario ? d.proprietario+' assinou' : 'Autorização assinada') + '! ✓', 'success');
+    });
+
+    _sseConexao.onerror = () => {
+      // Reconecta após 10s se cair
+      if(_sseConexao) { _sseConexao.close(); _sseConexao = null; }
+      setTimeout(_conectarSSE, 10000);
+    };
+  } catch(e) {
+    // EventSource não disponível — polling continua funcionando
+  }
 }
 
 /** Notifica mudança de status e força re-render imediato */
@@ -1861,7 +1893,7 @@ function gerarPDF(){
 function toggleConjuge(civil){
   const el = document.getElementById('blocoConjuge');
   if(!el) return;
-  el.classList.toggle('hidden', !['Casado(a)','União estável'].includes(civil));
+  el.classList.toggle('hidden', civil !== 'Casado(a)');
 }
 
 /* ── Comissão por extenso ── */
@@ -1872,8 +1904,7 @@ function numToWords(n){
 
 /* ── Salvar comissão e cônjuge no AG antes de gerar PDF ── */
 function capturarComissaoEConjuge(){
-  const sel = document.getElementById('i_comissao');
-  AG.comissao = sel ? parseInt(sel.value) : 6;
+  AG.comissao = 6; // fixo em 6% conforme política comercial
   AG.conjuge = {
     nome: (document.getElementById('p_conjuge_nome')?.value||'').trim(),
     cpf:  (document.getElementById('p_conjuge_cpf')?.value||'').trim()
