@@ -555,6 +555,7 @@ label{display:block;font-size:13px;font-weight:600;color:var(--ink-2);margin-bot
       <p>Lux House Imóveis Ltda. · CNPJ 48.192.939/0001-21 · Jurerê Internacional, Florianópolis/SC</p>
     </div>
     <div style="display:flex;gap:10px">
+      <button class="btn btn-ghost btn-lg" id="btnRefresh" onclick="refreshPainel()" title="Atualizar autorizações">🔄 Atualizar</button>
       <button class="btn btn-ghost btn-lg" onclick="abrirComprarCreditos()">💳 Comprar Créditos</button>
       <button class="btn btn-ghost btn-lg" onclick="abrirBoletos()">📄 Boletos</button>
       <button class="btn btn-primary btn-lg" onclick="novaAutorizacao()">+ NOVA AUTORIZAÇÃO</button>
@@ -1459,9 +1460,28 @@ function genCode(){
 function novaAutorizacao(){
   document.getElementById('modalEscolha').classList.add('open');
 }
-function fluxoVazio(){
+async function fluxoVazio(){
   document.getElementById('modalEscolha').classList.remove('open');
-  AG.code = genCode();
+  // Gera código e SALVA rascunho no banco antes de mostrar o link
+  // Garante que imobiliariaId fique registrado para quando o proprietário assinar
+  try {
+    const r = await fetch('/api/autorizacoes', {
+      method: 'POST',
+      headers: Auth.headers()
+    });
+    if (r.status === 402) {
+      const d = await r.json();
+      tratarErroLimite(d);
+      return;
+    }
+    if (!r.ok) throw new Error('Falha ao criar autorização.');
+    const salvo = await r.json();
+    AG.code = salvo.codigo;
+  } catch(e) {
+    // Fallback: se falhar (ex: sem conexão), usa código local
+    AG.code = genCode();
+    console.warn('Rascunho não salvo no servidor:', e.message);
+  }
   const link = (window.AGEMOB_BASE_URL || window.location.origin) + '/autorizacao/' + AG.code;
   document.getElementById('genLink').value = link;
   document.getElementById('copyBtn').textContent='Copiar';
@@ -1887,6 +1907,20 @@ function gerarPDF(){
   doc.text('Documento gerado eletronicamente pela plataforma AGEMOB · Autorizações Imobiliárias Inteligentes · Código '+AG.code, M, 290);
 
   doc.save('AGEMOB_Autorizacao_'+AG.code+'.pdf');
+}
+
+/* ── Refresh manual do painel ── */
+async function refreshPainel(){
+  const btn = document.getElementById('btnRefresh');
+  if(btn){ btn.disabled=true; btn.textContent='🔄 Atualizando…'; }
+  try {
+    await Promise.all([carregarAutorizacoes(), carregarUsoPlaino()]);
+    showToast('Painel atualizado ✓', 'success');
+  } catch(e) {
+    showToast('Erro ao atualizar.', 'error');
+  } finally {
+    if(btn){ btn.disabled=false; btn.textContent='🔄 Atualizar'; }
+  }
 }
 
 /* ── Cônjuge toggle ── */

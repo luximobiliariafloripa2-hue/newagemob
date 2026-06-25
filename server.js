@@ -997,6 +997,10 @@ app.post('/api/autorizacoes/assinar', async (req, res) => {
     } else {
       await db.autorizacoes.insert(aut);
     }
+    // Alerta se imobiliariaId ficou null — indica link gerado sem salvar rascunho
+    if (!aut.imobiliariaId) {
+      await log('aviso', `Autorização ${codigo} assinada SEM imobiliariaId — não aparecerá no painel`, null, null);
+    }
     await log('autorizacao', `Assinada: ${codigo} (${proprietario.nome})`, null, aut.imobiliariaId);
     if (aut.imobiliariaId) sseNotificar(aut.imobiliariaId, 'autorizacao_assinada', { codigo, proprietario: proprietario.nome, status: 'assinado' });
     res.json({ ok: true });
