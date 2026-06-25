@@ -886,7 +886,14 @@ app.get('/api/autorizacoes', authMiddleware(['admin','corretor','super_admin']),
 app.post('/api/autorizacoes', authMiddleware(['admin','corretor']), async (req, res) => {
   try {
     const limite = await verificarLimite(req.user.imobiliariaId);
-    if (!limite.ok) return res.status(402).json({ erro: limite.erro, usadas: limite.usadas, limiteTotal: (limite.limite||0)+(limite.extras||0) });
+    if (!limite.ok) {
+      // Se imobiliária não encontrada, o token está desatualizado (banco recriado)
+      // Retorna 401 para forçar novo login
+      if (limite.erro === 'Imobiliária não encontrada.') {
+        return res.status(401).json({ erro: 'Sessão expirada. Faça login novamente.' });
+      }
+      return res.status(402).json({ erro: limite.erro, usadas: limite.usadas, limiteTotal: (limite.limite||0)+(limite.extras||0) });
+    }
     const codigo = genCode();
     const linkPublico = `${getBaseUrl(req)}/autorizacao/${codigo}`;
     const aut = {
@@ -913,7 +920,12 @@ app.post('/api/autorizacoes/rascunho', authMiddleware(['admin','corretor']), asy
     const { codigo, proprietario, imovel } = req.body;
     if (!codigo || !proprietario?.nome) return res.status(422).json({ erro: 'Dados incompletos.' });
     const limite = await verificarLimite(req.user.imobiliariaId);
-    if (!limite.ok) return res.status(402).json({ erro: limite.erro });
+    if (!limite.ok) {
+      if (limite.erro === 'Imobiliária não encontrada.') {
+        return res.status(401).json({ erro: 'Sessão expirada. Faça login novamente.' });
+      }
+      return res.status(402).json({ erro: limite.erro });
+    }
     const linkPublico = `${getBaseUrl(req)}/autorizacao/${codigo}`;
     const aut = {
       codigo, linkPublico,
