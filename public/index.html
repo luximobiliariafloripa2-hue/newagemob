@@ -704,9 +704,18 @@ label{display:block;font-size:13px;font-weight:600;color:var(--ink-2);margin-bot
       <div class="field"><label>CPF *</label><input id="p_cpf" placeholder="000.000.000-00" oninput="maskCPF(this)" maxlength="14"></div>
       <div class="field"><label>Data de nascimento</label><input id="p_nasc" type="date"></div>
       <div class="field"><label>Estado civil</label>
-        <select id="p_civil"><option>Solteiro(a)</option><option>Casado(a)</option><option>Divorciado(a)</option><option>Viúvo(a)</option><option>União estável</option></select>
+        <select id="p_civil" onchange="toggleConjuge(this.value)"><option>Solteiro(a)</option><option>Casado(a)</option><option>Divorciado(a)</option><option>Viúvo(a)</option><option>União estável</option></select>
       </div>
       <div class="field"><label>Profissão</label><input id="p_prof" placeholder="Ex.: Empresário"></div>
+      <!-- Cônjuge — aparece automaticamente se casado(a) ou união estável -->
+      <div id="blocoConjuge" class="hidden" style="grid-column:1/-1;background:var(--brand-soft);border:1.5px solid var(--brand);border-radius:12px;padding:14px 16px;margin-top:4px">
+        <div style="font-size:12.5px;font-weight:700;color:var(--brand);margin-bottom:10px">💍 Dados do cônjuge / companheiro(a) <span style="font-weight:400;color:var(--ink-2)">(opcional — mas recomendado para imóvel em condomínio)</span></div>
+        <div class="grid2">
+          <div class="field" style="margin-bottom:0"><label>Nome do cônjuge</label><input id="p_conjuge_nome" placeholder="Nome completo"></div>
+          <div class="field" style="margin-bottom:0"><label>CPF do cônjuge</label><input id="p_conjuge_cpf" placeholder="000.000.000-00" oninput="maskCPF(this)" maxlength="14"></div>
+        </div>
+        <div style="font-size:12px;color:var(--ink-2);margin-top:8px">⚖️ Caso não informe, o documento incluirá declaração do proprietário responsabilizando-se pela dispensa de outorga.</div>
+      </div>
       <div class="field"><label>WhatsApp *</label><input id="p_zap" placeholder="(48) 9 9999-9999" oninput="maskTel(this)" maxlength="16"></div>
       <div class="field" style="grid-column:1/-1"><label>E-mail *</label><input id="p_email" type="email" placeholder="voce@email.com"></div>
       <!-- campos de endereço ocultos mas mantidos para compatibilidade com PDF e banco -->
@@ -728,6 +737,15 @@ label{display:block;font-size:13px;font-weight:600;color:var(--ink-2);margin-bot
         <select id="i_tipo"><option>Casa</option><option>Apartamento</option><option>Terreno</option><option>Sala Comercial</option><option>Galpão</option><option>Fazenda</option><option>Sítio</option><option>Outro</option></select>
       </div>
       <div class="field"><label>Valor de venda (incluindo a comissão) *</label><input id="i_valor" placeholder="R$ 0,00" oninput="maskMoney(this)"></div>
+      <div class="field"><label>Comissão de corretagem (%)</label>
+        <select id="i_comissao">
+          <option value="5">5%</option>
+          <option value="6" selected>6% (padrão)</option>
+          <option value="7">7%</option>
+          <option value="8">8%</option>
+          <option value="10">10%</option>
+        </select>
+      </div>
     </div>
     <p style="font-size:13px;color:var(--ink-3);margin-top:-6px;margin-bottom:14px">Valor da imobiliária é 6% sobre o valor da venda.</p>
     <div class="grid2">
@@ -1340,6 +1358,7 @@ function baixarPDFAutorizacao(idx){
   h('1. IMOBILIÁRIA AUTORIZADA');
   row('Razão social:',AG.imob.razao);
   row('CNPJ:',AG.imob.cnpj);
+  if(AG.imob.creci) row('CRECI:',AG.imob.creci);
   row('Endereço:',AG.imob.end); y+=2;
 
   h('2. PROPRIETÁRIO');
@@ -1349,10 +1368,10 @@ function baixarPDFAutorizacao(idx){
   h('3. IMÓVEL');
   row('Tipo/Local:',a.imovel);
   row('Valor de venda:',BRL(a.valor));
-  row('Comissão (6%):',BRL(a.valor*0.06)); y+=2;
+  const pct0 = AG.comissao||6; row('Comissão ('+pct0+'%):',BRL(a.valor*(pct0/100))); y+=2;
 
   h('4. CONDIÇÕES');
-  p('MODALIDADE — '+tipoTxt+'. Validade de 365 dias com renovação automática. Comissão de 6% sobre o valor total da venda.');
+  p('MODALIDADE — '+tipoTxt+'. Validade de 365 dias com renovação automática. Comissão de '+pct0+'% sobre o valor total da venda.');
   p('STATUS — '+({ativa:'Ativa e em vigor.',aguardando:'Aguardando assinatura do proprietário.',vencida:'Autorização vencida. Requer renovação.'}[a.status]||''));
 
   h('5. VENCIMENTO');
@@ -1788,6 +1807,7 @@ function gerarPDF(){
   h('1. IMOBILIÁRIA AUTORIZADA');
   row('Razão social:',AG.imob.razao);
   row('CNPJ:',AG.imob.cnpj);
+  if(AG.imob.creci) row('CRECI:',AG.imob.creci);
   row('Endereço:',AG.imob.end); y+=2;
 
   h('2. PROPRIETÁRIO');
@@ -1795,7 +1815,10 @@ function gerarPDF(){
   row('CPF:',V('p_cpf')); if(V('p_rg')!=='—') row('RG:',V('p_rg'));
   row('Estado civil:',V('p_civil')); row('Profissão:',V('p_prof'));
   row('Contato:',V('p_zap')+' · '+V('p_email'));
-  row('Endereço:',`${V('p_end')}, ${V('p_num')} ${V('p_comp')!=='—'?V('p_comp'):''} - ${V('p_bairro')}, ${V('p_cidade')}`); y+=2;
+  row('Endereço:',`${V('p_end')}, ${V('p_num')} ${V('p_comp')!=='—'?V('p_comp'):''} - ${V('p_bairro')}, ${V('p_cidade')}`);
+  const conjNome = V('p_conjuge_nome'); const conjCpf = V('p_conjuge_cpf');
+  if(conjNome && conjNome!=='—') row('Cônjuge/Companheiro(a):',conjNome+(conjCpf&&conjCpf!=='—'?' · CPF '+conjCpf:''));
+  y+=2;
 
   h('3. IMÓVEL');
   row('Tipo:',V('i_tipo'));
@@ -1804,12 +1827,17 @@ function gerarPDF(){
 
   h('4. CONDIÇÕES');
   p('PRAZO E RENOVAÇÃO — A presente autorização terá validade inicial de 365 (trezentos e sessenta e cinco) dias, contados da data de assinatura, com vencimento em '+venc.toLocaleDateString('pt-BR')+'. Ao término do prazo, será renovada automaticamente por períodos iguais e sucessivos, até manifestação contrária de qualquer das partes, comunicada formalmente com antecedência mínima de 30 (trinta) dias do vencimento.');
-  p('COMISSÃO DE CORRETAGEM — Será devida comissão de 6% (seis por cento) sobre o valor total da venda efetivamente realizada. A comissão permanecerá integralmente devida caso o imóvel seja vendido, durante a vigência desta autorização, a cliente apresentado pela imobiliária, originado de suas campanhas de marketing, cadastrado em seus sistemas ou apresentado por seus parceiros.');
+  const pctCom = AG.comissao || 6;
+  const pctComExt = AG.comissaoExt || numToWords(pctCom);
+  p('COMISSÃO DE CORRETAGEM — Será devida comissão de '+pctCom+'% ('+pctComExt+' por cento) sobre o valor total da venda efetivamente realizada. A comissão permanecerá integralmente devida caso o imóvel seja vendido, durante a vigência desta autorização, a cliente apresentado pela imobiliária, originado de suas campanhas de marketing, cadastrado em seus sistemas ou apresentado por seus parceiros.');
   if(AG.tipo==='exclusiva'){
     p('EXCLUSIVIDADE — Toda negociação do imóvel deverá ser conduzida exclusivamente pela imobiliária autorizada. Caso o proprietário realize a venda diretamente ou por intermédio de terceiros durante o prazo de exclusividade, a comissão contratada permanecerá devida.');
   } else {
     p('MODALIDADE SEM EXCLUSIVIDADE — O proprietário poderá anunciar ou negociar o imóvel por meio de outras imobiliárias, sendo a comissão devida apenas à imobiliária que efetivamente intermediar a venda.');
   }
+  p('MULTA POR REVOGAÇÃO ANTECIPADA — A revogação desta autorização pelo outorgante antes do término do prazo contratual, sem justa causa devidamente comprovada, sujeitará o outorgante ao pagamento de indenização à outorgada equivalente a '+pctCom+'% ('+pctComExt+' por cento) do valor do imóvel constante neste instrumento, a título de ressarcimento dos investimentos realizados em marketing, visitas e gestão comercial.');
+  p('REGIME DE BENS / OUTORGA — '+( (V('p_conjuge_nome')&&V('p_conjuge_nome')!=='—') ? 'O cônjuge/companheiro(a) '+V('p_conjuge_nome')+' (CPF '+V('p_conjuge_cpf')+') concorda com a presente autorização de venda.' : 'O outorgante declara, sob as penas da lei, que sua situação conjugal não exige outorga do cônjuge ou companheiro(a) para a prática deste ato, ou que é plenamente capaz de praticá-lo de forma independente, responsabilizando-se integralmente por tal declaração.'));
+  p('FORO — Fica eleito o foro da comarca de '+AG.imob.cidade+', para dirimir quaisquer questões oriundas do presente instrumento, com renúncia expressa a qualquer outro foro, por mais privilegiado que seja.');
 
   if(y>225){ doc.addPage(); y=20; }
 
@@ -1827,6 +1855,37 @@ function gerarPDF(){
   doc.text('Documento gerado eletronicamente pela plataforma AGEMOB · Autorizações Imobiliárias Inteligentes · Código '+AG.code, M, 290);
 
   doc.save('AGEMOB_Autorizacao_'+AG.code+'.pdf');
+}
+
+/* ── Cônjuge toggle ── */
+function toggleConjuge(civil){
+  const el = document.getElementById('blocoConjuge');
+  if(!el) return;
+  el.classList.toggle('hidden', !['Casado(a)','União estável'].includes(civil));
+}
+
+/* ── Comissão por extenso ── */
+function numToWords(n){
+  const m={5:'cinco',6:'seis',7:'sete',8:'oito',10:'dez',12:'doze'};
+  return m[n] || n.toString();
+}
+
+/* ── Salvar comissão e cônjuge no AG antes de gerar PDF ── */
+function capturarComissaoEConjuge(){
+  const sel = document.getElementById('i_comissao');
+  AG.comissao = sel ? parseInt(sel.value) : 6;
+  AG.conjuge = {
+    nome: (document.getElementById('p_conjuge_nome')?.value||'').trim(),
+    cpf:  (document.getElementById('p_conjuge_cpf')?.value||'').trim()
+  };
+  // Puxa CRECI da imobiliária se disponível
+  if(!AG.imob.creci && Auth.user?.imobiliaria?.creci) AG.imob.creci = Auth.user.imobiliaria.creci;
+  if(!AG.imob.creci && Auth.user?.imobiliaria?.responsavel?.creci) AG.imob.creci = Auth.user.imobiliaria.responsavel.creci;
+  // Cidade da imobiliária para o foro
+  if(!AG.imob.cidade){
+    const end = Auth.user?.imobiliaria?.endereco;
+    AG.imob.cidade = end?.cidade || 'Florianópolis';
+  }
 }
 
 /* ================= INICIALIZAÇÃO ================= */
@@ -3475,6 +3534,7 @@ assinar = async function(){
   v2Concluir();
 };
 function v2Concluir(){
+  capturarComissaoEConjuge();
   document.getElementById('finalCode').textContent='Código: '+AG.code+'  ·  Hash: '+V2D.hash.slice(0,20)+'…';
   const qh=document.getElementById('qrHolder'); qh.innerHTML='';
   new QRCode(qh,{text:(window.AGEMOB_BASE_URL||window.location.origin)+'/validar/'+AG.code,width:110,height:110,colorDark:'#04273B'});
@@ -3579,21 +3639,31 @@ gerarPDF = function(){
   doc.text('Código da autorização: '+AG.code+'  ·  Emitida em '+d.toLocaleDateString('pt-BR')+' às '+d.toLocaleTimeString('pt-BR'),M,y); y+=8;
   line();
   h('1. IMOBILIÁRIA AUTORIZADA');
-  row('Razão social:',AG.imob.razao); row('CNPJ:',AG.imob.cnpj); row('Endereço:',AG.imob.end); y+=2;
+  row('Razão social:',AG.imob.razao); row('CNPJ:',AG.imob.cnpj);
+  if(AG.imob.creci) row('CRECI:',AG.imob.creci);
+  row('Endereço:',AG.imob.end); y+=2;
   h('2. PROPRIETÁRIO');
   row('Nome:',V('p_nome')); row('CPF:',V('p_cpf')); if(V('p_rg')!=='—') row('RG:',V('p_rg'));
   row('Estado civil:',V('p_civil')); row('Profissão:',V('p_prof'));
   row('Contato:',V('p_zap')+' · '+V('p_email'));
-  row('Endereço:',`${V('p_end')}, ${V('p_num')} ${V('p_comp')!=='—'?V('p_comp'):''} - ${V('p_bairro')}, ${V('p_cidade')}`); y+=2;
+  row('Endereço:',`${V('p_end')}, ${V('p_num')} ${V('p_comp')!=='—'?V('p_comp'):''} - ${V('p_bairro')}, ${V('p_cidade')}`);
+  const cNome2=V('p_conjuge_nome'), cCpf2=V('p_conjuge_cpf');
+  if(cNome2&&cNome2!=='—') row('Cônjuge/Companheiro(a):',cNome2+(cCpf2&&cCpf2!=='—'?' · CPF '+cCpf2:''));
+  y+=2;
   h('3. IMÓVEL');
   row('Tipo:',V('i_tipo'));
   row('Endereço:',`${V('i_end')}, ${V('i_num')} - ${V('i_bairro')}, ${V('i_cidade')}`);
-  row('Valor de venda:', valor?BRL(valor):'—'); y+=2;
+  const pctCom2 = AG.comissao || 6; const pctComExt2 = numToWords(pctCom2);
+  row('Valor de venda:', valor?BRL(valor):'—');
+  row('Comissão ('+pctCom2+'%):',valor?BRL(valor*(pctCom2/100)):'—'); y+=2;
   h('4. CONDIÇÕES');
   p('PRAZO E RENOVAÇÃO — A presente autorização terá validade inicial de 365 (trezentos e sessenta e cinco) dias, contados da data de assinatura, com vencimento em '+venc.toLocaleDateString('pt-BR')+'. Ao término do prazo, será renovada automaticamente por períodos iguais e sucessivos, até manifestação contrária de qualquer das partes, comunicada formalmente com antecedência mínima de 30 (trinta) dias do vencimento.');
-  p('COMISSÃO DE CORRETAGEM — Será devida comissão de 6% (seis por cento) sobre o valor total da venda efetivamente realizada. A comissão permanecerá integralmente devida caso o imóvel seja vendido, durante a vigência desta autorização, a cliente apresentado pela imobiliária, originado de suas campanhas de marketing, cadastrado em seus sistemas ou apresentado por seus parceiros.');
+  p('COMISSÃO DE CORRETAGEM — Será devida comissão de '+pctCom2+'% ('+pctComExt2+' por cento) sobre o valor total da venda efetivamente realizada. A comissão permanecerá integralmente devida caso o imóvel seja vendido, durante a vigência desta autorização, a cliente apresentado pela imobiliária, originado de suas campanhas de marketing, cadastrado em seus sistemas ou apresentado por seus parceiros.');
   if(AG.tipo==='exclusiva'){ p('EXCLUSIVIDADE — Toda negociação do imóvel deverá ser conduzida exclusivamente pela imobiliária autorizada. Caso o proprietário realize a venda diretamente ou por intermédio de terceiros durante o prazo de exclusividade, a comissão contratada permanecerá devida.'); }
   else { p('MODALIDADE SEM EXCLUSIVIDADE — O proprietário poderá anunciar ou negociar o imóvel por meio de outras imobiliárias, sendo a comissão devida apenas à imobiliária que efetivamente intermediar a venda.'); }
+  p('MULTA POR REVOGAÇÃO ANTECIPADA — A revogação desta autorização pelo outorgante antes do término do prazo contratual, sem justa causa, sujeitará o outorgante ao pagamento de indenização à outorgada equivalente a '+pctCom2+'% ('+pctComExt2+' por cento) do valor do imóvel, a título de ressarcimento dos investimentos realizados em marketing e gestão comercial.');
+  p('REGIME DE BENS / OUTORGA — '+(cNome2&&cNome2!=='—'?'O cônjuge/companheiro(a) '+cNome2+' (CPF '+cCpf2+') concorda com a presente autorização de venda.':'O outorgante declara, sob as penas da lei, que sua situação conjugal não exige outorga para este ato, responsabilizando-se integralmente por tal declaração.'));
+  p('FORO — Fica eleito o foro da comarca de '+AG.imob.cidade+', para dirimir quaisquer questões oriundas deste instrumento, com renúncia a qualquer outro foro, por mais privilegiado que seja.');
   p('ASSINATURA ELETRÔNICA — As partes reconhecem a validade jurídica da assinatura eletrônica aposta neste documento, nos termos do art. 10, §2º, da MP 2.200-2/2001 e da Lei nº 14.063/2020, acompanhada do conjunto probatório descrito no Certificado de Assinatura anexo.');
   quebra(225);
   h('5. ASSINATURA');
@@ -3809,21 +3879,31 @@ async function v2GerarPDFBlob(){
   doc.text('Código da autorização: '+AG.code+'  ·  Emitida em '+d.toLocaleDateString('pt-BR')+' às '+d.toLocaleTimeString('pt-BR'),M,y); y+=8;
   line();
   h('1. IMOBILIÁRIA AUTORIZADA');
-  row('Razão social:',AG.imob.razao); row('CNPJ:',AG.imob.cnpj); row('Endereço:',AG.imob.end); y+=2;
+  row('Razão social:',AG.imob.razao); row('CNPJ:',AG.imob.cnpj);
+  if(AG.imob.creci) row('CRECI:',AG.imob.creci);
+  row('Endereço:',AG.imob.end); y+=2;
   h('2. PROPRIETÁRIO');
   row('Nome:',V('p_nome')); row('CPF:',V('p_cpf')); if(V('p_rg')!=='—') row('RG:',V('p_rg'));
   row('Estado civil:',V('p_civil')); row('Profissão:',V('p_prof'));
   row('Contato:',V('p_zap')+' · '+V('p_email'));
-  row('Endereço:',`${V('p_end')}, ${V('p_num')} ${V('p_comp')!=='—'?V('p_comp'):''} - ${V('p_bairro')}, ${V('p_cidade')}`); y+=2;
+  row('Endereço:',`${V('p_end')}, ${V('p_num')} ${V('p_comp')!=='—'?V('p_comp'):''} - ${V('p_bairro')}, ${V('p_cidade')}`);
+  const cNome2=V('p_conjuge_nome'), cCpf2=V('p_conjuge_cpf');
+  if(cNome2&&cNome2!=='—') row('Cônjuge/Companheiro(a):',cNome2+(cCpf2&&cCpf2!=='—'?' · CPF '+cCpf2:''));
+  y+=2;
   h('3. IMÓVEL');
   row('Tipo:',V('i_tipo'));
   row('Endereço:',`${V('i_end')}, ${V('i_num')} - ${V('i_bairro')}, ${V('i_cidade')}`);
-  row('Valor de venda:', valor?BRL(valor):'—'); y+=2;
+  const pctCom2 = AG.comissao || 6; const pctComExt2 = numToWords(pctCom2);
+  row('Valor de venda:', valor?BRL(valor):'—');
+  row('Comissão ('+pctCom2+'%):',valor?BRL(valor*(pctCom2/100)):'—'); y+=2;
   h('4. CONDIÇÕES');
   p('PRAZO E RENOVAÇÃO — A presente autorização terá validade inicial de 365 (trezentos e sessenta e cinco) dias, contados da data de assinatura, com vencimento em '+venc.toLocaleDateString('pt-BR')+'. Ao término do prazo, será renovada automaticamente por períodos iguais e sucessivos, até manifestação contrária de qualquer das partes, comunicada formalmente com antecedência mínima de 30 (trinta) dias do vencimento.');
-  p('COMISSÃO DE CORRETAGEM — Será devida comissão de 6% (seis por cento) sobre o valor total da venda efetivamente realizada. A comissão permanecerá integralmente devida caso o imóvel seja vendido, durante a vigência desta autorização, a cliente apresentado pela imobiliária, originado de suas campanhas de marketing, cadastrado em seus sistemas ou apresentado por seus parceiros.');
+  p('COMISSÃO DE CORRETAGEM — Será devida comissão de '+pctCom2+'% ('+pctComExt2+' por cento) sobre o valor total da venda efetivamente realizada. A comissão permanecerá integralmente devida caso o imóvel seja vendido, durante a vigência desta autorização, a cliente apresentado pela imobiliária, originado de suas campanhas de marketing, cadastrado em seus sistemas ou apresentado por seus parceiros.');
   if(AG.tipo==='exclusiva'){ p('EXCLUSIVIDADE — Toda negociação do imóvel deverá ser conduzida exclusivamente pela imobiliária autorizada. Caso o proprietário realize a venda diretamente ou por intermédio de terceiros durante o prazo de exclusividade, a comissão contratada permanecerá devida.'); }
   else { p('MODALIDADE SEM EXCLUSIVIDADE — O proprietário poderá anunciar ou negociar o imóvel por meio de outras imobiliárias, sendo a comissão devida apenas à imobiliária que efetivamente intermediar a venda.'); }
+  p('MULTA POR REVOGAÇÃO ANTECIPADA — A revogação desta autorização pelo outorgante antes do término do prazo contratual, sem justa causa, sujeitará o outorgante ao pagamento de indenização à outorgada equivalente a '+pctCom2+'% ('+pctComExt2+' por cento) do valor do imóvel, a título de ressarcimento dos investimentos realizados em marketing e gestão comercial.');
+  p('REGIME DE BENS / OUTORGA — '+(cNome2&&cNome2!=='—'?'O cônjuge/companheiro(a) '+cNome2+' (CPF '+cCpf2+') concorda com a presente autorização de venda.':'O outorgante declara, sob as penas da lei, que sua situação conjugal não exige outorga para este ato, responsabilizando-se integralmente por tal declaração.'));
+  p('FORO — Fica eleito o foro da comarca de '+AG.imob.cidade+', para dirimir quaisquer questões oriundas deste instrumento, com renúncia a qualquer outro foro, por mais privilegiado que seja.');
   p('ASSINATURA ELETRÔNICA — As partes reconhecem a validade jurídica da assinatura eletrônica aposta neste documento, nos termos do art. 10, §2º, da MP 2.200-2/2001 e da Lei nº 14.063/2020, acompanhada do conjunto probatório descrito no Certificado de Assinatura anexo.');
   quebra(225);
   h('5. ASSINATURA');
