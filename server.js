@@ -35,7 +35,6 @@ const db = {
   subscription_history:Datastore.create({ filename: path.join(DATA_DIR, 'subscription_history.db'),autoload: true }),
   billing_transactions:Datastore.create({ filename: path.join(DATA_DIR, 'billing_transactions.db'),autoload: true }),
   boletos:             Datastore.create({ filename: path.join(DATA_DIR, 'boletos.db'),             autoload: true }),
-  pagamentos:          Datastore.create({ filename: path.join(DATA_DIR, 'pagamentos.db'),          autoload: true }),
   config:              Datastore.create({ filename: path.join(DATA_DIR, 'config.db'),              autoload: true }),
   logs:                Datastore.create({ filename: path.join(DATA_DIR, 'logs.db'),                autoload: true })
 };
@@ -101,11 +100,9 @@ async function seed() {
     for (const p of [
       { slug:'trial',     nome:'Trial',     limite:1,   valorMensal:0,     maxUsuarios:1,  ativo:true },
       { slug:'start',     nome:'Start',     limite:10,  valorMensal:29.90, maxUsuarios:1,  ativo:true },
-      { slug:'pro',       nome:'Pro',       limite:25,  valorMensal:59.90, maxUsuarios:1,  ativo:true },
-      { slug:'prime',     nome:'Prime',     limite:50,  valorMensal:99.90, maxUsuarios:5,  ativo:true },
-      { slug:'scale',     nome:'Scale',     limite:100, valorMensal:179.90,maxUsuarios:15, ativo:true },
-      { slug:'corporate', nome:'Corporate', limite:500, valorMensal:0,     maxUsuarios:-1, ativo:true },
-      { slug:'basic',     nome:'Basic',     limite:15,  valorMensal:0,     maxUsuarios:1,  ativo:true },
+      { slug:'pro',       nome:'Pro',       limite:25,  valorMensal:49.90, maxUsuarios:2,  ativo:true },
+      { slug:'prime',     nome:'Prime',     limite:40,  valorMensal:79.90, maxUsuarios:5,  ativo:true },
+      { slug:'corporate', nome:'Corporate', limite:-1,  valorMensal:0,     maxUsuarios:-1, ativo:true },
       { slug:'enterprise',nome:'Enterprise',limite:100, valorMensal:0,     maxUsuarios:-1, ativo:true },
       { slug:'unlimited', nome:'Unlimited', limite:-1,  valorMensal:0,     maxUsuarios:-1, ativo:true }
     ]) await db.planos.insert({ ...p, criadoEm: new Date().toISOString() });
@@ -331,6 +328,48 @@ app.put('/api/admin/imobiliarias/:id', authMiddleware(['super_admin']), async (r
   } catch(e) {
     res.status(500).json({ erro: 'Falha ao atualizar.' });
   }
+});
+
+// PATCH completo para edição pelo Super Admin (todos os campos)
+app.patch('/api/admin/imobiliarias/:id', authMiddleware(['super_admin']), async (req, res) => {
+  try {
+    const { nome, nomeFantasia, cnpj, creci, cpf, telefone, whatsapp, email,
+            responsavel, endereco, status, planoId, limiteAutorizacoes, novaSenha } = req.body;
+    if (!nome) return res.status(422).json({ erro: 'Nome é obrigatório.' });
+
+    const upd = {
+      nome, nomeFantasia, cnpj, creci, cpf, telefone, whatsapp, email,
+      responsavel, endereco, status, atualizadoEm: new Date().toISOString()
+    };
+    if (limiteAutorizacoes !== undefined) upd.limiteAutorizacoes = limiteAutorizacoes;
+
+    await db.imobiliarias.update({ _id: req.params.id }, { $set: upd });
+
+    // Atualizar plano se fornecido
+    if (planoId) {
+      const plano = await db.planos.findOne({ _id: planoId });
+      if (plano) {
+        await db.imobiliarias.update({ _id: req.params.id }, { $set: {
+          planoId: plano._id, planoSlug: plano.slug, planoNome: plano.nome,
+          limiteAutorizacoes: limiteAutorizacoes !== undefined ? limiteAutorizacoes : plano.limite
+        }});
+        await db.subscriptions.update({ imobiliariaId: req.params.id }, { $set: {
+          planoId: plano._id, planoSlug: plano.slug, planoNome: plano.nome,
+          limiteAutorizacoes: plano.limite, atualizadoEm: new Date().toISOString()
+        }});
+      }
+    }
+
+    // Atualizar senha se fornecida
+    if (novaSenha && novaSenha.length >= 6) {
+      const bcrypt = require('bcryptjs');
+      const hash = await bcrypt.hash(novaSenha, 10);
+      await db.usuarios.update({ imobiliariaId: req.params.id, role: 'admin' }, { $set: { senha: hash } });
+    }
+
+    await log('admin', 'Imobiliária editada pelo Super Admin: ' + req.params.id);
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ erro: e.message }); }
 });
 
 // Desativar/ativar imobiliária
@@ -1425,15 +1464,6 @@ app.post('/api/admin/suporte/:imobId', authMiddleware(['super_admin']), async (r
     });
   } catch(e) { res.status(500).json({ erro: e.message }); }
 });
-
-// ═══════════════════════════════════════════════════════
-// MÓDULO DE PAGAMENTOS — Mercado Pago (isolado, ver /routes e /services)
-// ═══════════════════════════════════════════════════════
-const paymentsRouter  = require('./routes/payments');
-const webhooksRouter  = require('./routes/webhooks');
-
-app.use('/api/pagamentos', paymentsRouter({ db, authMiddleware, log, getBaseUrl }));
-app.use('/api/webhooks',   webhooksRouter({ db, log }));
 
 // ═══════════════════════════════════════════════════════
 // SPA CATCH-ALL

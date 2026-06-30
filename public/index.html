@@ -58,8 +58,8 @@ label{display:block;font-size:13px;font-weight:600;color:var(--ink-2);margin-bot
 @media(max-width:640px){.topbar .tag{display:none}}
 .topbar .agency{margin-left:auto;display:flex;align-items:center;gap:9px;font-size:13px;font-weight:600;color:#fff}
 .topbar .agency .dot{width:8px;height:8px;border-radius:50%;background:var(--gold)}
-.logout-btn{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.2);color:#fff}
-.logout-btn:hover{border-color:var(--red);color:#ffb4a8}
+.logout-btn{background:#fff;border:1.5px solid rgba(255,255,255,.4);color:var(--brand);font-weight:700}
+.logout-btn:hover{background:rgba(255,255,255,.9);border-color:var(--red);color:var(--red)}
 
 /* ---------- Buttons / badges ---------- */
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border:none;border-radius:10px;padding:11px 18px;font-weight:600;font-size:14.5px;transition:transform var(--ease-fast),box-shadow var(--ease-fast),background var(--ease-fast),border-color var(--ease-fast);cursor:pointer}
@@ -300,7 +300,6 @@ label{display:block;font-size:13px;font-weight:600;color:var(--ink-2);margin-bot
       <p>Gerencie clientes, planos, billing e métricas da plataforma</p>
     </div>
     <div style="display:flex;gap:10px">
-      <button class="btn btn-ghost btn-lg" onclick="voltarSuperAdmin()">← Painel</button>
       <button class="btn btn-primary btn-lg" onclick="abrirModalNovaImob()">+ Novo Cliente</button>
     </div>
   </div>
@@ -310,7 +309,7 @@ label{display:block;font-size:13px;font-weight:600;color:var(--ink-2);margin-bot
     <button class="sa-tab on" id="tab-dashboard" onclick="saTrocaAba('dashboard')">📊 Dashboard</button>
     <button class="sa-tab" id="tab-clientes" onclick="saTrocaAba('clientes')">👥 Clientes</button>
     <button class="sa-tab" id="tab-planos" onclick="saTrocaAba('planos')">📋 Planos</button>
-  <button class="sa-tab" id="tab-boletos" onclick="saTrocaAba('boletos')">💰 Boletos</button>
+  <button class="sa-tab" id="tab-boletos" onclick="saTrocaAba('boletos')">💰 Financeiro</button>
   </div>
 
   <!-- ABA: DASHBOARD -->
@@ -371,21 +370,36 @@ label{display:block;font-size:13px;font-weight:600;color:var(--ink-2);margin-bot
     </div>
   </div>
 
-  <!-- ABA: BOLETOS -->
+  <!-- ABA: FINANCEIRO (antigo Boletos — expandido) -->
   <div id="sa-aba-boletos" class="hidden">
     <!-- KPIs financeiros -->
     <div class="kpis" id="saBoletoKpis" style="grid-template-columns:repeat(4,1fr);margin-bottom:14px"></div>
 
+    <!-- Sub-abas: Imobiliárias / Corretores -->
+    <div style="display:flex;gap:4px;margin-bottom:16px;border-bottom:1px solid var(--line)">
+      <button class="sa-tab on" id="fin-tab-imob" onclick="finTrocaAba('imob')">🏢 Imobiliárias</button>
+      <button class="sa-tab" id="fin-tab-corretores" onclick="finTrocaAba('corretores')">👤 Corretores</button>
+    </div>
+
     <!-- Filtros -->
     <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
-      <input id="saBoletoSearch" placeholder="🔍 Buscar imobiliária..." oninput="filtrarBoletos()"
-        style="flex:1;min-width:180px;padding:9px 13px;border:1.5px solid var(--line);border-radius:9px;font-size:13.5px">
+      <input id="saBoletoSearch" placeholder="🔍 Buscar por nome, cidade ou estado..." oninput="filtrarBoletos()"
+        style="flex:1;min-width:200px;padding:9px 13px;border:1.5px solid var(--line);border-radius:9px;font-size:13.5px">
       <select id="saBoletoFiltroStatus" onchange="filtrarBoletos()" style="padding:9px 12px;border:1.5px solid var(--line);border-radius:9px;font-size:13px">
         <option value="">Todos os status</option>
         <option value="pago">Pago</option>
-        <option value="a_vencer">A vencer</option>
-        <option value="vencido">Vencido</option>
+        <option value="a_vencer">Em aberto</option>
+        <option value="vencido">Atrasado</option>
         <option value="cancelado">Cancelado</option>
+      </select>
+      <select id="saBoletoFiltroEstado" onchange="filtrarBoletos()" style="padding:9px 12px;border:1.5px solid var(--line);border-radius:9px;font-size:13px">
+        <option value="">Todos os estados</option>
+        <option>AC</option><option>AL</option><option>AP</option><option>AM</option><option>BA</option>
+        <option>CE</option><option>DF</option><option>ES</option><option>GO</option><option>MA</option>
+        <option>MT</option><option>MS</option><option>MG</option><option>PA</option><option>PB</option>
+        <option>PR</option><option>PE</option><option>PI</option><option>RJ</option><option>RN</option>
+        <option>RS</option><option>RO</option><option>RR</option><option>SC</option><option>SP</option>
+        <option>SE</option><option>TO</option>
       </select>
       <select id="saBoletoFiltroPeriodo" onchange="filtrarBoletos()" style="padding:9px 12px;border:1.5px solid var(--line);border-radius:9px;font-size:13px">
         <option value="">Todos os períodos</option>
@@ -393,17 +407,36 @@ label{display:block;font-size:13px;font-weight:600;color:var(--ink-2);margin-bot
         <option value="mes_anterior">Mês anterior</option>
         <option value="3_meses">Últimos 3 meses</option>
       </select>
-      <button class="btn btn-primary" onclick="abrirModalEmitirBoleto()">+ Emitir boleto</button>
+      <button class="btn btn-primary" onclick="abrirModalEmitirBoleto()">+ Emitir cobrança</button>
     </div>
 
-    <div class="panel" style="padding:0;overflow:hidden">
-      <div class="tbl-scroll">
-        <table class="tbl">
-          <thead><tr>
-            <th>Imobiliária</th><th>Plano</th><th>Valor</th><th>Competência</th><th>Vencimento</th><th>Pagamento</th><th>Status</th><th>Ações</th>
-          </tr></thead>
-          <tbody id="saBoletosBody"></tbody>
-        </table>
+    <!-- Aba Imobiliárias -->
+    <div id="fin-aba-imob">
+      <div class="panel" style="padding:0;overflow:hidden">
+        <div class="tbl-scroll">
+          <table class="tbl">
+            <thead><tr>
+              <th>Estado</th><th>Cidade</th><th>Imobiliária</th><th>Plano</th>
+              <th>Mensalidade</th><th>Vencimento</th><th>Último pag.</th><th>Situação</th><th>Ações</th>
+            </tr></thead>
+            <tbody id="saBoletosBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Aba Corretores -->
+    <div id="fin-aba-corretores" class="hidden">
+      <div class="panel" style="padding:0;overflow:hidden">
+        <div class="tbl-scroll">
+          <table class="tbl">
+            <thead><tr>
+              <th>Estado</th><th>Cidade</th><th>Corretor</th><th>Plano</th>
+              <th>Mensalidade</th><th>Vencimento</th><th>Último pag.</th><th>Situação</th><th>Ações</th>
+            </tr></thead>
+            <tbody id="saBoletosCorretoresBody"></tbody>
+          </table>
+        </div>
       </div>
     </div>
   </div>
@@ -936,6 +969,92 @@ label{display:block;font-size:13px;font-weight:600;color:var(--ink-2);margin-bot
     <div class="nav-row" style="margin-top:16px">
       <button class="btn btn-ghost" onclick="document.getElementById('modalEmitirBoleto').classList.remove('open')">Cancelar</button>
       <button class="btn btn-primary" onclick="emitirBoleto()">Emitir ✓</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- ====================== MODAL: EDITAR CLIENTE (SUPER ADMIN) ====================== -->
+<div class="overlay" id="modalEditarCliente">
+  <div class="modal" style="max-width:680px;max-height:92vh;overflow-y:auto">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <h2>✏️ Editar Cliente</h2>
+      <button class="btn btn-ghost" style="padding:6px 12px" onclick="document.getElementById('modalEditarCliente').classList.remove('open')">✕</button>
+    </div>
+    <div id="editarClienteTabs" style="display:flex;gap:8px;margin-bottom:16px;border-bottom:1px solid var(--line)">
+      <button class="sa-tab on" id="edt-tab-dados" onclick="edtTrocaAba('dados')">📋 Dados</button>
+      <button class="sa-tab" id="edt-tab-acesso" onclick="edtTrocaAba('acesso')">🔐 Acesso</button>
+      <button class="sa-tab" id="edt-tab-plano" onclick="edtTrocaAba('plano')">⭐ Plano</button>
+    </div>
+    <input type="hidden" id="edt_id">
+    <input type="hidden" id="edt_tipo">
+
+    <!-- Aba Dados -->
+    <div id="edt-aba-dados">
+      <div id="edt-form-imob">
+        <div class="grid2">
+          <div class="field"><label>Nome / Razão Social *</label><input id="edt_nome" placeholder="Nome completo ou razão social"></div>
+          <div class="field"><label>Nome Fantasia</label><input id="edt_fantasia" placeholder="Nome fantasia"></div>
+          <div class="field"><label>CNPJ</label><input id="edt_cnpj" placeholder="00.000.000/0001-00"></div>
+          <div class="field"><label>CRECI</label><input id="edt_creci" placeholder="Ex.: 12345-J"></div>
+          <div class="field"><label>CPF (Corretor)</label><input id="edt_cpf" placeholder="000.000.000-00"></div>
+          <div class="field"><label>Telefone</label><input id="edt_tel" placeholder="(48) 9 9999-9999"></div>
+          <div class="field"><label>WhatsApp</label><input id="edt_zap" placeholder="(48) 9 9999-9999"></div>
+          <div class="field"><label>E-mail</label><input id="edt_email" type="email" placeholder="email@exemplo.com"></div>
+          <div class="field" style="grid-column:1/-1"><label>Responsável</label><input id="edt_responsavel" placeholder="Nome do responsável"></div>
+          <div class="field" style="grid-column:1/-1"><label>Endereço</label><input id="edt_logradouro" placeholder="Rua, Avenida..."></div>
+          <div class="field"><label>Número</label><input id="edt_numero" placeholder="Número"></div>
+          <div class="field"><label>Complemento</label><input id="edt_complemento" placeholder="Apto, Sala..."></div>
+          <div class="field"><label>Bairro</label><input id="edt_bairro" placeholder="Bairro"></div>
+          <div class="field"><label>CEP</label><input id="edt_cep" placeholder="00000-000"></div>
+          <div class="field"><label>Cidade</label><input id="edt_cidade" placeholder="Cidade"></div>
+          <div class="field"><label>Estado</label>
+            <select id="edt_estado">
+              <option value="">Selecione...</option>
+              <option>AC</option><option>AL</option><option>AP</option><option>AM</option><option>BA</option>
+              <option>CE</option><option>DF</option><option>ES</option><option>GO</option><option>MA</option>
+              <option>MT</option><option>MS</option><option>MG</option><option>PA</option><option>PB</option>
+              <option>PR</option><option>PE</option><option>PI</option><option>RJ</option><option>RN</option>
+              <option>RS</option><option>RO</option><option>RR</option><option>SC</option><option>SP</option>
+              <option>SE</option><option>TO</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Aba Acesso -->
+    <div id="edt-aba-acesso" class="hidden">
+      <div class="grid2">
+        <div class="field"><label>Status da conta</label>
+          <select id="edt_status">
+            <option value="ativo">Ativo</option>
+            <option value="suspenso">Suspenso</option>
+            <option value="inativo">Inativo</option>
+            <option value="cancelado">Cancelado</option>
+          </select>
+        </div>
+        <div class="field"><label>Nova senha (deixe em branco para manter)</label>
+          <input id="edt_senha" type="password" placeholder="Nova senha (mínimo 6 caracteres)">
+        </div>
+      </div>
+    </div>
+
+    <!-- Aba Plano -->
+    <div id="edt-aba-plano" class="hidden">
+      <div class="grid2">
+        <div class="field"><label>Plano</label>
+          <select id="edt_planoId"></select>
+        </div>
+        <div class="field"><label>Limite de autorizações</label>
+          <input id="edt_limite" type="number" placeholder="Ex.: 25 (-1 = ilimitado)">
+        </div>
+      </div>
+    </div>
+
+    <div class="nav-row" style="margin-top:20px">
+      <button class="btn btn-ghost" onclick="document.getElementById('modalEditarCliente').classList.remove('open')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarEdicaoCliente()">Salvar alterações ✓</button>
     </div>
   </div>
 </div>
@@ -2184,9 +2303,9 @@ function renderSubscriptions(){
       <td style="font-size:12px;color:var(--ink-2)">${renovacao}</td>
       <td style="white-space:nowrap">
         <div style="display:flex;flex-wrap:wrap;gap:4px">
+          <button class="icon-btn" title="Editar cliente" onclick="abrirEditarCliente('${s._id}','${s.tipoCliente||'imobiliaria'}')" style="background:var(--brand-soft);border-color:var(--brand);color:var(--brand)">✏️</button>
           <button class="icon-btn" title="Alterar plano" onclick="abrirAlterarPlano('${s._id}','${s.nome.replace(/'/g,'')}')">📋</button>
           <button class="icon-btn" title="Créditos" onclick="abrirModalCreditos('${s._id}','${s.nome.replace(/'/g,'')}')">💰</button>
-          <button class="icon-btn" title="Limite manual" onclick="abrirLimiteManual('${s._id}','${s.nome.replace(/'/g,'')}')">✏️</button>
           <button class="icon-btn" title="Resetar consumo" onclick="resetarConsumo('${s._id}')">🔄</button>
           <button class="icon-btn" title="Modo Suporte — acessar conta" onclick="entrarModoSuporte('${s._id}','${s.nome.replace(/'/g,'')}')">🔑</button>
           ${s.status==='active'||s.status==='trial'
@@ -2540,31 +2659,48 @@ async function carregarBoletosSA(){
   } catch(e) { console.error(e); }
 }
 
+function finTrocaAba(aba){
+  ['imob','corretores'].forEach(a=>{
+    document.getElementById('fin-aba-'+a)?.classList.toggle('hidden', a!==aba);
+    document.getElementById('fin-tab-'+a)?.classList.toggle('on', a===aba);
+  });
+  filtrarBoletos();
+}
+
 function filtrarBoletos(){
-  const search  = document.getElementById('saBoletoSearch')?.value.toLowerCase() || '';
+  const search  = (document.getElementById('saBoletoSearch')?.value || '').toLowerCase();
   const status  = document.getElementById('saBoletoFiltroStatus')?.value || '';
+  const estado  = document.getElementById('saBoletoFiltroEstado')?.value || '';
   const periodo = document.getElementById('saBoletoFiltroPeriodo')?.value || '';
   const agora   = new Date();
+  const abaAtiva = document.getElementById('fin-tab-corretores')?.classList.contains('on') ? 'corretores' : 'imob';
 
-  let lista = _saBoletosLista.filter(b => {
-    if(search  && !b.imobiliariaNome?.toLowerCase().includes(search)) return false;
-    if(status  && b.status !== status) return false;
+  const sColor={pago:'b-green',a_vencer:'b-blue',vencido:'b-red',cancelado:'b-gray'};
+  const sLabel={pago:'Pago',a_vencer:'Em aberto',vencido:'Atrasado',cancelado:'Cancelado'};
+
+  const filtrar = (lista, tipoFiltro) => lista.filter(b => {
+    if(tipoFiltro && b.tipoCliente && b.tipoCliente !== tipoFiltro) return false;
+    const nome = (b.imobiliariaNome || b.nome || '').toLowerCase();
+    const cid  = (b.cidade || '').toLowerCase();
+    const est  = (b.estado || '').toUpperCase();
+    if(search && !nome.includes(search) && !cid.includes(search) && !est.toLowerCase().includes(search)) return false;
+    if(status && b.status !== status) return false;
+    if(estado && est !== estado) return false;
     if(periodo) {
       const d = new Date(b.criadoEm);
-      if(periodo === 'mes_atual' && !(d.getMonth()===agora.getMonth() && d.getFullYear()===agora.getFullYear())) return false;
-      if(periodo === 'mes_anterior') { const ant=new Date(agora.getFullYear(),agora.getMonth()-1,1); if(!(d.getMonth()===ant.getMonth() && d.getFullYear()===ant.getFullYear())) return false; }
-      if(periodo === '3_meses' && d < new Date(agora.getFullYear(),agora.getMonth()-3,1)) return false;
+      if(periodo==='mes_atual' && !(d.getMonth()===agora.getMonth() && d.getFullYear()===agora.getFullYear())) return false;
+      if(periodo==='mes_anterior'){const ant=new Date(agora.getFullYear(),agora.getMonth()-1,1); if(!(d.getMonth()===ant.getMonth() && d.getFullYear()===ant.getFullYear())) return false;}
+      if(periodo==='3_meses' && d < new Date(agora.getFullYear(),agora.getMonth()-3,1)) return false;
     }
     return true;
   });
 
-  const sColor={pago:'b-green',a_vencer:'b-blue',vencido:'b-red',cancelado:'b-gray'};
-  const sLabel={pago:'Pago',a_vencer:'A vencer',vencido:'Vencido',cancelado:'Cancelado'};
-  document.getElementById('saBoletosBody').innerHTML = lista.map(b=>`<tr>
-    <td><div class="prop">${b.imobiliariaNome||'—'}</div><div class="sub">${b.planoNome||'—'}</div></td>
+  const renderLinha = (b) => `<tr>
+    <td style="font-weight:700;color:var(--brand)">${b.estado||'—'}</td>
+    <td>${b.cidade||'—'}</td>
+    <td><div style="font-weight:600">${b.imobiliariaNome||b.nome||'—'}</div></td>
     <td><span class="badge ${b.planoNome?'b-green':'b-gray'}">${b.planoNome||'—'}</span></td>
-    <td style="font-weight:700">R$ ${(b.valor||0).toFixed(2).replace('.',',')}</td>
-    <td>${b.competencia||'—'}</td>
+    <td style="font-weight:700">R$ ${(b.valor||0).toFixed(2).replace('.',',')}/mês</td>
     <td>${b.vencimento?new Date(b.vencimento).toLocaleDateString('pt-BR'):'—'}</td>
     <td>${b.pagamentoEm?new Date(b.pagamentoEm).toLocaleDateString('pt-BR'):'—'}</td>
     <td><span class="badge ${sColor[b.status]||'b-gray'}">${sLabel[b.status]||b.status}</span></td>
@@ -2573,7 +2709,18 @@ function filtrarBoletos(){
       ${b.status!=='cancelado'?`<button class="icon-btn" title="Cancelar" onclick="marcarBoletoSA('${b._id}','cancelado')">✕</button>`:''}
       <button class="icon-btn" title="Reenviar" onclick="reenviarBoletoSA('${b._id}')">📧</button>
     </td>
-  </tr>`).join('') || '<tr><td colspan="8" style="text-align:center;color:var(--ink-3);padding:16px">Nenhum boleto encontrado.</td></tr>';
+  </tr>`;
+
+  const listaImob = filtrar(_saBoletosLista, 'imobiliaria');
+  const listaCorr = filtrar(_saBoletosLista, 'corretor');
+
+  const empty = (cols) => `<tr><td colspan="${cols}" style="text-align:center;color:var(--ink-3);padding:20px">Nenhum registro encontrado.</td></tr>`;
+
+  const bodyImob = document.getElementById('saBoletosBody');
+  if(bodyImob) bodyImob.innerHTML = listaImob.map(renderLinha).join('') || empty(9);
+
+  const bodyCorr = document.getElementById('saBoletosCorretoresBody');
+  if(bodyCorr) bodyCorr.innerHTML = listaCorr.map(renderLinha).join('') || empty(9);
 }
 
 async function marcarBoletoSA(id, status){
