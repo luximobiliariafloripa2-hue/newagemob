@@ -11,7 +11,7 @@
 <style>
 :root{
   --ink:#101828; --ink-2:#475467; --ink-3:#98A2B3;
-  --paper:#0A2E44; --card:#FFFFFF; --line:#E4E7EC;
+  --paper:#F7F8FA; --card:#FFFFFF; --line:#E4E7EC;
   --brand:#04273B; --brand-dark:#021c2b; --brand-soft:#E6EEF3;
   --gold:#C9A227; --gold-soft:#FBF3DD; --gold-dark:#A8851C;
   --red:#D92D20; --red-soft:#FEF3F2;
@@ -34,7 +34,7 @@
   --ease-med:.25s var(--ease);
 }
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'Inter',sans-serif;background:linear-gradient(180deg,var(--page-bg) 0%,var(--page-bg-2) 100%) fixed;color:var(--ink);font-size:15px;line-height:1.55;min-height:100vh}
+body{font-family:'Inter',sans-serif;background:#F7F8FA;color:var(--ink);font-size:15px;line-height:1.55;min-height:100vh}
 h1,h2,h3,.display{font-family:'Sora',sans-serif}
 button{font-family:inherit;cursor:pointer}
 input,select,textarea{font-family:inherit;font-size:15px;width:100%;padding:12px 14px;border:1.5px solid var(--line);border-radius:10px;background:#fff;color:var(--ink);outline:none;transition:border var(--ease-fast),box-shadow var(--ease-fast)}
@@ -82,8 +82,8 @@ label{display:block;font-size:13px;font-weight:600;color:var(--ink-2);margin-bot
 /* ---------- Admin layout ---------- */
 .wrap{max-width:1180px;margin:0 auto;padding:28px 20px 60px}
 .page-head{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:24px;flex-wrap:wrap}
-.page-head h1{font-size:27px;font-weight:800;letter-spacing:-.6px;color:#fff}
-.page-head p{color:rgba(255,255,255,.6);font-size:14px;margin-top:4px;font-weight:500}
+.page-head h1{font-size:27px;font-weight:800;letter-spacing:-.6px;color:var(--brand)}
+.page-head p{color:var(--ink-2);font-size:14px;margin-top:4px;font-weight:500}
 .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:14px}
 @media(max-width:980px){.kpis{grid-template-columns:repeat(2,1fr)}}
 .kpi{background:var(--card);border:1px solid var(--line);border-radius:var(--radius-lg);padding:20px;box-shadow:var(--shadow);transition:transform var(--ease-med),box-shadow var(--ease-med),border-color var(--ease-med);position:relative;overflow:hidden}
@@ -2858,9 +2858,9 @@ if(!isRotaProprietario()){
 .v2-pct{font-size:40px;font-weight:800;font-family:'Sora',sans-serif;text-align:center}
 .v2-validation-ok{text-align:center;padding:10px 0}
 .v2-validation-ok .seal-big{margin:0 auto 14px}
-.sa-tab{background:none;border:none;border-bottom:2.5px solid transparent;padding:11px 20px;font-size:14px;font-weight:600;color:rgba(255,255,255,.55);cursor:pointer;transition:color var(--ease-fast),border-color var(--ease-fast);margin-bottom:-1px;border-radius:8px 8px 0 0;position:relative}
-.sa-tab.on{border-bottom-color:var(--gold);color:#fff;background:rgba(255,255,255,.06)}
-.sa-tab:hover:not(.on){color:rgba(255,255,255,.85);background:rgba(255,255,255,.03)}
+.sa-tab{background:none;border:none;border-bottom:2.5px solid transparent;padding:11px 20px;font-size:14px;font-weight:600;color:var(--ink-3);cursor:pointer;transition:color var(--ease-fast),border-color var(--ease-fast),background var(--ease-fast);margin-bottom:-1px;border-radius:8px 8px 0 0;position:relative}
+.sa-tab.on{border-bottom-color:var(--brand);color:var(--brand);background:var(--brand-soft)}
+.sa-tab:hover:not(.on){color:var(--brand);background:#F2F4F7}
 </style>
 
 <!-- ───────── MODAL: CONFIGURAÇÃO DO FLUXO (ADMIN) ───────── -->
