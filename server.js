@@ -35,6 +35,7 @@ const db = {
   subscription_history:Datastore.create({ filename: path.join(DATA_DIR, 'subscription_history.db'),autoload: true }),
   billing_transactions:Datastore.create({ filename: path.join(DATA_DIR, 'billing_transactions.db'),autoload: true }),
   boletos:             Datastore.create({ filename: path.join(DATA_DIR, 'boletos.db'),             autoload: true }),
+  pagamentos:          Datastore.create({ filename: path.join(DATA_DIR, 'pagamentos.db'),          autoload: true }),
   config:              Datastore.create({ filename: path.join(DATA_DIR, 'config.db'),              autoload: true }),
   logs:                Datastore.create({ filename: path.join(DATA_DIR, 'logs.db'),                autoload: true })
 };
@@ -1424,6 +1425,15 @@ app.post('/api/admin/suporte/:imobId', authMiddleware(['super_admin']), async (r
     });
   } catch(e) { res.status(500).json({ erro: e.message }); }
 });
+
+// ═══════════════════════════════════════════════════════
+// MÓDULO DE PAGAMENTOS — Mercado Pago (isolado, ver /routes e /services)
+// ═══════════════════════════════════════════════════════
+const paymentsRouter  = require('./routes/payments');
+const webhooksRouter  = require('./routes/webhooks');
+
+app.use('/api/pagamentos', paymentsRouter({ db, authMiddleware, log, getBaseUrl }));
+app.use('/api/webhooks',   webhooksRouter({ db, log }));
 
 // ═══════════════════════════════════════════════════════
 // SPA CATCH-ALL

@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AGEMOB · Assinar Plano</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--navy:#04273B;--navy2:#0d4a6e;--gold:#C9A227;--gold2:#E3C768;--ink:#101828;--ink2:#475467;--ink3:#98A2B3;--paper:#F8F9FB;--line:#E4E7EC;--green:#067647;--red:#D92D20;--radius:16px}
+body{font-family:'Inter',sans-serif;background:var(--paper);color:var(--ink);min-height:100vh}
+header{background:var(--navy);padding:18px 24px;display:flex;align-items:center;gap:10px}
+.logo{display:flex;align-items:center;gap:10px;color:#fff;font-family:'Sora',sans-serif;font-weight:800;font-size:18px;text-decoration:none}
+.seal{width:32px;height:32px;border-radius:50%;background:var(--gold);color:var(--navy);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800}
+main{max-width:760px;margin:40px auto;padding:0 20px}
+h1{font-family:'Sora',sans-serif;font-size:26px;font-weight:800;color:var(--navy);margin-bottom:6px}
+.sub{color:var(--ink2);font-size:14.5px;margin-bottom:28px}
+.card{background:#fff;border:1px solid var(--line);border-radius:var(--radius);padding:28px;margin-bottom:20px;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+.plan-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px}
+@media(max-width:640px){.plan-grid{grid-template-columns:1fr}}
+.plan-card{border:1.5px solid var(--line);border-radius:14px;padding:18px;cursor:pointer;transition:.15s;text-align:center}
+.plan-card.sel{border-color:var(--navy);background:var(--paper);box-shadow:0 0 0 3px rgba(4,39,59,.08)}
+.plan-card h3{font-size:15px;font-weight:700;color:var(--navy);margin-bottom:6px}
+.plan-card .price{font-family:'Sora',sans-serif;font-size:22px;font-weight:800;color:var(--ink)}
+.plan-card .price span{font-size:12px;font-weight:600;color:var(--ink3)}
+.period-toggle{display:flex;gap:8px;margin-bottom:20px;background:var(--paper);border-radius:12px;padding:4px}
+.period-toggle button{flex:1;padding:10px;border:none;background:none;border-radius:9px;font-size:14px;font-weight:600;color:var(--ink2);cursor:pointer;transition:.15s}
+.period-toggle button.sel{background:#fff;color:var(--navy);box-shadow:0 1px 3px rgba(0,0,0,.1)}
+.resumo{background:var(--paper);border-radius:12px;padding:16px 18px;margin-bottom:20px}
+.resumo-row{display:flex;justify-content:space-between;font-size:14px;padding:6px 0}
+.resumo-row.total{font-weight:700;font-size:16px;border-top:1px solid var(--line);margin-top:6px;padding-top:12px;color:var(--navy)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border:none;border-radius:12px;padding:14px 24px;font-weight:700;font-size:15.5px;cursor:pointer;width:100%}
+.btn-primary{background:var(--navy);color:#fff}
+.btn-primary:hover{background:var(--navy2)}
+.btn-primary:disabled{opacity:.5;cursor:not-allowed}
+.alert{padding:14px 16px;border-radius:10px;font-size:13.5px;margin-bottom:16px}
+.alert-warn{background:#FFFAEB;border:1px solid #FCD34D;color:#92400E}
+.alert-err{background:#FEF3F2;border:1px solid #FCA5A5;color:var(--red)}
+.badge-discount{display:inline-block;background:var(--gold);color:#fff;font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px;margin-left:6px}
+.loading{text-align:center;padding:30px;color:var(--ink3)}
+.spin{width:32px;height:32px;border:3px solid var(--line);border-top-color:var(--navy);border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 10px}
+@keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<header><a href="/index.html" class="logo"><div class="seal">A</div>AGEMOB</a></header>
+
+<main>
+  <h1>Assinar plano</h1>
+  <p class="sub">Pagamento único — sem renovação automática. Você escolhe quando renovar.</p>
+
+  <div id="configWarning"></div>
+
+  <div class="card">
+    <h3 style="font-size:14px;font-weight:700;color:var(--ink2);margin-bottom:14px;text-transform:uppercase;letter-spacing:.4px">Escolha o plano</h3>
+    <div class="plan-grid" id="planGrid"><div class="loading"><div class="spin"></div>Carregando planos...</div></div>
+
+    <div class="period-toggle">
+      <button id="btnMensal" class="sel" onclick="selecionarPeriodo('mensal')">Mensal</button>
+      <button id="btnAnual" onclick="selecionarPeriodo('anual')">Anual <span class="badge-discount">economize</span></button>
+    </div>
+
+    <div class="resumo" id="resumo" style="display:none">
+      <div class="resumo-row"><span>Plano</span><span id="resumoPlano">—</span></div>
+      <div class="resumo-row"><span>Periodicidade</span><span id="resumoPeriodo">—</span></div>
+      <div class="resumo-row" id="resumoParcelasRow" style="display:none"><span>Parcelamento</span><span>Em até 12x no cartão</span></div>
+      <div class="resumo-row total"><span>Total</span><span id="resumoTotal">—</span></div>
+    </div>
+
+    <button class="btn btn-primary" id="btnPagar" onclick="iniciarPagamento()" disabled>Selecione um plano</button>
+  </div>
+</main>
+
+<script>
+const Auth = {
+  token: localStorage.getItem('agemob_token'),
+  headers() { return { 'Content-Type':'application/json', 'Authorization': `Bearer ${this.token}` }; }
+};
+
+let planos = [];
+let planoSelecionado = null;
+let periodoSelecionado = 'mensal';
+
+async function init(){
+  // Verifica configuração do gateway
+  try {
+    const r = await fetch('/api/pagamentos/config');
+    const cfg = await r.json();
+    if(!cfg.configurado){
+      document.getElementById('configWarning').innerHTML = `
+        <div class="alert alert-warn">⚠️ O gateway de pagamento ainda não foi configurado pelo administrador.
+        Entre em contato com o suporte para mais informações.</div>`;
+    }
+  } catch(e){}
+
+  try {
+    const r = await fetch('/api/pagamentos/planos');
+    planos = await r.json();
+    renderPlanos();
+  } catch(e) {
+    document.getElementById('planGrid').innerHTML = '<div class="alert alert-err">Erro ao carregar planos.</div>';
+  }
+}
+
+function renderPlanos(){
+  document.getElementById('planGrid').innerHTML = planos.map(p => `
+    <div class="plan-card" id="plan-${p.slug}" onclick="selecionarPlano('${p.slug}')">
+      <h3>${p.nome}</h3>
+      <div class="price" id="price-${p.slug}">R$ ${p.mensal.toFixed(2).replace('.',',')}<span>/mês</span></div>
+    </div>`).join('');
+}
+
+function selecionarPlano(slug){
+  planoSelecionado = planos.find(p => p.slug === slug);
+  document.querySelectorAll('.plan-card').forEach(el => el.classList.remove('sel'));
+  document.getElementById('plan-'+slug).classList.add('sel');
+  atualizarResumo();
+}
+
+function selecionarPeriodo(periodo){
+  periodoSelecionado = periodo;
+  document.getElementById('btnMensal').classList.toggle('sel', periodo==='mensal');
+  document.getElementById('btnAnual').classList.toggle('sel', periodo==='anual');
+  // Atualiza preços exibidos nos cards
+  planos.forEach(p => {
+    const el = document.getElementById('price-'+p.slug);
+    if(!el) return;
+    el.innerHTML = periodo==='anual'
+      ? `R$ ${p.anual.toFixed(2).replace('.',',')}<span>/ano</span>`
+      : `R$ ${p.mensal.toFixed(2).replace('.',',')}<span>/mês</span>`;
+  });
+  atualizarResumo();
+}
+
+function atualizarResumo(){
+  if(!planoSelecionado){ return; }
+  const valor = periodoSelecionado === 'anual' ? planoSelecionado.anual : planoSelecionado.mensal;
+  document.getElementById('resumo').style.display = 'block';
+  document.getElementById('resumoPlano').textContent = planoSelecionado.nome;
+  document.getElementById('resumoPeriodo').textContent = periodoSelecionado === 'anual' ? 'Anual (12 meses)' : 'Mensal (30 dias)';
+  document.getElementById('resumoParcelasRow').style.display = periodoSelecionado === 'anual' ? 'flex' : 'none';
+  document.getElementById('resumoTotal').textContent = 'R$ ' + valor.toFixed(2).replace('.',',');
+  document.getElementById('btnPagar').disabled = false;
+  document.getElementById('btnPagar').textContent = 'Ir para o pagamento →';
+}
+
+async function iniciarPagamento(){
+  if(!planoSelecionado) return;
+  const btn = document.getElementById('btnPagar');
+  btn.disabled = true; btn.textContent = 'Processando...';
+
+  try {
+    const r = await fetch('/api/pagamentos/criar-pedido', {
+      method: 'POST',
+      headers: Auth.headers(),
+      body: JSON.stringify({ planoSlug: planoSelecionado.slug, periodicidade: periodoSelecionado })
+    });
+    const d = await r.json();
+    if(!r.ok) throw new Error(d.erro || 'Falha ao iniciar pagamento.');
+
+    // Redireciona para o checkout hospedado pelo Mercado Pago (cartão/PIX/boleto)
+    window.location.href = d.sandboxInitPoint || d.initPoint;
+  } catch(e) {
+    document.getElementById('configWarning').innerHTML = `<div class="alert alert-err">${e.message}</div>`;
+    btn.disabled = false; btn.textContent = 'Tentar novamente';
+  }
+}
+
+init();
+</script>
+</body>
+</html>

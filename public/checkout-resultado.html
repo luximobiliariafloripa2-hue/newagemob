@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AGEMOB · Resultado do Pagamento</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--navy:#04273B;--gold:#C9A227;--green:#067647;--red:#D92D20;--ink:#101828;--ink2:#475467;--ink3:#98A2B3;--line:#E4E7EC;--paper:#F8F9FB;--radius:16px}
+body{font-family:'Inter',sans-serif;background:var(--paper);color:var(--ink);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+.card{background:#fff;border-radius:var(--radius);padding:40px 32px;max-width:440px;width:100%;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,.08);border:1px solid var(--line)}
+.icon{width:80px;height:80px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:36px;margin:0 auto 20px;animation:pop .4s cubic-bezier(.2,.8,.2,1)}
+.icon.ok{background:var(--green);color:#fff}
+.icon.pending{background:#FFFAEB;color:#B45309}
+.icon.fail{background:var(--red);color:#fff}
+h1{font-family:'Sora',sans-serif;font-size:22px;font-weight:800;margin-bottom:8px}
+p{color:var(--ink2);font-size:14.5px;line-height:1.6;margin-bottom:24px}
+.btn{display:inline-flex;align-items:center;justify-content:center;border:none;border-radius:12px;padding:13px 24px;font-weight:700;font-size:15px;cursor:pointer;background:var(--navy);color:#fff;text-decoration:none;width:100%}
+@keyframes pop{from{transform:scale(.8);opacity:0}to{transform:scale(1);opacity:1}}
+.spin{width:36px;height:36px;border:3px solid var(--line);border-top-color:var(--navy);border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 16px}
+@keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<div class="card" id="card">
+  <div class="spin"></div>
+  <h1>Verificando pagamento...</h1>
+  <p>Aguarde um momento.</p>
+</div>
+
+<script>
+const Auth = { token: localStorage.getItem('agemob_token'), headers(){ return {'Authorization':`Bearer ${this.token}`}; } };
+const params = new URLSearchParams(window.location.search);
+const status = params.get('status');
+const pedidoId = params.get('pedido');
+
+async function verificar(){
+  // Consulta o status real do pedido no nosso banco (não confia no parâmetro da URL)
+  let pedido = null;
+  try {
+    const r = await fetch('/api/pagamentos/pedido/'+pedidoId, { headers: Auth.headers() });
+    if(r.ok) pedido = await r.json();
+  } catch(e){}
+
+  // Se ainda pendente no banco (webhook pode demorar alguns segundos), tenta de novo
+  if(pedido && pedido.status === 'pendente' && status === 'success'){
+    setTimeout(verificar, 2000);
+    return;
+  }
+
+  render(pedido);
+}
+
+function render(pedido){
+  const card = document.getElementById('card');
+  const st = pedido?.status || status;
+
+  if(st === 'aprovado' || status === 'success'){
+    card.innerHTML = `
+      <div class="icon ok">✓</div>
+      <h1>Pagamento aprovado!</h1>
+      <p>Seu plano <b>${pedido?.planoNome||''}</b> foi liberado com sucesso. Você já pode aproveitar todos os recursos.</p>
+      <a href="/index.html" class="btn">Acessar o painel →</a>`;
+  } else if(st === 'pendente' || status === 'pending'){
+    card.innerHTML = `
+      <div class="icon pending">⏳</div>
+      <h1>Pagamento em processamento</h1>
+      <p>Recebemos sua solicitação. Se você escolheu boleto ou PIX, a confirmação pode levar alguns minutos. Avisaremos assim que for aprovado.</p>
+      <a href="/index.html" class="btn">Voltar ao painel</a>`;
+  } else {
+    card.innerHTML = `
+      <div class="icon fail">✕</div>
+      <h1>Pagamento não concluído</h1>
+      <p>Houve um problema ao processar seu pagamento. Você pode tentar novamente a qualquer momento.</p>
+      <a href="/checkout.html" class="btn">Tentar novamente</a>`;
+  }
+}
+
+verificar();
+</script>
+</body>
+</html>
