@@ -176,6 +176,10 @@ app.use(express.static(path.join(__dirname, 'public')));
 // Rate limiting — proteção brute force
 const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 20, message: { erro: 'Muitas tentativas. Aguarde 15 minutos.' } });
 const apiLimiter  = rateLimit({ windowMs: 60 * 1000, max: 100 });
+// Limite dedicado para /api/enviar-email — rota pública (fluxo de OTP do proprietário,
+// sem autenticação disponível), então a mitigação de abuso é via rate limit mais restrito
+// em vez de exigir login.
+const emailLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 5, message: { erro: 'Muitas tentativas de envio de e-mail. Aguarde 15 minutos.' } });
 app.use('/api/auth', authLimiter);
 app.use('/api', apiLimiter);
 
@@ -198,45 +202,123 @@ function authMiddleware(roles = []) {
     }
   };
 }
+function filtroImobiliaria(req, extra = {}) {
+  if (req.user.role === 'super_admin') {
+    return extra;
+  }
 
+  return {
+    ...extra,
+    imobiliariaId: req.user.imobiliariaId
+  };
+}
 // ═══════════════════════════════════════════════════════
 // AUTH ROUTES
 // ═══════════════════════════════════════════════════════
-app.post('/api/auth/login', async (req, res) => {
-  const { email, senha } = req.body;
-  if (!email || !senha) return res.status(422).json({ erro: 'E-mail e senha são obrigatórios.' });
-  const user = await db.usuarios.findOne({ email: email.toLowerCase().trim(), ativo: true });
-  if (!user) return res.status(401).json({ erro: 'Credenciais inválidas.' });
-  const ok = await bcrypt.compare(senha, user.senha);
-  if (!ok) return res.status(401).json({ erro: 'Credenciais inválidas.' });
-
-  let imobiliaria = null;
-  if (user.imobiliariaId) {
-    imobiliaria = await db.imobiliarias.findOne({ _id: user.imobiliariaId });
-  }
-
-  const token = jwt.sign({
-    userId:          user._id,
-    nome:            user.nome,
-    email:           user.email,
-    role:            user.role,
-    imobiliariaId:   user.imobiliariaId   || null,
-    imobiliariaSlug: user.imobiliariaSlug || null,
-    imobiliariaNome: imobiliaria?.nome    || null
-  }, JWT_SECRET, { expiresIn: '8h' });
-
-  await log('auth', `Login: ${user.email} (${user.role})`, null, user.imobiliariaId);
-  res.json({ token, user: { nome: user.nome, email: user.email, role: user.role, imobiliaria } });
-});
-
-app.get('/api/auth/me', authMiddleware(), async (req, res) => {
-  const user = await db.usuarios.findOne({ _id: req.user.userId });
-  if (!user) return res.status(404).json({ erro: 'Usuário não encontrado.' });
-  const { senha, ...safe } = user;
-  res.json(safe);
-});
 
 // ═══════════════════════════════════════════════════════
+// AUTH ROUTES (CORRIGIDO)
+// ═══════════════════════════════════════════════════════
+
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { email, senha } = req.body;
+
+    if (!email || !senha) {
+      return res.status(422).json({ erro: 'E-mail e senha são obrigatórios.' });
+    }
+
+    const login = email.toLowerCase().trim();
+
+    // 🔐 busca usuário
+    let user = await db.usuarios.findOne({
+      email: login,
+      ativo: true
+    });
+
+    // 🔐 fallback do super admin (garantia)
+    if (!user && login === 'admin' || login === 'admin@agemob.com.br') {
+      user = await db.usuarios.findOne({
+        email: 'admin@agemob.com.br',
+        ativo: true
+      });
+    }
+
+    if (!user) {
+      return res.status(401).json({ erro: 'Credenciais inválidas.' });
+    }
+
+    const ok = await bcrypt.compare(senha, user.senha);
+
+    if (!ok) {
+      return res.status(401).json({ erro: 'Credenciais inválidas.' });
+    }
+
+    let imobiliaria = null;
+
+    if (user.imobiliariaId) {
+      imobiliaria = await db.imobiliarias.findOne({
+        _id: user.imobiliariaId
+      });
+    }
+
+    const token = jwt.sign(
+      {
+        userId: user._id,
+        nome: user.nome,
+        email: user.email,
+        role: user.role,
+        imobiliariaId: user.imobiliariaId || null,
+        imobiliariaSlug: user.imobiliariaSlug || null,
+        imobiliariaNome: imobiliaria?.nome || null
+      },
+      JWT_SECRET,
+      { expiresIn: '8h' }
+    );
+
+    await log('auth', `Login: ${user.email} (${user.role})`, null, user.imobiliariaId);
+
+    return res.json({
+      token,
+      user: {
+        _id: user._id,
+        nome: user.nome,
+        email: user.email,
+        role: user.role,
+        imobiliariaId: user.imobiliariaId || null,
+        imobiliariaSlug: user.imobiliariaSlug || null,
+        imobiliaria
+      }
+    });
+
+  } catch (err) {
+    return res.status(500).json({ erro: 'Erro interno no login' });
+  }
+});
+
+
+// ═══════════════════════════════════════════════════════
+// AUTH ME ROUTE
+// ═══════════════════════════════════════════════════════
+
+app.get('/api/auth/me', authMiddleware(), async (req, res) => {
+  try {
+    const user = await db.usuarios.findOne({
+      _id: req.user.userId
+    });
+
+    if (!user) {
+      return res.status(404).json({ erro: 'Usuário não encontrado.' });
+    }
+
+    const { senha, ...safe } = user;
+
+    return res.json(safe);
+
+  } catch (err) {
+    return res.status(500).json({ erro: 'Erro ao buscar usuário' });
+  }
+});// ═══════════════════════════════════════════════════════
 // SUPER ADMIN ROUTES — /api/admin/*
 // ═══════════════════════════════════════════════════════
 
@@ -885,7 +967,13 @@ app.get('/api/base-url', (req, res) => res.json({ baseUrl: getBaseUrl(req) }));
 app.get('/api/autorizacoes/codigo/:codigo', async (req, res) => {
   const aut = await db.autorizacoes.findOne({ codigo: req.params.codigo });
   if (!aut) return res.json(null);
-  res.json(aut);
+  // Rota pública (sem auth) — expõe só o necessário para o pré-preenchimento do
+  // formulário do proprietário, sem vazar imobiliariaId/corretor/hash/evidências.
+  res.json({
+    preenchidoPorCorretor: aut.preenchidoPorCorretor || false,
+    proprietario: aut.proprietario || null,
+    imovel:       aut.imovel       || null
+  });
 });
 
 // Buscar dados da imobiliária pelo slug (para branding no link do proprietário)
@@ -917,8 +1005,9 @@ app.post('/api/fluxo-config', authMiddleware(['admin','super_admin']), async (re
 
 // Listar autorizações (filtradas por imobiliária)
 app.get('/api/autorizacoes', authMiddleware(['admin','corretor','super_admin']), async (req, res) => {
-  const query = req.user.role === 'super_admin' ? {} : { imobiliariaId: req.user.imobiliariaId };
-  const lista = await db.autorizacoes.find(query).sort({ criadoEm: -1 });
+  const lista = await db.autorizacoes
+  .find(filtroImobiliaria(req))
+  .sort({ criadoEm: -1 });
   res.json(lista);
 });
 
@@ -1103,7 +1192,7 @@ async function enviarEmailBrevo(destino, assunto, texto, html, nomeImob) {
   return r.json();
 }
 
-app.post('/api/enviar-email', async (req, res) => {
+app.post('/api/enviar-email', emailLimiter, async (req, res) => {
   try {
     const { destino, assunto, texto, html, nomeImob } = req.body;
     if (!destino || !assunto || (!texto && !html)) return res.status(422).json({ erro: 'Campos obrigatórios.' });
