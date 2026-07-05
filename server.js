@@ -10,11 +10,16 @@ const bcrypt     = require('bcryptjs');
 const jwt        = require('jsonwebtoken');
 const rateLimit  = require('express-rate-limit');
 const Datastore  = require('nedb-promises');
+const crypto     = require('crypto');
 const { gerarAutorizacaoPDF } = require('./services/pdf');
 
 const app  = express();
 const PORT = process.env.PORT || 3000;
-const JWT_SECRET = process.env.JWT_SECRET || 'agemob-dev-secret-mude-em-producao';
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  console.error('ERRO FATAL: JWT_SECRET não definido. Configure a variável de ambiente JWT_SECRET antes de iniciar o servidor.');
+  process.exit(1);
+}
 
 app.set('trust proxy', 1);
 
@@ -38,6 +43,13 @@ const db = {
   config:              Datastore.create({ filename: path.join(DATA_DIR, 'config.db'),              autoload: true }),
   logs:                Datastore.create({ filename: path.join(DATA_DIR, 'logs.db'),                autoload: true })
 };
+
+// Índice único no campo "codigo" — última linha de defesa contra colisão/duplicidade
+// entre autorizações (inclusive entre imobiliárias diferentes). `sparse` evita
+// conflito com qualquer documento legado que porventura não tenha o campo.
+db.autorizacoes.ensureIndex({ fieldName: 'codigo', unique: true, sparse: true }).catch(e => {
+  console.error('⚠️  Não foi possível criar índice único em autorizacoes.codigo (verifique duplicidade existente):', e.message);
+});
 
 const STORAGE_BASE = process.env.STORAGE_DIR || path.join(__dirname, 'storage');
 ['originais','assinados'].forEach(d => fs.mkdirSync(path.join(STORAGE_BASE, d), { recursive: true }));
@@ -155,10 +167,26 @@ async function log(tipo, mensagem, dados, imobiliariaId) {
   catch(e) { console.error('Log error:', e.message); }
 }
 
+// Gera um código de 9 caracteres usando RNG criptograficamente seguro
+// (crypto.randomInt) em vez de Math.random() — mesmo formato/alfabeto de sempre,
+// então códigos já emitidos continuam válidos e o link público não muda de forma.
 function genCode() {
   const c = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let s = '';
-  for (let i = 0; i < 9; i++) s += c[Math.floor(Math.random() * c.length)];
+  for (let i = 0; i < 9; i++) s += c[crypto.randomInt(0, c.length)];
   return s;
+}
+
+// Gera um código e garante que ele ainda não existe no banco antes de devolvê-lo.
+// Usado nos pontos em que o próprio servidor decide o código (nunca quando o
+// código já foi definido pelo cliente). Em caso de colisão (estatisticamente
+// improvável: 32^9 combinações), tenta novamente algumas vezes.
+async function gerarCodigoUnico() {
+  for (let tentativa = 0; tentativa < 10; tentativa++) {
+    const codigo = genCode();
+    const existe = await db.autorizacoes.findOne({ codigo });
+    if (!existe) return codigo;
+  }
+  throw new Error('Não foi possível gerar um código único. Tente novamente.');
 }
 
 function getBaseUrl(req) {
@@ -1023,7 +1051,7 @@ app.post('/api/autorizacoes', authMiddleware(['admin','corretor']), async (req, 
       }
       return res.status(402).json({ erro: limite.erro, usadas: limite.usadas, limiteTotal: (limite.limite||0)+(limite.extras||0) });
     }
-    const codigo = genCode();
+    const codigo = await gerarCodigoUnico();
     const linkPublico = `${getBaseUrl(req)}/autorizacao/${codigo}`;
     const aut = {
       codigo, linkPublico,
@@ -1046,8 +1074,8 @@ app.post('/api/autorizacoes', authMiddleware(['admin','corretor']), async (req, 
 // Criar rascunho assistido (corretor preenche os dados) — com verificação de limite
 app.post('/api/autorizacoes/rascunho', authMiddleware(['admin','corretor']), async (req, res) => {
   try {
-    const { codigo, proprietario, imovel } = req.body;
-    if (!codigo || !proprietario?.nome) return res.status(422).json({ erro: 'Dados incompletos.' });
+    const { proprietario, imovel } = req.body;
+    if (!proprietario?.nome) return res.status(422).json({ erro: 'Dados incompletos.' });
     const limite = await verificarLimite(req.user.imobiliariaId);
     if (!limite.ok) {
       if (limite.erro === 'Imobiliária não encontrada.') {
@@ -1055,6 +1083,7 @@ app.post('/api/autorizacoes/rascunho', authMiddleware(['admin','corretor']), asy
       }
       return res.status(402).json({ erro: limite.erro });
     }
+    const codigo = await gerarCodigoUnico();
     const linkPublico = `${getBaseUrl(req)}/autorizacao/${codigo}`;
     const aut = {
       codigo, linkPublico,
@@ -1087,7 +1116,7 @@ app.post('/api/autorizacoes/manual', async (req, res) => {
     const { proprietario, imovel, tipo, status, vencimento, corretor, inseridoManualmente } = req.body;
     if (!proprietario?.nome || !imovel?.end) return res.status(422).json({ erro: 'Dados incompletos.' });
 
-    const codigo = genCode();
+    const codigo = await gerarCodigoUnico();
     const aut = {
       codigo,
       proprietario,

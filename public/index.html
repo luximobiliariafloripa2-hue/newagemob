@@ -1524,7 +1524,7 @@ function baixarPDFAutorizacao(idx){
   const W=210, M=18; let y=20;
   const tipoTxt = a.tipo==='exclusiva' ? 'COM EXCLUSIVIDADE' : 'SEM EXCLUSIVIDADE';
   const d=new Date();
-  const code = a.code || 'AGM-'+Math.random().toString(36).substr(2,9).toUpperCase();
+  const code = a.code || 'SEM-CODIGO';
 
   const h=(t,size=11)=>{doc.setFont('helvetica','bold');doc.setFontSize(size);doc.text(t,M,y);y+=6;};
   const p=(t,size=9.5)=>{
@@ -1583,7 +1583,7 @@ function reenviarLink(idx){
     showToast('Autorização já concluída.', 'info');
     return;
   }
-  const code = a.code || 'AGM-'+Math.random().toString(36).substr(2,9).toUpperCase();
+  const code = a.code || 'SEM-CODIGO';
   const link = (window.AGEMOB_BASE_URL || window.location.origin) + '/autorizacao/' + code;
   navigator.clipboard?.writeText(link).catch(()=>{});
   showToast('Link copiado com sucesso.', 'success');
@@ -1616,11 +1616,6 @@ function showToast(msg, tipo='success'){
 }
 
 /* ================= LINK / MODAL ================= */
-function genCode(){
-  const c="ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; let s="";
-  for(let i=0;i<9;i++) s+=c[Math.floor(Math.random()*c.length)];
-  return s;
-}
 function novaAutorizacao(){
   document.getElementById('modalEscolha').classList.add('open');
 }
@@ -1642,9 +1637,8 @@ async function fluxoVazio(){
     const salvo = await r.json();
     AG.code = salvo.codigo;
   } catch(e) {
-    // Fallback: se falhar (ex: sem conexão), usa código local
-    AG.code = genCode();
-    console.warn('Rascunho não salvo no servidor:', e.message);
+    showToast('Não foi possível gerar o link. Tente novamente.', 'error');
+    return;
   }
   const link = (window.AGEMOB_BASE_URL || window.location.origin) + '/autorizacao/' + AG.code;
   document.getElementById('genLink').value = link;
@@ -1673,9 +1667,7 @@ async function gerarLinkAssistido(){
   if(!nome || !cpf || !zap || !email || !iend || !ibairro || !ivalorRaw){
     showToast('Preencha todos os campos obrigatórios (*).', 'error'); return;
   }
-  const codigo = genCode();
   const dados = {
-    codigo,
     proprietario: {
       nome, cpf,
       nasc:  document.getElementById('a_nasc').value,
@@ -1701,8 +1693,9 @@ async function gerarLinkAssistido(){
       body: JSON.stringify(dados)
     });
     if(!r.ok) throw new Error('Falha ao salvar');
-    AG.code = codigo;
-    const link = (window.AGEMOB_BASE_URL || window.location.origin) + '/autorizacao/' + codigo;
+    const salvo = await r.json();
+    AG.code = salvo.codigo;
+    const link = salvo.linkPublico || ((window.AGEMOB_BASE_URL || window.location.origin) + '/autorizacao/' + salvo.codigo);
     document.getElementById('modalAssistido').classList.remove('open');
     document.getElementById('genLink').value = link;
     document.getElementById('copyBtn').textContent='Copiar';
@@ -1779,7 +1772,7 @@ function openOwner(){
   document.getElementById('viewAdmin').classList.add('hidden');
   document.getElementById('viewOwner').classList.remove('hidden');
   document.getElementById('btnBack').classList.remove('hidden');
-  document.getElementById('ownerCode').textContent = AG.code || (AG.code=genCode());
+  document.getElementById('ownerCode').textContent = AG.code || 'DEMO-PREVIEW';
   step=1; showStep();
   window.scrollTo(0,0);
 }
