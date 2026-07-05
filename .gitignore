@@ -2,5 +2,8 @@ node_modules/
 data/
 storage/
 .env
+.env.local
+.env.*.local
 *.db
 *.log
+.claude/
