@@ -1138,6 +1138,79 @@ app.post('/api/autorizacoes/manual', async (req, res) => {
   } catch(e) { res.status(500).json({ erro: e.message }); }
 });
 
+// Adapta os campos salvos no banco (formato do formulário do proprietário) para o
+// formato esperado por gerarAutorizacaoPDF, sem alterar o que é persistido em `aut`
+// e sem alterar services/pdf.js (layout e cláusulas permanecem intocados).
+function adaptarParaPDF(aut, imob) {
+  const juntarEndereco = (o) => o
+    ? [
+        [o.end, o.num].filter(Boolean).join(', '),
+        [o.bairro, o.cidade].filter(Boolean).join(', ')
+      ].filter(Boolean).join(' - ')
+    : null;
+
+  const enderecoImob = imob?.endereco
+    ? [
+        [imob.endereco.logradouro, imob.endereco.numero].filter(Boolean).join(', ') +
+          (imob.endereco.complemento ? ' - ' + imob.endereco.complemento : ''),
+        [imob.endereco.bairro, imob.endereco.cidade].filter(Boolean).join(', ')
+      ].filter(Boolean).join(' - ')
+    : '';
+
+  return {
+    autPdf: {
+      codigo: aut.codigo,
+      tipo:   aut.tipo,
+      proprietario: {
+        nome:        aut.proprietario?.nome,
+        cpf:         aut.proprietario?.cpf,
+        rg:          aut.proprietario?.rg,
+        estadoCivil: aut.proprietario?.civil,
+        profissao:   aut.proprietario?.prof,
+        whatsapp:    aut.proprietario?.zap,
+        email:       aut.proprietario?.email,
+        endereco:    juntarEndereco(aut.proprietario)
+      },
+      imovel: {
+        tipo:     aut.imovel?.tipo,
+        endereco: juntarEndereco(aut.imovel),
+        valor:    aut.imovel?.valor
+      }
+    },
+    imobPdf: {
+      razao:    imob?.razaoSocial || imob?.nomeFantasia || 'Lux House Imóveis',
+      cnpj:     imob?.cnpj || '',
+      endereco: enderecoImob
+    }
+  };
+}
+
+// Gera o PDF oficial da autorização assinada e salva em storage/assinados/.
+// Falha aqui NÃO desfaz a assinatura já persistida (mesma tolerância a erro já
+// usada hoje para a escrita paralela no Firebase) — apenas registra aviso no log.
+async function gerarESalvarPDFAssinatura(aut) {
+  try {
+    const imob = aut.imobiliariaId
+      ? await db.imobiliarias.findOne({ _id: aut.imobiliariaId })
+      : await db.imobiliarias.findOne({ slug: 'lux-house' });
+
+    const { autPdf, imobPdf } = adaptarParaPDF(aut, imob);
+    const buffer = await gerarAutorizacaoPDF(autPdf, imobPdf);
+
+    const pdfPath = `assinados/${aut.codigo}.pdf`;
+    await fs.promises.writeFile(path.join(STORAGE_BASE, pdfPath), buffer);
+
+    await db.autorizacoes.update({ codigo: aut.codigo }, { $set: { pdfPath } });
+  } catch (e) {
+    await log(
+      'aviso',
+      `Falha ao gerar/salvar PDF oficial da autorização ${aut.codigo}: ${e.message}`,
+      null,
+      aut.imobiliariaId || null
+    );
+  }
+}
+
 // Salvar autorização assinada (chamado pelo proprietário — sem auth)
 app.post('/api/autorizacoes/assinar', async (req, res) => {
   try {
@@ -1167,6 +1240,7 @@ app.post('/api/autorizacoes/assinar', async (req, res) => {
     } else {
       await db.autorizacoes.insert(aut);
     }
+    await gerarESalvarPDFAssinatura(aut);
     // Alerta se imobiliariaId ficou null — indica link gerado sem salvar rascunho
     if (!aut.imobiliariaId) {
       await log('aviso', `Autorização ${codigo} assinada SEM imobiliariaId — não aparecerá no painel`, null, null);
