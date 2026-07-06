@@ -75,6 +75,29 @@ function gerarAutorizacaoPDF(aut, imob) {
     titulo('5. ASSINATURA ELETRÔNICA');
     paragrafo('Este documento será assinado eletronicamente, atendendo aos requisitos de integridade, autenticidade e não repúdio previstos na legislação brasileira (MP 2.200-2/2001 e Lei 14.063/2020). A assinatura e o log de evidências integram este instrumento.');
 
+    titulo('6. VALIDAÇÃO E AUTENTICIDADE');
+    linha('Status da autorização:', 'Assinada eletronicamente e registrada na plataforma AGEMOB.');
+    doc.moveDown(0.3);
+    doc.font('Helvetica-Bold').fontSize(13).fillColor('#0B7A5C').text(aut.codigo);
+    doc.moveDown(0.3);
+    if (aut.assinadoEm) {
+      const dAssin = new Date(aut.assinadoEm);
+      linha('Data e hora da assinatura:', `${dAssin.toLocaleDateString('pt-BR')} às ${dAssin.toLocaleTimeString('pt-BR')}`);
+    }
+    linha('Documento emitido em:', `${agora.toLocaleDateString('pt-BR')} às ${agora.toLocaleTimeString('pt-BR')}`);
+    if (aut.hash) {
+      linha('Algoritmo criptográfico:', 'SHA-256');
+      doc.font('Helvetica-Bold').fontSize(9.5).fillColor('#101828').text('Hash oficial da autorização (SHA-256):');
+      doc.font('Courier').fontSize(8).fillColor('#475467').text(aut.hash, { width: W - 104 });
+    }
+    if (aut.urlValidacao) {
+      doc.moveDown(0.2);
+      linha('Verificação pública:', aut.urlValidacao);
+    }
+    linha('Plataforma emissora:', 'AGEMOB — Sistema de Autorizações Digitais para Imobiliárias e Corretores.');
+    doc.moveDown(0.4);
+    paragrafo('Este documento foi registrado eletronicamente pela plataforma AGEMOB. Sua autenticidade pode ser verificada a qualquer momento utilizando o código da autorização e o hash criptográfico acima. Qualquer alteração posterior no conteúdo poderá invalidar sua integridade criptográfica, tornando o hash incompatível com o registro original armazenado pela plataforma.');
+
     doc.moveDown(2);
     doc.font('Helvetica').fontSize(9).fillColor('#101828');
     doc.text('_______________________________________________');

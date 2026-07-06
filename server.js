@@ -1159,8 +1159,11 @@ function adaptarParaPDF(aut, imob) {
 
   return {
     autPdf: {
-      codigo: aut.codigo,
-      tipo:   aut.tipo,
+      codigo:       aut.codigo,
+      tipo:         aut.tipo,
+      hash:         aut.hashDadosAutorizacao || aut.hash || null,
+      assinadoEm:   aut.assinadoEm || null,
+      urlValidacao: `${getBaseUrl()}/validar/${aut.codigo}`,
       proprietario: {
         nome:        aut.proprietario?.nome,
         cpf:         aut.proprietario?.cpf,
