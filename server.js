@@ -1211,6 +1211,32 @@ async function gerarESalvarPDFAssinatura(aut) {
   }
 }
 
+// Calcula o hash oficial dos dados principais da autorização — serialização
+// determinística (chaves em ordem fixa, valores normalizados) para permitir
+// que o próprio servidor recalcule e confira este valor no futuro.
+function calcularHashDadosAutorizacao(aut) {
+  const payload = JSON.stringify({
+    codigo: aut.codigo,
+    tipo:   aut.tipo,
+    proprietario: {
+      nome:  aut.proprietario?.nome  || '',
+      cpf:   aut.proprietario?.cpf   || '',
+      email: aut.proprietario?.email || '',
+      zap:   aut.proprietario?.zap   || ''
+    },
+    imovel: {
+      tipo:   aut.imovel?.tipo   || '',
+      end:    aut.imovel?.end    || '',
+      num:    aut.imovel?.num    || '',
+      bairro: aut.imovel?.bairro || '',
+      cidade: aut.imovel?.cidade || '',
+      valor:  aut.imovel?.valor  || 0
+    },
+    assinadoEm: aut.assinadoEm
+  });
+  return crypto.createHash('sha256').update(payload).digest('hex');
+}
+
 // Salvar autorização assinada (chamado pelo proprietário — sem auth)
 app.post('/api/autorizacoes/assinar', async (req, res) => {
   try {
@@ -1235,6 +1261,8 @@ app.post('/api/autorizacoes/assinar', async (req, res) => {
       vencimento:    venc.toLocaleDateString('pt-BR'),
       atualizadoEm:  new Date().toISOString()
     };
+    aut.hashDadosAutorizacao = calcularHashDadosAutorizacao(aut);
+    aut.hash = aut.hashDadosAutorizacao;
     if (rascunho) {
       await db.autorizacoes.update({ codigo }, { $set: { ...aut } });
     } else {
