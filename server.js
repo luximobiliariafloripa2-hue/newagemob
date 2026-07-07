@@ -1266,6 +1266,14 @@ app.post('/api/autorizacoes/assinar', async (req, res) => {
     };
     aut.hashDadosAutorizacao = calcularHashDadosAutorizacao(aut);
     aut.hash = aut.hashDadosAutorizacao;
+    aut.registroAssinatura = {
+      hashCliente:          aut.hashCliente,
+      hashDadosAutorizacao: aut.hashDadosAutorizacao,
+      hash:                 aut.hash,
+      evidencias:           aut.evidencias,
+      validacoes:           aut.validacoes,
+      assinadoEm:           aut.assinadoEm
+    };
     if (rascunho) {
       await db.autorizacoes.update({ codigo }, { $set: { ...aut } });
     } else {
