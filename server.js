@@ -1240,6 +1240,26 @@ function calcularHashDadosAutorizacao(aut) {
   return crypto.createHash('sha256').update(payload).digest('hex');
 }
 
+// Serializa qualquer valor de forma canônica — chaves de objeto ordenadas
+// alfabeticamente em toda profundidade, arrays preservam a ordem original.
+// Usada para que hashEvidencias independa da ordem em que o cliente enviou
+// os campos no JSON.
+function serializarCanonico(valor) {
+  if (Array.isArray(valor)) return '[' + valor.map(serializarCanonico).join(',') + ']';
+  if (valor && typeof valor === 'object') {
+    const chaves = Object.keys(valor).sort();
+    return '{' + chaves.map(k => JSON.stringify(k) + ':' + serializarCanonico(valor[k])).join(',') + '}';
+  }
+  return JSON.stringify(valor);
+}
+
+// Calcula o hash de integridade sobre TODO o conteúdo de registroAssinatura
+// (chamado antes de hashEvidencias existir nesse objeto — evita
+// circularidade por ordem de execução, sem excluir nenhum campo manualmente).
+function calcularHashEvidencias(registroAssinatura) {
+  return crypto.createHash('sha256').update(serializarCanonico(registroAssinatura)).digest('hex');
+}
+
 // Salvar autorização assinada (chamado pelo proprietário — sem auth)
 app.post('/api/autorizacoes/assinar', async (req, res) => {
   try {
@@ -1274,6 +1294,7 @@ app.post('/api/autorizacoes/assinar', async (req, res) => {
       validacoes:           aut.validacoes,
       assinadoEm:           aut.assinadoEm
     };
+    aut.registroAssinatura.hashEvidencias = calcularHashEvidencias(aut.registroAssinatura);
     if (rascunho) {
       await db.autorizacoes.update({ codigo }, { $set: { ...aut } });
     } else {
