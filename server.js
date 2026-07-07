@@ -941,28 +941,38 @@ app.get('/api/health', (_req, res) => res.json({ ok: true, ts: new Date().toISOS
 // Auto-cadastro publico via landing page
 app.post('/api/cadastro', async (req, res) => {
   try {
-    const { nome, cnpj, responsavel, email, telefone, whatsapp, senha } = req.body;
-    if (!nome || !cnpj || !email || !senha || !responsavel)
+    const { tipoCliente, nome, cnpj, cpf, creci, responsavel, email, telefone, whatsapp, senha, plano: planoSlugBody } = req.body;
+    const tipo = tipoCliente === 'corretor'
+      ? 'corretor'
+      : 'imobiliaria';
+    if (!nome || !email || !senha || !responsavel)
       return res.status(422).json({ erro: 'Preencha todos os campos obrigatorios.' });
+
+    if (tipo === 'imobiliaria' && !cnpj)
+      return res.status(422).json({ erro: 'CNPJ obrigatório para imobiliárias.' });
+
+    if (tipo === 'corretor' && !cpf)
+      return res.status(422).json({ erro: 'CPF obrigatório para corretores autônomos.' });
     if (senha.length < 6)
       return res.status(422).json({ erro: 'A senha deve ter pelo menos 6 caracteres.' });
 
-    const cnpjLimpo = cnpj.replace(/\D/g, '');
     const exEmail = await db.usuarios.findOne({ email: email.toLowerCase().trim() });
     if (exEmail) return res.status(422).json({ erro: 'E-mail ja cadastrado.' });
 
-    const plano = await db.planos.findOne({ slug: 'basic' });
+    const slugPlano = ['start', 'pro', 'prime'].includes(planoSlugBody) ? planoSlugBody : 'start';
+    const plano = await db.planos.findOne({ slug: slugPlano });
     const slugBase = nome.toLowerCase().normalize('NFD')
       .replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
     const slug = slugBase + '-' + Date.now().toString(36);
 
     const imob = await db.imobiliarias.insert({
-      tipoCliente:'imobiliaria', nome, razaoSocial:nome, nomeFantasia:nome,
-      slug, cnpj, email, telefone:telefone||'', whatsapp:whatsapp||'',
+      tipoCliente: tipo, nome, razaoSocial:nome, nomeFantasia:nome,
+      slug, cnpj: cnpj||'', cpf: cpf||'', creci: creci||'',
+      email, telefone:telefone||'', whatsapp:whatsapp||'',
       responsavel:{ nome:responsavel, email },
       corPrimaria:'#04273B', corSecundaria:'#C9A227',
-      planoId:plano?._id||null, planoSlug:'basic', planoNome:'Basic',
-      limiteAutorizacoes:1, creditosExtras:0,
+      planoId:plano?._id||null, planoSlug:plano?.slug||'start', planoNome:plano?.nome||'Start',
+      limiteAutorizacoes:plano?.limite ?? 10, creditosExtras:0,
       status:'ativo', ativo:true, origem:'landing',
       criadoEm:new Date().toISOString(), atualizadoEm:new Date().toISOString()
     });
@@ -974,7 +984,7 @@ app.post('/api/cadastro', async (req, res) => {
       ativo:true, criadoEm:new Date().toISOString()
     });
 
-    await log('cadastro', `Nova imobiliaria via landing: ${nome} (${email})`);
+    await log('cadastro', `Novo cliente via landing (${tipo}): ${nome} (${email})`);
     // Cria subscription trial
     try { await SubscriptionService.criar(imob._id, plano?._id, 'trial'); } catch(e) { /* non-fatal */ }
 
@@ -983,7 +993,7 @@ app.post('/api/cadastro', async (req, res) => {
       role:'admin', imobiliariaId:imob._id, imobiliariaSlug:slug, imobiliariaNome:nome
     }, JWT_SECRET, { expiresIn:'8h' });
 
-    res.json({ ok:true, token, imobiliaria:{ nome, slug, plano:'Basic', limite:1 } });
+    res.json({ ok:true, token, imobiliaria:{ nome, slug, plano: plano?.nome || 'Start', limite: plano?.limite ?? 10 } });
   } catch(e) {
     res.status(500).json({ erro: 'Falha ao criar conta. Tente novamente.' });
   }
