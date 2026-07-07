@@ -1089,6 +1089,21 @@ app.post('/api/corretores', authMiddleware(['admin']), async (req, res) => {
   } catch(e) { res.status(500).json({ erro: e.message }); }
 });
 
+// Listar corretores do próprio tenant (Admin) — allowlist estrita de campos,
+// resposta já envelopada em objeto para permitir adicionar metadados de
+// paginação (total, page, pageSize) no futuro sem quebrar contrato existente.
+app.get('/api/corretores', authMiddleware(['admin']), async (req, res) => {
+  try {
+    const lista = await db.usuarios
+      .find({ imobiliariaId: req.user.imobiliariaId, role: 'corretor' })
+      .sort({ nome: 1 });
+    const corretores = lista.map(({ _id, nome, email, creci, telefone, ativo, criadoEm }) => ({
+      _id, nome, email, creci, telefone, ativo, criadoEm
+    }));
+    res.json({ corretores });
+  } catch(e) { res.status(500).json({ erro: e.message }); }
+});
+
 // Listar autorizações (filtradas por imobiliária)
 app.get('/api/autorizacoes', authMiddleware(['admin','corretor','super_admin']), async (req, res) => {
   const lista = await db.autorizacoes
