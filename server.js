@@ -1041,6 +1041,54 @@ app.post('/api/fluxo-config', authMiddleware(['admin','super_admin']), async (re
   } catch(e) { res.status(500).json({ erro: e.message }); }
 });
 
+// ═══════════════════════════════════════════════════════
+// GESTÃO DE CORRETORES — Admin cadastra corretores do próprio tenant
+// ═══════════════════════════════════════════════════════
+
+// Criar corretor vinculado à imobiliária do Admin logado
+app.post('/api/corretores', authMiddleware(['admin']), async (req, res) => {
+  try {
+    const { nome, email, senha, creci, telefone } = req.body;
+    if (!nome || !email || !senha) {
+      return res.status(422).json({ erro: 'Nome, e-mail e senha são obrigatórios.' });
+    }
+    if (senha.length < 6) {
+      return res.status(422).json({ erro: 'A senha deve ter pelo menos 6 caracteres.' });
+    }
+
+    const imob = await db.imobiliarias.findOne({ _id: req.user.imobiliariaId });
+    if (!imob) return res.status(404).json({ erro: 'Imobiliária não encontrada.' });
+    if (imob.tipoCliente !== 'imobiliaria') {
+      return res.status(403).json({ erro: 'Corretor autônomo não pode cadastrar subusuários.' });
+    }
+
+    const plano = await db.planos.findOne({ _id: imob.planoId });
+    const maxUsuarios = plano?.maxUsuarios ?? 1;
+    if (maxUsuarios !== -1) {
+      const totalCorretores = await db.usuarios.count({ imobiliariaId: req.user.imobiliariaId, role: 'corretor' });
+      if (totalCorretores >= maxUsuarios) {
+        return res.status(403).json({ erro: 'Limite de corretores do plano atingido.' });
+      }
+    }
+
+    const exEmail = await db.usuarios.findOne({ email: email.toLowerCase().trim() });
+    if (exEmail) return res.status(422).json({ erro: 'E-mail já cadastrado.' });
+
+    const hash = await bcrypt.hash(senha, 10);
+    const corretor = await db.usuarios.insert({
+      nome, email: email.toLowerCase().trim(), senha: hash,
+      role: 'corretor', creci: creci || '', telefone: telefone || '',
+      imobiliariaId: req.user.imobiliariaId, imobiliariaSlug: req.user.imobiliariaSlug,
+      convidadoPor: req.user.userId,
+      ativo: true, criadoEm: new Date().toISOString(), atualizadoEm: new Date().toISOString()
+    });
+
+    await log('corretor', `Corretor criado: ${nome} (${email})`, null, req.user.imobiliariaId);
+    const { senha: _senha, ...corretorSafe } = corretor;
+    res.json({ ok: true, corretor: corretorSafe });
+  } catch(e) { res.status(500).json({ erro: e.message }); }
+});
+
 // Listar autorizações (filtradas por imobiliária)
 app.get('/api/autorizacoes', authMiddleware(['admin','corretor','super_admin']), async (req, res) => {
   const lista = await db.autorizacoes
