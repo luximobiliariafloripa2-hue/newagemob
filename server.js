@@ -1252,7 +1252,7 @@ app.post('/api/autorizacoes/assinar', async (req, res) => {
       codigo, proprietario, imovel,
       tipo:          tipo || 'simples',
       status:        'assinado',
-      hash:          hash || null,
+      hashCliente:   hash || null,
       evidencias:    evidencias || null,
       validacoes:    { otp: otp||[], facial: facial||null, liveness: liveness||null, uploads: uploads||[] },
       imobiliariaId:   rascunho?.imobiliariaId   || null,
