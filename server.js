@@ -1143,6 +1143,37 @@ app.patch('/api/corretores/:id', authMiddleware(['admin']), async (req, res) => 
   } catch(e) { res.status(500).json({ erro: e.message }); }
 });
 
+// Ativar/desativar corretor do próprio tenant (Admin) — único campo mutável é
+// `ativo`; login já filtra por ativo:true, então desativar aqui já basta para
+// bloquear acesso, sem precisar revogar token (expira em até 8h).
+app.patch('/api/corretores/:id/status', authMiddleware(['admin']), async (req, res) => {
+  try {
+    const alvo = await db.usuarios.findOne({
+      _id: req.params.id, imobiliariaId: req.user.imobiliariaId, role: 'corretor'
+    });
+    if (!alvo) return res.status(404).json({ erro: 'Corretor não encontrado.' });
+
+    const { ativo } = req.body;
+    if (typeof ativo !== 'boolean') {
+      return res.status(422).json({ erro: 'Campo "ativo" deve ser booleano.' });
+    }
+
+    const upd = { ativo, atualizadoEm: new Date().toISOString() };
+    await db.usuarios.update({ _id: alvo._id }, { $set: upd });
+    const atualizado = { ...alvo, ...upd };
+
+    await log('corretor',
+      `${ativo ? 'Corretor ativado' : 'Corretor desativado'}: ${atualizado.nome} (${atualizado.email})`,
+      null, req.user.imobiliariaId);
+
+    res.json({ ok: true, corretor: {
+      _id: atualizado._id, nome: atualizado.nome, email: atualizado.email,
+      telefone: atualizado.telefone, creci: atualizado.creci, ativo: atualizado.ativo,
+      criadoEm: atualizado.criadoEm, atualizadoEm: atualizado.atualizadoEm
+    }});
+  } catch(e) { res.status(500).json({ erro: e.message }); }
+});
+
 // Listar autorizações (filtradas por imobiliária)
 app.get('/api/autorizacoes', authMiddleware(['admin','corretor','super_admin']), async (req, res) => {
   const lista = await db.autorizacoes
