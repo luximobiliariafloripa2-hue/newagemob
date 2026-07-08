@@ -1174,6 +1174,31 @@ app.patch('/api/corretores/:id/status', authMiddleware(['admin']), async (req, r
   } catch(e) { res.status(500).json({ erro: e.message }); }
 });
 
+// Redefinir senha de corretor do próprio tenant (Admin) — único campo mutável
+// é `senha` (sempre re-hasheada); não retorna hash nem qualquer dado sensível,
+// só confirmação { ok:true }.
+app.patch('/api/corretores/:id/senha', authMiddleware(['admin']), async (req, res) => {
+  try {
+    const alvo = await db.usuarios.findOne({
+      _id: req.params.id, imobiliariaId: req.user.imobiliariaId, role: 'corretor'
+    });
+    if (!alvo) return res.status(404).json({ erro: 'Corretor não encontrado.' });
+
+    const { senha } = req.body;
+    if (!senha || senha.length < 6) {
+      return res.status(422).json({ erro: 'A senha deve ter pelo menos 6 caracteres.' });
+    }
+
+    const hash = await bcrypt.hash(senha, 10);
+    const upd = { senha: hash, atualizadoEm: new Date().toISOString() };
+    await db.usuarios.update({ _id: alvo._id }, { $set: upd });
+
+    await log('corretor', `Senha redefinida para corretor: ${alvo.nome} (${alvo.email})`, null, req.user.imobiliariaId);
+
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ erro: e.message }); }
+});
+
 // Listar autorizações (filtradas por imobiliária)
 app.get('/api/autorizacoes', authMiddleware(['admin','corretor','super_admin']), async (req, res) => {
   const lista = await db.autorizacoes
