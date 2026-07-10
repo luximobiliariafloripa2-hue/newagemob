@@ -913,7 +913,7 @@ label{display:block;font-size:13px;font-weight:600;color:var(--ink-2);margin-bot
     <div class="legal" id="sigMeta"></div>
     <div class="nav-row">
       <button class="btn btn-ghost" onclick="prevStep(5)">← Voltar</button>
-      <button class="btn btn-primary btn-lg" onclick="assinar()">Assinar e concluir ✓</button>
+      <button class="btn btn-primary btn-lg" id="btnAssinar" onclick="assinar()">Assinar e concluir ✓</button>
     </div>
   </section>
 
@@ -3741,6 +3741,8 @@ function v2RegistrarAceite(chk){
 
 /* ════════════ 4 + 11 + 12. ASSINATURA (mantida) + HASH + ASSINANTES ADICIONAIS ════════════ */
 assinar = async function(){
+  const btnAssinar = document.getElementById('btnAssinar');
+  if(btnAssinar && btnAssinar.disabled) return; // já em andamento — ignora clique repetido
   /* bloqueios jurídicos antes da assinatura */
   if(!V2D.aceite){ showToast('Marque o aceite expresso para concluir a assinatura.','error'); return; }
   if(v2Cfg.facialObrigatorio && v2Fila.includes('facial') && !(V2D.facial&&V2D.facial.aprovado)){
@@ -3755,54 +3757,39 @@ assinar = async function(){
     if(!n){ alert('Digite seu nome para assinar.'); return; }
     AG.sigImg=typedToImage(n);
   }
-  /* evidências do exato momento da assinatura + hash SHA-256 do documento */
-  V2D.evidAssinatura = V2E.snapshot();
-  const payload = JSON.stringify({
-    codigo:AG.code, tipo:AG.tipo, proprietario:{nome:V('p_nome'),cpf:V('p_cpf'),email:V('p_email'),zap:V('p_zap')},
-    imovel:{tipo:V('i_tipo'),end:V('i_end'),num:V('i_num'),bairro:V('i_bairro'),cidade:V('i_cidade'),valor:moneyVal()},
-    assinatura:AG.sigImg, aceite:V2D.aceite, evidencias:V2D.evidAssinatura,
-    uploads:Object.values(V2D.uploads).map(u=>({tipo:u.tipo,hash:u.hash})),
-    otp:Object.values(V2D.otp).filter(o=>o.validado).map(o=>({canal:o.canal,destino:o.destino,validadoEm:o.dataValidacao})),
-    facial:V2D.facial?{compatibilidade:V2D.facial.compatibilidade,aprovado:V2D.facial.aprovado}:null,
-    liveness:V2D.liveness?{aprovado:V2D.liveness.aprovado}:null
-  });
-  V2D.hash = await v2SHA256(payload);
-  v2Evento('Assinatura eletrônica concluída','SHA-256 '+V2D.hash.slice(0,20)+'… · IP '+(V2E.ip||'—'));
-
-  /* registro no painel — idêntico ao comportamento original */
-  const valor=moneyVal();
-  const venc=new Date(); venc.setDate(venc.getDate()+365);
-  AG.autorizacoes.unshift({ prop:V('p_nome'), imovel:`${V('i_tipo')} · ${V('i_bairro')}`,
-    valor:valor||0, tipo:AG.tipo, status:'ativa', venc:venc.toLocaleDateString('pt-BR'),
-    corretor:'Lucas Siqueira', code:AG.code, hash:V2D.hash });
-  notificarMudancaStatus();
-
-  /* registro permanente no servidor para validação por QR Code */
+  if(btnAssinar){ btnAssinar.disabled=true; btnAssinar.textContent='Assinando…'; }
   try{
-    await fetch('/api/autorizacoes/assinar', {
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({
-        codigo:AG.code,
-        proprietario:{ nome:V('p_nome'), cpf:V('p_cpf'), email:V('p_email'), zap:V('p_zap'),
-          civil:V('p_civil'), prof:V('p_prof'), rg:V('p_rg')||'' },
-        imovel:{ tipo:V('i_tipo'), end:V('i_end'), num:V('i_num'), comp:V('i_comp')||'',
-          bairro:V('i_bairro'), cidade:V('i_cidade'), valor:moneyVal() },
-        tipo:AG.tipo,
-        hash:V2D.hash,
-        evidencias:V2D.evidAssinatura,
-        otp:Object.values(V2D.otp).filter(o=>o.validado).map(o=>({canal:o.canal,destino:o.destino,validadoEm:o.dataValidacao})),
-        facial:V2D.facial?{compatibilidade:V2D.facial.compatibilidade,aprovado:V2D.facial.aprovado}:null,
-        liveness:V2D.liveness?{aprovado:V2D.liveness.aprovado}:null,
-        uploads:Object.values(V2D.uploads).map(u=>({tipo:u.tipo,hash:u.hash})),
-        assinadoEm:new Date().toISOString()
-      })
+    /* evidências do exato momento da assinatura + hash SHA-256 do documento */
+    V2D.evidAssinatura = V2E.snapshot();
+    const payload = JSON.stringify({
+      codigo:AG.code, tipo:AG.tipo, proprietario:{nome:V('p_nome'),cpf:V('p_cpf'),email:V('p_email'),zap:V('p_zap')},
+      imovel:{tipo:V('i_tipo'),end:V('i_end'),num:V('i_num'),bairro:V('i_bairro'),cidade:V('i_cidade'),valor:moneyVal()},
+      assinatura:AG.sigImg, aceite:V2D.aceite, evidencias:V2D.evidAssinatura,
+      uploads:Object.values(V2D.uploads).map(u=>({tipo:u.tipo,hash:u.hash})),
+      otp:Object.values(V2D.otp).filter(o=>o.validado).map(o=>({canal:o.canal,destino:o.destino,validadoEm:o.dataValidacao})),
+      facial:V2D.facial?{compatibilidade:V2D.facial.compatibilidade,aprovado:V2D.facial.aprovado}:null,
+      liveness:V2D.liveness?{aprovado:V2D.liveness.aprovado}:null
     });
-  }catch(e){ console.warn('Falha ao salvar validação no servidor:', e); }
+    V2D.hash = await v2SHA256(payload);
+    v2Evento('Assinatura eletrônica concluída','SHA-256 '+V2D.hash.slice(0,20)+'… · IP '+(V2E.ip||'—'));
 
-  /* assinantes adicionais (cônjuge, coproprietários, testemunhas) */
-  if(v2FilaPos.length){ v2RenderAssinantes(); return; }
-  v2Concluir();
+    /* registro no painel — idêntico ao comportamento original */
+    const valor=moneyVal();
+    const venc=new Date(); venc.setDate(venc.getDate()+365);
+    AG.autorizacoes.unshift({ prop:V('p_nome'), imovel:`${V('i_tipo')} · ${V('i_bairro')}`,
+      valor:valor||0, tipo:AG.tipo, status:'ativa', venc:venc.toLocaleDateString('pt-BR'),
+      corretor:'Lucas Siqueira', code:AG.code, hash:V2D.hash });
+    notificarMudancaStatus();
+
+    /* assinantes adicionais (cônjuge, coproprietários, testemunhas) — assinatura segue em
+       andamento até v2Concluir() rodar; botão permanece desabilitado nesse caminho */
+    if(v2FilaPos.length){ v2RenderAssinantes(); return; }
+    v2Concluir();
+  }catch(e){
+    console.warn('Falha ao concluir a assinatura:', e);
+    if(btnAssinar){ btnAssinar.disabled=false; btnAssinar.textContent='Assinar e concluir ✓'; }
+    showToast('Falha ao concluir a assinatura. Tente novamente.','error');
+  }
 };
 function v2Concluir(){
   capturarComissaoEConjuge();

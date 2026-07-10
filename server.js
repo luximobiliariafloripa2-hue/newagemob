@@ -1456,6 +1456,11 @@ app.post('/api/autorizacoes/assinar', async (req, res) => {
     const venc = new Date(); venc.setDate(venc.getDate() + 365);
     // Busca rascunho existente para preservar imobiliariaId
     const rascunho = await db.autorizacoes.findOne({ codigo });
+    // Idempotência: se esta autorização já foi assinada, não reprocessa
+    // (evita duplicar PDF, Dossiê, log e notificação em caso de reenvio)
+    if (rascunho && rascunho.status === 'assinado') {
+      return res.json({ ok: true });
+    }
     const aut = {
       codigo, proprietario, imovel,
       tipo:          tipo || 'simples',
