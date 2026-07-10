@@ -3784,7 +3784,7 @@ assinar = async function(){
     /* assinantes adicionais (cônjuge, coproprietários, testemunhas) — assinatura segue em
        andamento até v2Concluir() rodar; botão permanece desabilitado nesse caminho */
     if(v2FilaPos.length){ v2RenderAssinantes(); return; }
-    v2Concluir();
+    await v2Concluir();
   }catch(e){
     console.warn('Falha ao concluir a assinatura:', e);
     if(btnAssinar){ btnAssinar.disabled=false; btnAssinar.textContent='Assinar e concluir ✓'; }
@@ -3868,7 +3868,12 @@ async function v2ConcluirAssinantes(){
       v2Evento('Assinatura adicional registrada', rotulo+' · '+nome+' · certificado '+cert);
     }
   }
-  v2Concluir();
+  try{
+    await v2Concluir();
+  }catch(e){
+    console.warn('Falha ao concluir a assinatura:', e);
+    showToast('Falha ao concluir a assinatura. Tente novamente.','error');
+  }
 }
 
 /* ════════════ 13 + 14 + 16. CERTIFICADO PDF + QR + PDF PROTEGIDO ════════════ */
@@ -4419,10 +4424,9 @@ function v2ReenviarPDFEmail(){
 /* ── Hook na função v2Concluir: dispara o upload e salva no servidor ── */
 const _v1_v2Concluir = v2Concluir;
 v2Concluir = function(){
-  _v1_v2Concluir();              // executa tudo original primeiro (sem alterar nada)
-  setTimeout(v2UploadPDF, 800);  // aguarda o QR Code renderizar, depois sobe o PDF
-  // Salva a autorização assinada no banco do servidor
-  fetch('/api/autorizacoes/assinar', {
+  // Salva a autorização assinada no banco do servidor — a tela de sucesso e o
+  // upload ao Firebase só acontecem depois da confirmação do backend.
+  return fetch('/api/autorizacoes/assinar', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -4434,7 +4438,7 @@ v2Concluir = function(){
         end:   V('p_end'), num: V('p_num'), bairro: V('p_bairro'), cidade: V('p_cidade')
       },
       imovel: {
-        tipo:   V('i_tipo'), end: V('i_end'), num: V('i_num'),
+        tipo:   V('i_tipo'), end: V('i_end'), num: V('i_num'), comp: V('i_comp')||'',
         bairro: V('i_bairro'), cidade: V('i_cidade'), valor: moneyVal()
       },
       tipo:      AG.tipo,
@@ -4445,7 +4449,12 @@ v2Concluir = function(){
       liveness:  V2D.liveness ? {aprovado:V2D.liveness.aprovado} : null,
       uploads:   Object.values(V2D.uploads||{}).map(u=>({tipo:u.tipo, hash:u.hash}))
     })
-  }).catch(()=>{});
+  }).then(r => {
+    if(!r.ok) throw new Error('Falha ao salvar a assinatura no servidor (HTTP '+r.status+').');
+  }).then(() => {
+    _v1_v2Concluir();              // mostra a tela de sucesso só após confirmação do backend
+    setTimeout(v2UploadPDF, 800);  // Firebase — mesmo timing relativo ao QR de sempre, inalterado
+  });
 };
 
 /* ════════════ CEP ANTES DO ENDEREÇO (etapas "Seus dados" e "Dados do imóvel") ════════════
