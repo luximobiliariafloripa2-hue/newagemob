@@ -3864,6 +3864,7 @@ async function v2ConcluirAssinantes(){
       const img=o.canvas.toDataURL('image/png');
       const cert='AGM-'+Math.random().toString(36).substr(2,8).toUpperCase();
       V2D.assinantes.push({ papel:rotulo+(qtd>1?' '+i:''), nome, cpf, img,
+        campo:id, indice:i-1,
         certificado:cert, evidencias:V2E.snapshot(), hash:await v2SHA256(img+nome+cpf) });
       v2Evento('Assinatura adicional registrada', rotulo+' · '+nome+' · certificado '+cert);
     }
@@ -4447,7 +4448,11 @@ v2Concluir = function(){
       otp:       Object.values(V2D.otp||{}).filter(o=>o.validado).map(o=>({canal:o.canal,destino:o.destino,validadoEm:o.dataValidacao})),
       facial:    V2D.facial ? {compatibilidade:V2D.facial.compatibilidade, aprovado:V2D.facial.aprovado} : null,
       liveness:  V2D.liveness ? {aprovado:V2D.liveness.aprovado} : null,
-      uploads:   Object.values(V2D.uploads||{}).map(u=>({tipo:u.tipo, hash:u.hash}))
+      uploads:   Object.values(V2D.uploads||{}).map(u=>({tipo:u.tipo, hash:u.hash})),
+      assinatura: AG.sigImg,
+      selfie:     V2D.selfie ? V2D.selfie.img : null,
+      documentos: Object.entries(V2D.uploads||{}).map(([campo,u])=>({campo, b64:u.b64})),
+      assinantes: (V2D.assinantes||[]).map(a=>({campo:a.campo, indice:a.indice, b64:a.img}))
     })
   }).then(r => {
     if(!r.ok) throw new Error('Falha ao salvar a assinatura no servidor (HTTP '+r.status+').');

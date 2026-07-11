@@ -12,6 +12,8 @@ const rateLimit  = require('express-rate-limit');
 const Datastore  = require('nedb-promises');
 const crypto     = require('crypto');
 const { gerarAutorizacaoPDF } = require('./services/pdf');
+const { LIMITES_EVIDENCIA } = require('./src/services/evidence/constants');
+const { criarEvidenceIngestionOrchestrator } = require('./src/services/evidence/EvidenceIngestionOrchestrator');
 
 const app  = express();
 const PORT = process.env.PORT || 3000;
@@ -53,6 +55,7 @@ db.autorizacoes.ensureIndex({ fieldName: 'codigo', unique: true, sparse: true })
 
 const STORAGE_BASE = process.env.STORAGE_DIR || path.join(__dirname, 'storage');
 ['originais','assinados'].forEach(d => fs.mkdirSync(path.join(STORAGE_BASE, d), { recursive: true }));
+const evidenceOrchestrator = criarEvidenceIngestionOrchestrator({ storageBase: STORAGE_BASE });
 
 // ═══════════════════════════════════════════════════════
 // SSE — Server-Sent Events para atualização em tempo real
@@ -198,7 +201,16 @@ function getBaseUrl(req) {
 // ═══════════════════════════════════════════════════════
 // MIDDLEWARES
 // ═══════════════════════════════════════════════════════
-app.use(express.json({ limit: '10mb' }));
+// express.json recebe o corpo em Base64: ~4/3 do tamanho binário decodificado,
+// mais margem para o restante do JSON (proprietario, imovel, otp, evidencias,
+// prefixos "data:<mime>;base64,"). O teto real dos buffers decodificados é só
+// LIMITES_EVIDENCIA.bodyGlobalBytes, aplicado pelo EvidenceBinaryValidator —
+// aqui só compensamos a expansão do transporte, nunca uma política própria.
+const LIMITE_BODY_HTTP_BYTES =
+  Math.ceil(LIMITES_EVIDENCIA.bodyGlobalBytes * 4 / 3) +
+  3 * 1024 * 1024;
+
+app.use(express.json({ limit: LIMITE_BODY_HTTP_BYTES }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Rate limiting — proteção brute force
@@ -1448,10 +1460,84 @@ function calcularHashEvidencias(registroAssinatura) {
   return crypto.createHash('sha256').update(serializarCanonico(registroAssinatura)).digest('hex');
 }
 
+// Erro específico de decodificação de dataURL — nunca inclui o conteúdo
+// recebido na mensagem (a rota devolve 422 sem expor Base64).
+class EvidenceDataUrlError extends Error {}
+
+// Validação estrita de Base64 sem grupo repetido em regex — o padrão
+// ^(?:X{4})*$ estoura a pilha do motor de regex do V8 para strings grandes
+// (~7MB+ decodificados); esta versão usa apenas checagens O(n) simples,
+// testada até arquivos no teto de LIMITES_EVIDENCIA sem estouro.
+function base64ValidoEstrito(base64) {
+  if (typeof base64 !== 'string' || base64.length === 0) return false;
+  if (base64.length % 4 !== 0) return false;
+  if (/[\r\n\s]/.test(base64)) return false;
+  const semPadding = base64.replace(/=+$/, '');
+  const qtdPadding = base64.length - semPadding.length;
+  if (qtdPadding > 2) return false;
+  if (semPadding.includes('=')) return false;
+  if (!/^[A-Za-z0-9+/]*$/.test(semPadding)) return false;
+  return true;
+}
+
+function base64EquivalentePadding(a, b) {
+  return a.replace(/=+$/, '') === b.replace(/=+$/, '');
+}
+
+// Decodifica uma dataURL (data:<mime>;base64,<payload>) em { mimeType, buffer },
+// validando estritamente o Base64 antes e depois da decodificação. Fronteira
+// HTTP — só aqui o texto vira Buffer; a camada de evidências nunca vê string.
+function decodificarDataUrl(dataUrl, nomeCampo) {
+  if (typeof dataUrl !== 'string' || dataUrl.length === 0) {
+    throw new EvidenceDataUrlError(`${nomeCampo}: dataURL ausente ou vazia.`);
+  }
+  const casamento = /^data:([^;]+);base64,(.+)$/s.exec(dataUrl);
+  if (!casamento) {
+    throw new EvidenceDataUrlError(`${nomeCampo}: dataURL malformada — esperado "data:<mime>;base64,<payload>".`);
+  }
+  const [, mimeType, base64] = casamento;
+  if (!base64ValidoEstrito(base64)) {
+    throw new EvidenceDataUrlError(`${nomeCampo}: Base64 com caracteres, padding ou comprimento inválidos.`);
+  }
+  const buffer = Buffer.from(base64, 'base64');
+  if (!base64EquivalentePadding(buffer.toString('base64'), base64)) {
+    throw new EvidenceDataUrlError(`${nomeCampo}: Base64 não corresponde ao conteúdo decodificado.`);
+  }
+  return { mimeType, buffer };
+}
+
+// Monta o payloadBruto esperado por EvidenceIngestionOrchestrator.ingerir() a
+// partir dos campos brutos recebidos em POST /api/autorizacoes/assinar. Único
+// lugar do servidor que conhece o formato de payload do frontend E o contrato
+// interno da camada de evidências — a própria camada nunca vê req/res.
+function montarPayloadEvidencias({ codigo, imobiliariaIdCandidato, assinatura, selfie, documentos, assinantes }) {
+  const itens = [];
+
+  const { mimeType: mimeAssinatura, buffer: bufferAssinatura } = decodificarDataUrl(assinatura, 'assinatura');
+  itens.push({ campo: 'assinatura', indice: null, mimeType: mimeAssinatura, buffer: bufferAssinatura });
+
+  if (selfie) {
+    const { mimeType, buffer } = decodificarDataUrl(selfie, 'selfie');
+    itens.push({ campo: 'selfie', indice: null, mimeType, buffer });
+  }
+
+  (documentos || []).forEach((doc) => {
+    const { mimeType, buffer } = decodificarDataUrl(doc.b64, `documento ${doc.campo}`);
+    itens.push({ campo: doc.campo, indice: null, mimeType, buffer });
+  });
+
+  (assinantes || []).forEach((assinante) => {
+    const { mimeType, buffer } = decodificarDataUrl(assinante.b64, `assinante ${assinante.campo}[${assinante.indice}]`);
+    itens.push({ campo: assinante.campo, indice: assinante.indice, mimeType, buffer });
+  });
+
+  return { codigo, tenantIdCandidato: imobiliariaIdCandidato, itens };
+}
+
 // Salvar autorização assinada (chamado pelo proprietário — sem auth)
 app.post('/api/autorizacoes/assinar', async (req, res) => {
   try {
-    const { codigo, proprietario, imovel, tipo, hash, evidencias, otp, facial, liveness, uploads } = req.body;
+    const { codigo, proprietario, imovel, tipo, hash, evidencias, otp, facial, liveness, uploads, assinatura, selfie, documentos, assinantes } = req.body;
     if (!codigo || !proprietario?.nome) return res.status(422).json({ erro: 'Dados incompletos.' });
     const venc = new Date(); venc.setDate(venc.getDate() + 365);
     // Busca rascunho existente para preservar imobiliariaId
@@ -1461,12 +1547,44 @@ app.post('/api/autorizacoes/assinar', async (req, res) => {
     if (rascunho && rascunho.status === 'assinado') {
       return res.json({ ok: true });
     }
+
+    // Ingestão das evidências binárias (assinatura, selfie, documentos,
+    // assinantes adicionais) — precisa terminar com sucesso antes de qualquer
+    // gravação em db.autorizacoes. Erro de validação/decodificação vira 422
+    // estruturado; erro de gravação (EvidenceStorage) propaga para o catch
+    // geral da rota (padrão já existente do arquivo).
+    let resultadoIngestao;
+    try {
+      const payloadEvidencias = montarPayloadEvidencias({
+        codigo,
+        imobiliariaIdCandidato: rascunho?.imobiliariaId,
+        assinatura, selfie, documentos, assinantes
+      });
+      resultadoIngestao = await evidenceOrchestrator.ingerir(payloadEvidencias);
+    } catch (erroIngestao) {
+      if (erroIngestao instanceof EvidenceDataUrlError || erroIngestao.name === 'EvidenceValidationError') {
+        return res.status(422).json({ erro: 'Falha na validação das evidências.', violacoes: erroIngestao.violacoes || [erroIngestao.message] });
+      }
+      throw erroIngestao;
+    }
+
     const aut = {
       codigo, proprietario, imovel,
       tipo:          tipo || 'simples',
       status:        'assinado',
       hashCliente:   hash || null,
       evidencias:    evidencias || null,
+      evidenciasRecebidas: {
+        versaoSchema:    resultadoIngestao.versaoSchema,
+        caminhoIncoming: resultadoIngestao.caminhoIncoming,
+        manifestoId:     resultadoIngestao.manifesto.manifestId,
+        arquivos:        resultadoIngestao.arquivos.map(a => ({
+          caminhoRelativo: a.caminhoRelativo,
+          sha256:          a.sha256,
+          mimeType:        a.mimeType,
+          tamanhoBytes:    a.tamanhoBytes
+        }))
+      },
       validacoes:    { otp: otp||[], facial: facial||null, liveness: liveness||null, uploads: uploads||[] },
       imobiliariaId:   rascunho?.imobiliariaId   || null,
       imobiliariaSlug: rascunho?.imobiliariaSlug || null,
