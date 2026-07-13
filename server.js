@@ -1829,6 +1829,13 @@ app.post('/api/admin/subscriptions/:imobId/iniciar', authMiddleware(['super_admi
 // VALIDAÇÃO PÚBLICA — QR Code / Link de verificação
 // ═══════════════════════════════════════════════════════
 
+// Resolve o caminho físico do PDF oficial de uma autorização a partir do
+// código do registro no NeDB — única função que constrói esse caminho;
+// nunca aceita pdfPath vindo do banco/cliente.
+function caminhoPdfAssinatura(codigo) {
+  return path.join(STORAGE_BASE, 'assinados', `${codigo}.pdf`);
+}
+
 // Rota pública — qualquer pessoa com o link pode verificar
 app.get('/api/validar/:codigo', async (req, res) => {
   try {
@@ -1855,9 +1862,31 @@ app.get('/api/validar/:codigo', async (req, res) => {
       },
       imobiliaria: {
         nome: aut.imobiliariaNome || null
-      }
+      },
+      pdfDisponivel: fs.existsSync(caminhoPdfAssinatura(aut.codigo))
     });
   } catch(e) { res.status(500).json({ valido: false, erro: 'Erro interno.' }); }
+});
+
+// Serve o PDF oficial da autorização assinada — único ponto de acesso ao
+// arquivo em storage/assinados/; nunca expõe o caminho físico ao cliente.
+app.get('/api/autorizacoes/:codigo/pdf', async (req, res) => {
+  try {
+    const codigo = req.params.codigo;
+    if (!/^[A-Z0-9]{6,12}$/.test(codigo)) return res.status(404).end();
+
+    const aut = await db.autorizacoes.findOne({ codigo });
+    if (!aut) return res.status(404).end();
+
+    const absoluto = caminhoPdfAssinatura(aut.codigo);
+    if (!fs.existsSync(absoluto)) return res.status(404).end();
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="autorizacao-${codigo}.pdf"`);
+    res.sendFile(absoluto);
+  } catch (e) {
+    res.status(500).json({ erro: 'Erro interno.' });
+  }
 });
 
 // ═══════════════════════════════════════════════════════

@@ -161,6 +161,13 @@ function renderResult(d, code){
       Qualquer alteração posterior produziria um hash diferente, tornando a fraude detectável.
     </p>` : ''}
 
+    ${(isValido && d.pdfDisponivel) ? `
+    <div style="margin-top:16px;text-align:center">
+      <a href="/api/autorizacoes/${code}/pdf" target="_blank" rel="noopener"
+         style="display:inline-block;padding:10px 22px;background:var(--navy);color:#fff;border-radius:10px;text-decoration:none;font-size:14px;font-weight:700">
+         ⬇ Baixar PDF oficial</a>
+    </div>` : ''}
+
     ${isValido ? `
     <div class="legal">
       ✅ <b>Validade jurídica confirmada.</b> Este documento possui assinatura eletrônica com validade nos termos

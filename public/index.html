@@ -245,9 +245,6 @@ label{display:block;font-size:13px;font-weight:600;color:var(--ink-2);margin-bot
 .btn-cep:hover{background:var(--brand-dark)}
 .btn-cep:disabled{background:var(--ink-3);cursor:not-allowed}
 </style>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 <script src="/soundManager.js"></script>
 </head>
 <body>
@@ -4096,269 +4093,20 @@ function v2AbrirValidacaoLegacy(code){
 v2Evento('Sessão iniciada', V2E.navegador()+' · '+V2E.so());
 
 /* ════════════════════════════════════════════════════════════════════
-   AGEMOB · STORAGE MODULE — Upload automático do PDF assinado
-   Firebase Storage + Firestore · Projeto: agemob-prod
-   Implementação 100% aditiva — nenhuma funcionalidade existente alterada.
+   AGEMOB · LINKS OFICIAIS — PDF assinado + página pública de validação
+
+   O PDF oficial é gerado e salvo pelo backend em
+   storage/assinados/ durante o POST /api/autorizacoes/assinar,
+   antes da confirmação final.
+
+   Nenhum serviço externo participa do fluxo jurídico da assinatura.
    ════════════════════════════════════════════════════════════════════ */
 
-/* ── Configuração Firebase (projeto agemob-prod já existente) ── */
-const AGEMOB_FB_CONFIG = {
-  apiKey:            "AIzaSyCZj9n20AautGaoJVsbtj7kBAd2KQifFv4",
-  authDomain:        "agemob-prod.firebaseapp.com",
-  projectId:         "agemob-prod",
-  storageBucket:     "agemob-prod.firebasestorage.app",
-  messagingSenderId: "822406821771",
-  appId:             "1:822406821771:web:0b37238f6a9ff50804e18e"
-};
+function v2LinkPDF(){ return (window.AGEMOB_BASE_URL||window.location.origin)+'/api/autorizacoes/'+AG.code+'/pdf'; }
+function v2LinkValidacao(){ return (window.AGEMOB_BASE_URL||window.location.origin)+'/validar/'+AG.code; }
 
-/* Inicializa Firebase apenas uma vez */
-let _fbApp = null, _fbStorage = null, _fbFirestore = null;
-function fbInit(){
-  if(_fbApp) return;
-  try{
-    _fbApp       = firebase.initializeApp(AGEMOB_FB_CONFIG, 'agemob-storage');
-    _fbStorage   = firebase.storage(_fbApp);
-    _fbFirestore = firebase.firestore(_fbApp);
-  }catch(e){ console.error('[AGEMOB Storage] Falha ao inicializar Firebase:', e); }
-}
-
-/* ── Gera o blob do PDF sem disparar o download ── */
-async function v2GerarPDFBlob(){
-  const {jsPDF}=window.jspdf;
-  let doc;
-  try{ doc=new jsPDF({unit:'mm',format:'a4',encryption:{ownerPassword:'AGM-'+(V2D.hash||'').slice(0,12), userPermissions:['print']}}); }
-  catch(e){ doc=new jsPDF({unit:'mm',format:'a4'}); }
-
-  const W=210, M=18; let y=20;
-  const tipoTxt = AG.tipo==='exclusiva' ? 'COM EXCLUSIVIDADE' : 'SEM EXCLUSIVIDADE';
-  const valor=moneyVal(); const d=new Date();
-  const venc=new Date(); venc.setDate(venc.getDate()+365);
-  const h=(t,size=11)=>{doc.setFont('helvetica','bold');doc.setFontSize(size);doc.text(t,M,y);y+=6;};
-  const p=(t,size=9.5)=>{doc.setFont('helvetica','normal');doc.setFontSize(size);const lines=doc.splitTextToSize(t,W-M*2);doc.text(lines,M,y);y+=lines.length*4.4+2;};
-  const row=(k,v)=>{doc.setFont('helvetica','bold');doc.setFontSize(9.5);doc.text(k,M,y);doc.setFont('helvetica','normal');const lv=doc.splitTextToSize(String(v),W-M*2-52);doc.text(lv,M+52,y);y+=Math.max(5.4,lv.length*4.6);};
-  const line=()=>{doc.setDrawColor(200);doc.line(M,y,W-M,y);y+=6;};
-  const quebra=(lim=255)=>{ if(y>lim){ doc.addPage(); y=20; } };
-
-  doc.setFillColor(4,39,59); doc.rect(0,0,W,14,'F'); doc.setFillColor(201,162,39); doc.rect(0,14,W,0.8,'F');
-  doc.setTextColor(255); doc.setFont('helvetica','bold'); doc.setFontSize(12);
-  doc.text('AGEMOB · AUTORIZAÇÃO DE VENDA '+tipoTxt, M, 9.5);
-  doc.setTextColor(16,24,40); y=24;
-  h('AUTORIZAÇÃO DE VENDA DE IMÓVEL '+tipoTxt, 13); y+=2;
-  doc.setFontSize(9); doc.setFont('helvetica','normal');
-  doc.text('Código da autorização: '+AG.code+'  ·  Emitida em '+d.toLocaleDateString('pt-BR')+' às '+d.toLocaleTimeString('pt-BR'),M,y); y+=8;
-  line();
-  h('1. IMOBILIÁRIA AUTORIZADA');
-  row('Razão social:',AG.imob.razao); row('CNPJ:',AG.imob.cnpj);
-  if(AG.imob.creci) row('CRECI:',AG.imob.creci);
-  row('Endereço:',AG.imob.end); y+=2;
-  h('2. PROPRIETÁRIO');
-  row('Nome:',V('p_nome')); row('CPF:',V('p_cpf')); if(V('p_rg')!=='—') row('RG:',V('p_rg'));
-  row('Estado civil:',V('p_civil')); row('Profissão:',V('p_prof'));
-  row('Contato:',V('p_zap')+' · '+V('p_email'));
-  row('Endereço:',`${V('p_end')}, ${V('p_num')} ${V('p_comp')!=='—'?V('p_comp'):''} - ${V('p_bairro')}, ${V('p_cidade')}`);
-  const cNome2=V('p_conjuge_nome'), cCpf2=V('p_conjuge_cpf');
-  if(cNome2&&cNome2!=='—') row('Cônjuge/Companheiro(a):',cNome2+(cCpf2&&cCpf2!=='—'?' · CPF '+cCpf2:''));
-  y+=2;
-  h('3. IMÓVEL');
-  row('Tipo:',V('i_tipo'));
-  row('Endereço:',`${V('i_end')}, ${V('i_num')} - ${V('i_bairro')}, ${V('i_cidade')}`);
-  const pctCom2 = AG.comissao || 6; const pctComExt2 = numToWords(pctCom2);
-  row('Valor de venda:', valor?BRL(valor):'—');
-  row('Comissão ('+pctCom2+'%):',valor?BRL(valor*(pctCom2/100)):'—'); y+=2;
-  h('4. CONDIÇÕES');
-  p('PRAZO E RENOVAÇÃO — A presente autorização terá validade inicial de 365 (trezentos e sessenta e cinco) dias, contados da data de assinatura, com vencimento em '+venc.toLocaleDateString('pt-BR')+'. Ao término do prazo, será renovada automaticamente por períodos iguais e sucessivos, até manifestação contrária de qualquer das partes, comunicada formalmente com antecedência mínima de 30 (trinta) dias do vencimento.');
-  p('COMISSÃO DE CORRETAGEM — Será devida comissão de '+pctCom2+'% ('+pctComExt2+' por cento) sobre o valor total da venda efetivamente realizada. A comissão permanecerá integralmente devida caso o imóvel seja vendido, durante a vigência desta autorização, a cliente apresentado pela imobiliária, originado de suas campanhas de marketing, cadastrado em seus sistemas ou apresentado por seus parceiros.');
-  if(AG.tipo==='exclusiva'){ p('EXCLUSIVIDADE — Toda negociação do imóvel deverá ser conduzida exclusivamente pela imobiliária autorizada. Caso o proprietário realize a venda diretamente ou por intermédio de terceiros durante o prazo de exclusividade, a comissão contratada permanecerá devida.'); }
-  else { p('MODALIDADE SEM EXCLUSIVIDADE — O proprietário poderá anunciar ou negociar o imóvel por meio de outras imobiliárias, sendo a comissão devida apenas à imobiliária que efetivamente intermediar a venda.'); }
-  p('MULTA POR REVOGAÇÃO ANTECIPADA — A revogação desta autorização pelo outorgante antes do término do prazo contratual, sem justa causa, sujeitará o outorgante ao pagamento de indenização à outorgada equivalente a '+pctCom2+'% ('+pctComExt2+' por cento) do valor do imóvel, a título de ressarcimento dos investimentos realizados em marketing e gestão comercial.');
-  p('REGIME DE BENS / OUTORGA — '+(cNome2&&cNome2!=='—'?'O cônjuge/companheiro(a) '+cNome2+' (CPF '+cCpf2+') concorda com a presente autorização de venda.':'O outorgante declara, sob as penas da lei, que sua situação conjugal não exige outorga para este ato, responsabilizando-se integralmente por tal declaração.'));
-  p('FORO — Fica eleito o foro da comarca de '+AG.imob.cidade+', para dirimir quaisquer questões oriundas deste instrumento, com renúncia a qualquer outro foro, por mais privilegiado que seja.');
-  p('ASSINATURA ELETRÔNICA — As partes reconhecem a validade jurídica da assinatura eletrônica aposta neste documento, nos termos do art. 10, §2º, da MP 2.200-2/2001 e da Lei nº 14.063/2020, acompanhada do conjunto probatório descrito no Certificado de Assinatura anexo.');
-  quebra(225);
-  h('5. ASSINATURA');
-  p('Assinado eletronicamente em '+d.toLocaleDateString('pt-BR')+' às '+d.toLocaleTimeString('pt-BR')+' · Dispositivo: '+(navigator.platform||'web')+' · Validação: '+(window.AGEMOB_BASE_URL||window.location.origin)+'/validar/'+AG.code);
-  if(AG.sigImg){ doc.addImage(AG.sigImg,'PNG',M,y,70,22); }
-  y+=26; doc.setDrawColor(120); doc.line(M,y,M+80,y); y+=5;
-  doc.setFontSize(9); doc.text(V('p_nome')+' · CPF '+V('p_cpf'),M,y);
-  const qrCanvas=document.querySelector('#qrHolder canvas');
-  if(qrCanvas){ doc.addImage(qrCanvas.toDataURL('image/png'),'PNG',W-M-30,y-26,30,30); }
-  V2D.assinantes && V2D.assinantes.forEach(a=>{
-    y+=14; quebra(245);
-    doc.addImage(a.img,'PNG',M,y,60,18); y+=22;
-    doc.setDrawColor(120); doc.line(M,y,M+80,y); y+=5;
-    doc.setFontSize(9); doc.text(a.papel+': '+a.nome+(a.cpf?' · CPF '+a.cpf:''),M,y);
-  });
-  doc.setFontSize(8); doc.setTextColor(130);
-  doc.setDrawColor(201,162,39); doc.setLineWidth(0.4); doc.line(M,284,W-M,284);
-  doc.text('Documento gerado eletronicamente pela plataforma AGEMOB · Autorizações Imobiliárias Inteligentes · Código '+AG.code, M, 290);
-  doc.setTextColor(16,24,40);
-
-  /* Certificado */
-  doc.addPage(); y=24;
-  doc.setFillColor(201,162,39); doc.rect(0,0,W,14,'F'); doc.setFillColor(4,39,59); doc.rect(0,14,W,0.8,'F');
-  doc.setTextColor(255); doc.setFont('helvetica','bold'); doc.setFontSize(12);
-  doc.text('AGEMOB · CERTIFICADO DE ASSINATURA ELETRÔNICA', M, 9.5);
-  doc.setTextColor(16,24,40);
-  const ev = V2D.evidAssinatura || V2E.snapshot();
-  h('CERTIFICADO DE ASSINATURA E CONJUNTO PROBATÓRIO', 13); y+=1;
-  p('Este certificado integra de forma inseparável o documento "Autorização de Venda '+tipoTxt+'", código '+AG.code+', e reúne as evidências técnicas e jurídicas coletadas no momento da assinatura.', 9);
-  line();
-  h('SIGNATÁRIO PRINCIPAL');
-  row('Nome completo:',V('p_nome')); row('CPF:',V('p_cpf'));
-  row('Telefone:',V('p_zap')); row('E-mail:',V('p_email')); y+=2;
-  h('IMÓVEL OBJETO');
-  row('Imóvel:',V('i_tipo')+' · '+V('i_end')+', '+V('i_num')+' · '+V('i_bairro')+' · '+V('i_cidade'));
-  row('Valor:',valor?BRL(valor):'—'); y+=2;
-  h('EVIDÊNCIAS DA ASSINATURA');
-  row('Data:',ev.dataHoraLocal); row('IP:',ev.ip); row('Geolocalização:',ev.geolocalizacao);
-  row('Navegador:',ev.navegador+' · '+ev.sistemaOperacional); row('Dispositivo:',ev.dispositivo);
-  row('Sessão:',ev.sessao); y+=2;
-  quebra(210);
-  h('VALIDAÇÕES REALIZADAS');
-  row('Aceite expresso:', V2D.aceite ? 'Registrado em '+V2D.aceite.data+' '+V2D.aceite.hora : '—');
-  const otps=(V2D.otp?Object.values(V2D.otp).filter(o=>o.validado):[]);
-  row('OTP:', otps.length?otps.map(o=>o.canal+' ('+o.destino+') · '+o.dataValidacao).join(' | '):'não exigido');
-  row('Reconhecimento facial:', V2D.facial?(V2D.facial.pendente?'análise manual':(V2D.facial.compatibilidade+'% · '+(V2D.facial.aprovado?'APROVADO':'reprovado'))):'não exigido');
-  row('Prova de vida:', V2D.liveness?((V2D.liveness.aprovado?'CONFIRMADA':'análise manual')+' · '+V2D.liveness.desafio):'não exigida');
-  const ups=Object.values(V2D.uploads||{});
-  if(ups.length){ row('Documentos anexos:',ups.length+' documento(s)'); ups.forEach(u=>row('· '+u.tipo+':',u.nome+' · '+u.quando+' · SHA-256 '+u.hash.slice(0,24)+'…')); }
-  else row('Documentos anexos:','nenhum'); y+=2;
-  quebra(225);
-  h('INTEGRIDADE DO DOCUMENTO');
-  row('Código de validação:',(window.AGEMOB_BASE_URL||window.location.origin)+'/validar/'+AG.code);
-  doc.setFont('helvetica','bold'); doc.setFontSize(9.5); doc.text('Hash SHA-256:',M,y); y+=5;
-  doc.setFont('courier','normal'); doc.setFontSize(8.5);
-  doc.text(doc.splitTextToSize(V2D.hash||'—', W-M*2),M,y); y+=10;
-  doc.setFont('helvetica','normal'); doc.setFontSize(9);
-  p('Qualquer alteração posterior invalida a verificação do hash. Autenticidade verificável pelo QR Code ou código de validação.');
-  quebra(240);
-  if(qrCanvas){ doc.addImage(qrCanvas.toDataURL('image/png'),'PNG',W-M-32,y,32,32); }
-  let imgX=M;
-  const addEvidImg=(src,rotulo)=>{ try{ const fmt=src.startsWith('data:image/png')?'PNG':'JPEG'; doc.addImage(src,fmt,imgX,y,40,28); doc.setFontSize(7.5); doc.setTextColor(120); doc.text(rotulo,imgX,y+32); doc.setTextColor(16,24,40); imgX+=46; }catch(e){} };
-  if(V2D.selfie) addEvidImg(V2D.selfie.img,'Selfie do signatário');
-  ups.filter(u=>u.mime&&u.mime.startsWith('image')).forEach(u=>{ if(imgX+40>W-M-34) return; addEvidImg(u.b64,u.tipo+(u.origem==='foto capturada na hora'?' (foto na hora)':'')); });
-  y+=38;
-  if(V2D.assinantes&&V2D.assinantes.length){
-    quebra(200); h('ASSINANTES ADICIONAIS');
-    V2D.assinantes.forEach(a=>{ quebra(240); row(a.papel+':',a.nome+(a.cpf?' · CPF '+a.cpf:'')); row('Certificado:',a.certificado+' · '+a.evidencias.dataHoraLocal); row('Hash:',a.hash.slice(0,40)+'…'); y+=1; });
-  }
-
-  /* Auditoria */
-  doc.addPage(); y=24;
-  doc.setFillColor(4,39,59); doc.rect(0,0,W,14,'F'); doc.setFillColor(201,162,39); doc.rect(0,14,W,0.8,'F');
-  doc.setTextColor(255); doc.setFont('helvetica','bold'); doc.setFontSize(12);
-  doc.text('AGEMOB · TRILHA DE AUDITORIA · '+AG.code, M, 9.5);
-  doc.setTextColor(16,24,40);
-  h('REGISTRO CRONOLÓGICO DE EVENTOS', 12); y+=2;
-  doc.setFontSize(8.5);
-  V2E.eventos.forEach(e=>{ quebra(275); doc.setFont('helvetica','bold'); doc.text(e.dataHoraLocal,M,y); doc.setFont('helvetica','normal'); const txt=doc.splitTextToSize(e.tipo+(e.detalhe?' — '+e.detalhe:'')+' · IP '+e.ip,W-M*2-42); doc.text(txt,M+42,y); y+=Math.max(4.8,txt.length*4.2)+1.5; });
-  doc.setFontSize(8); doc.setTextColor(130);
-  doc.text('Certificado gerado eletronicamente pela plataforma AGEMOB · Hash '+(V2D.hash||'').slice(0,32)+'…', M, 290);
-
-  return doc.output('blob');
-}
-
-/* ── Upload para Storage + metadados no Firestore ── */
-const V2Storage = {
-  status: 'idle',   // idle | uploading | ok | error
-  downloadURL: null,
-  storagePath: null,
-  erro: null
-};
-
-async function v2UploadPDF(){
-  fbInit();
-  if(!_fbStorage || !_fbFirestore){
-    console.warn('[AGEMOB Storage] Firebase não inicializado — verifique as credenciais em AGEMOB_FB_CONFIG.');
-    v2StorageUI('warn', 'Firebase não configurado. O PDF foi salvo localmente.');
-    return;
-  }
-
-  V2Storage.status = 'uploading';
-  v2StorageUI('uploading');
-  v2Evento('Upload do PDF iniciado', 'Storage: '+AG.code);
-
-  let blob;
-  try {
-    blob = await Promise.race([
-      v2GerarPDFBlob(),
-      new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout_pdf')), 30000))
-    ]);
-  } catch(e) {
-    v2StorageErro('Falha ao gerar o PDF para upload.', e); return;
-  }
-
-  /* Estrutura: autorizacoes/ANO/MES/CODIGO/autorizacao_assinada.pdf */
-  const agora = new Date();
-  const ano  = agora.getFullYear().toString();
-  const mes  = String(agora.getMonth()+1).padStart(2,'0');
-  const path = `autorizacoes/${ano}/${mes}/${AG.code}/autorizacao_assinada.pdf`;
-  V2Storage.storagePath = path;
-
-  try {
-    const ref = _fbStorage.ref(path);
-    const meta = { contentType:'application/pdf', customMetadata:{
-      autorizacaoId: AG.code, proprietario: V('p_nome'), cpf: V('p_cpf'),
-      dataAssinatura: agora.toISOString(), hash: V2D.hash||'', sistema:'AGEMOB v2'
-    }};
-
-    const snap = await Promise.race([
-      ref.put(blob, meta),
-      new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout_upload')), 60000))
-    ]);
-
-    V2Storage.downloadURL = await snap.ref.getDownloadURL();
-  } catch(e) {
-    if(e.message==='timeout_upload'){ v2StorageErro('Tempo limite excedido no upload. Verifique sua conexão.', e); }
-    else if(e.code==='storage/unauthorized'){ v2StorageErro('Sem permissão no Firebase Storage. Verifique as regras de segurança.', e); }
-    else if(e.code==='storage/canceled'){ v2StorageErro('Upload cancelado.', e); }
-    else { v2StorageErro('Falha no upload: '+e.message, e); }
-    return;
-  }
-
-  /* Metadados no Firestore */
-  try {
-    await _fbFirestore.collection('autorizacoes').doc(AG.code).set({
-      autorizacaoId:    AG.code,
-      nomeProprietario: V('p_nome'),
-      cpf:              V('p_cpf'),
-      telefone:         V('p_zap'),
-      email:            V('p_email'),
-      imovel:           V('i_tipo')+' · '+V('i_end')+', '+V('i_num')+' · '+V('i_bairro'),
-      valor:            moneyVal()||0,
-      tipo:             AG.tipo,
-      dataAssinatura:   agora.toISOString(),
-      dataAssinaturaLocal: agora.toLocaleString('pt-BR'),
-      storagePath:      path,
-      downloadURL:      V2Storage.downloadURL,
-      hash:             V2D.hash||'',
-      status:           'assinado',
-      validacoesOTP:    Object.values(V2D.otp||{}).filter(o=>o.validado).length,
-      reconhecimentoFacial: V2D.facial?(V2D.facial.pendente?'análise_manual':(V2D.facial.aprovado?'aprovado':'reprovado')):'nao_exigido',
-      provaDeVida:      V2D.liveness?(V2D.liveness.aprovado?'confirmada':'analise_manual'):'nao_exigida',
-      documentosAnexos: Object.values(V2D.uploads||{}).map(u=>({tipo:u.tipo,hash:u.hash})),
-      criadoEm:         firebase.firestore.FieldValue.serverTimestamp()
-    }, { merge: true });
-  } catch(e) {
-    /* Falha no Firestore não desfaz o upload já concluído */
-    console.warn('[AGEMOB Storage] PDF salvo no Storage mas falha ao gravar metadados no Firestore:', e);
-  }
-
-  V2Storage.status = 'ok';
-  v2Evento('Upload do PDF concluído', 'Storage: '+path+' · URL gerada com sucesso');
-  v2StorageUI('ok');
-}
-
-function v2StorageErro(msg, err){
-  V2Storage.status = 'error';
-  V2Storage.erro   = msg;
-  console.error('[AGEMOB Storage]', msg, err);
-  v2Evento('Erro no upload do PDF', msg);
-  v2StorageUI('error', msg);
-}
-
-/* ── UI de status do upload (injetada na tela de sucesso, não altera nada existente) ── */
-function v2StorageUI(estado, detalhe){
+/* ── Caixa com os links oficiais, injetada uma única vez na tela de sucesso ── */
+function v2MostrarLinksOficiais(){
   let box = document.getElementById('v2StorageBox');
   if(!box){
     box = document.createElement('div');
@@ -4367,35 +4115,20 @@ function v2StorageUI(estado, detalhe){
     const btnPDF = document.querySelector('[data-step="6"] button[onclick="gerarPDF()"]');
     if(btnPDF) btnPDF.after(box); else { const s=document.querySelector('[data-step="6"] .success'); if(s) s.appendChild(box); }
   }
-  if(estado==='uploading'){
-    box.style.background='#EFF8FF'; box.style.border='1px solid #175CD3'; box.style.color='#175CD3';
-    box.innerHTML='☁ Salvando PDF assinado na nuvem…';
-  } else if(estado==='ok'){
-    box.style.background='#F0FDF4'; box.style.border='1px solid #ABEFC6'; box.style.color='#067647';
-    box.innerHTML = '✓ PDF salvo na nuvem com sucesso!'
-      + `<div style="margin-top:10px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
-          <a href="${V2Storage.downloadURL}" target="_blank" rel="noopener"
-             style="display:inline-block;padding:8px 16px;background:#067647;color:#fff;border-radius:8px;text-decoration:none;font-size:13px">
-             ⬇ Baixar da nuvem</a>
-          <button onclick="v2ReenviarPDFWhats()" style="padding:8px 16px;background:#25D366;color:#fff;border:none;border-radius:8px;font-size:13px;cursor:pointer;font-weight:600">
-             💬 Enviar link por WhatsApp</button>
-          <button onclick="v2ReenviarPDFEmail()" style="padding:8px 16px;background:var(--brand);color:#fff;border:none;border-radius:8px;font-size:13px;cursor:pointer;font-weight:600">
-             ✉ Enviar por e-mail</button>
-        </div>`;
-  } else if(estado==='error'){
-    box.style.background='#FEF3F2'; box.style.border='1px solid #FECDCA'; box.style.color='#D92D20';
-    box.innerHTML='⚠ '+( detalhe||'Erro ao salvar na nuvem.')+' O PDF está disponível para download local normalmente.';
-  } else if(estado==='warn'){
-    box.style.background='#FFFAEB'; box.style.border='1px solid #FEF0C7'; box.style.color='#B54708';
-    box.innerHTML='⚠ '+(detalhe||'Aviso.');
-  }
+  box.style.background='#F0FDF4'; box.style.border='1px solid #ABEFC6'; box.style.color='#067647';
+  box.innerHTML = '✓ Documento assinado e disponível'
+    + '<div style="margin-top:10px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap">'
+    +   '<a href="'+v2LinkValidacao()+'" target="_blank" rel="noopener" style="display:inline-block;padding:8px 16px;background:#067647;color:#fff;border-radius:8px;text-decoration:none;font-size:13px">✓ Página de validação</a>'
+    +   '<a href="'+v2LinkPDF()+'" target="_blank" rel="noopener" style="display:inline-block;padding:8px 16px;background:var(--brand);color:#fff;border-radius:8px;text-decoration:none;font-size:13px">⬇ Baixar PDF oficial</a>'
+    +   '<button onclick="v2ReenviarPDFWhats()" style="padding:8px 16px;background:#25D366;color:#fff;border:none;border-radius:8px;font-size:13px;cursor:pointer;font-weight:600">💬 Enviar por WhatsApp</button>'
+    +   '<button onclick="v2ReenviarPDFEmail()" style="padding:8px 16px;background:var(--brand);color:#fff;border:none;border-radius:8px;font-size:13px;cursor:pointer;font-weight:600">✉ Enviar por e-mail</button>'
+    + '</div>';
 }
 
-/* Reenvio por WhatsApp: envia o link do Storage via Z-API (se configurado) */
+/* Reenvio por WhatsApp: prioriza a página pública de validação */
 async function v2ReenviarPDFWhats(){
-  if(!V2Storage.downloadURL){ showToast('Link do PDF ainda não disponível.','error'); return; }
   const tel = V('p_zap');
-  const msg = `AGEMOB · Lux House Imóveis\n\nOlá, ${V('p_nome')}! Segue o link da sua Autorização de Venda assinada eletronicamente:\n\n${V2Storage.downloadURL}\n\nCódigo: ${AG.code}`;
+  const msg = 'AGEMOB · Lux House Imóveis\n\nOlá, '+V('p_nome')+'! Sua Autorização de Venda foi assinada eletronicamente.\n\nValide o documento aqui:\n'+v2LinkValidacao()+'\n\nPDF oficial:\n'+v2LinkPDF()+'\n\nCódigo: '+AG.code;
   let ok = false;
   if(typeof v2EnviarWhatsReal === 'function') ok = await v2EnviarWhatsReal(tel, msg);
   if(ok){ showToast('Link enviado por WhatsApp! ✓','success'); v2Evento('PDF reenviado por WhatsApp', tel); }
@@ -4406,27 +4139,27 @@ async function v2ReenviarPDFWhats(){
   }
 }
 
-/* Reenvio por e-mail: abre o cliente de e-mail padrão com o link */
+/* Reenvio por e-mail: abre o cliente de e-mail padrão com os links oficiais */
 function v2ReenviarPDFEmail(){
-  if(!V2Storage.downloadURL){ showToast('Link do PDF ainda não disponível.','error'); return; }
   const dest = V('p_email');
   const sub  = encodeURIComponent('Autorização de Venda assinada — AGEMOB / Lux House · '+AG.code);
   const body = encodeURIComponent(
     'Olá, '+V('p_nome')+'!\n\n'+
-    'Segue o link da sua Autorização de Venda assinada eletronicamente:\n\n'+
-    V2Storage.downloadURL+'\n\n'+
+    'Sua Autorização de Venda foi assinada eletronicamente.\n\n'+
+    'Valide o documento aqui:\n'+v2LinkValidacao()+'\n\n'+
+    'PDF oficial:\n'+v2LinkPDF()+'\n\n'+
     'Código de validação: '+AG.code+'\n'+
     'Hash SHA-256: '+(V2D.hash||'')+'\n\n'+
     'Lux House Imóveis — AGEMOB');
-  window.location.href = `mailto:${dest}?subject=${sub}&body=${body}`;
+  window.location.href = 'mailto:'+dest+'?subject='+sub+'&body='+body;
   v2Evento('PDF reenviado por e-mail', dest);
 }
 
-/* ── Hook na função v2Concluir: dispara o upload e salva no servidor ── */
+/* ── Hook na função v2Concluir: mostra os links oficiais após a confirmação do backend ── */
 const _v1_v2Concluir = v2Concluir;
 v2Concluir = function(){
-  // Salva a autorização assinada no banco do servidor — a tela de sucesso e o
-  // upload ao Firebase só acontecem depois da confirmação do backend.
+  // Salva a autorização assinada no banco do servidor — a tela de sucesso só
+  // é exibida após a confirmação do backend, que já gera o PDF oficial em disco.
   return fetch('/api/autorizacoes/assinar', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -4457,8 +4190,8 @@ v2Concluir = function(){
   }).then(r => {
     if(!r.ok) throw new Error('Falha ao salvar a assinatura no servidor (HTTP '+r.status+').');
   }).then(() => {
-    _v1_v2Concluir();              // mostra a tela de sucesso só após confirmação do backend
-    setTimeout(v2UploadPDF, 800);  // Firebase — mesmo timing relativo ao QR de sempre, inalterado
+    _v1_v2Concluir();          // mostra a tela de sucesso só após confirmação do backend
+    v2MostrarLinksOficiais();  // exibe os links do PDF oficial e da página de validação
   });
 };
 
