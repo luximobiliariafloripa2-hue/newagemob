@@ -1499,6 +1499,78 @@ function criarEstruturaDossie(absoluto) {
 // Cap. 4 — Decisão 1 da Micro-Sprint 8.2.A). Informação operacional mutável
 // (status de preservação, verificação de integridade) pertence exclusivamente
 // a metadata.json.
+// Conta evidências reais por categoria a partir de aut.evidenciasRecebidas —
+// mesma fonte e mesma validação de categoria já usadas por criarHashes
+// (categoriaDoCaminhoRelativo, Marco 5.2). Não lê nem duplica hashes.json,
+// só resume quantidade por categoria. Ordem determinística: segue a ordem
+// de iteração de CATEGORIAS_EVIDENCIA_VALIDAS.
+function contarEvidenciasPorCategoria(aut) {
+  const arquivos = aut.evidenciasRecebidas?.arquivos || [];
+  const contagem = {};
+  CATEGORIAS_EVIDENCIA_VALIDAS.forEach((categoria) => { contagem[categoria] = 0; });
+  arquivos.forEach((arquivo) => {
+    const categoria = categoriaDoCaminhoRelativo(arquivo.caminhoRelativo);
+    contagem[categoria] += 1;
+  });
+  return contagem;
+}
+
+// Monta o campo componentes do manifesto — status real de cada peça do
+// Dossiê no instante em que o manifesto é gravado (Microetapa 5.3). Chaves
+// lógicas estáveis (não nomes de arquivo), com o caminho relativo declarado
+// em cada uma. metadata/timeline/custodia já existem em disco nesse ponto
+// (nova ordem em criarEstruturaInicialDossie: gravados antes do manifesto)
+// — presenteNoMomentoDoManifesto vem de fs.existsSync real, nunca presumido.
+// hashes só pode ser gravado depois do manifesto (hashManifesto depende do
+// conteúdo já gravado do manifesto — ver criarHashes), por isso
+// presenteNoMomentoDoManifesto é sempre false e ordemGeracao documenta que
+// vem em seguida, na mesma operação. pdfOficial.presenteNoMomentoDoManifesto
+// reflete o estado real do PDF, já gerado antes do Dossiê na rota de
+// assinatura (gerarESalvarPDFAssinatura), reaproveitando o caminho canônico
+// já existente (caminhoPdfAssinatura, Marco 4). evidencias só resume
+// quantidade por categoria — detalhe (hash, caminho, mimeType) continua
+// exclusivamente em hashes.json, sem duplicação. Nenhum hash é recalculado,
+// nenhum arquivo é copiado ou movido.
+function montarComponentesManifesto(absoluto, aut) {
+  const evidenciasPorCategoria = contarEvidenciasPorCategoria(aut);
+  const categorias = {};
+  CATEGORIAS_EVIDENCIA_VALIDAS.forEach((categoria) => {
+    const quantidade = evidenciasPorCategoria[categoria];
+    categorias[categoria] = { quantidade, estado: quantidade > 0 ? 'presente' : 'vazio' };
+  });
+
+  return {
+    hashes: {
+      caminho: 'hashes.json',
+      presenteNoMomentoDoManifesto: false,
+      ordemGeracao: 'apos_manifesto'
+    },
+    metadata: {
+      caminho: 'metadata.json',
+      presenteNoMomentoDoManifesto: fs.existsSync(path.join(absoluto, 'metadata.json')),
+      estadoConteudo: 'parcial'
+    },
+    timeline: {
+      caminho: 'timeline.json',
+      presenteNoMomentoDoManifesto: fs.existsSync(path.join(absoluto, 'timeline.json')),
+      estadoConteudo: 'vazio'
+    },
+    custodia: {
+      caminho: 'custodia/eventos.json',
+      presenteNoMomentoDoManifesto: fs.existsSync(path.join(absoluto, 'custodia', 'eventos.json')),
+      estadoConteudo: 'vazio'
+    },
+    pdfOficial: {
+      caminho: `assinados/${aut.codigo}.pdf`,
+      presenteNoMomentoDoManifesto: fs.existsSync(caminhoPdfAssinatura(aut.codigo))
+    },
+    evidencias: {
+      detalhesEm: 'hashes.json',
+      categorias
+    }
+  };
+}
+
 function criarManifesto(absoluto, aut) {
   const manifesto = {
     versaoSchema:  VERSAO_SCHEMA_DOSSIE,
@@ -1517,6 +1589,7 @@ function criarManifesto(absoluto, aut) {
         custodia: 'custodia/eventos.json'
       }
     },
+    componentes:       montarComponentesManifesto(absoluto, aut),
     criadoEm:          aut.criadoEm   || null,
     assinadoEm:        aut.assinadoEm || null,
     preservadoEm:      new Date().toISOString(),
@@ -1625,11 +1698,11 @@ function criarCustodiaEventos(absoluto) {
 // responsabilidade de uma função própria; esta só coordena a sequência.
 function criarEstruturaInicialDossie(absoluto, aut) {
   criarEstruturaDossie(absoluto);
-  criarManifesto(absoluto, aut);
-  criarHashes(absoluto, aut);
   criarMetadata(absoluto);
   criarTimeline(absoluto);
   criarCustodiaEventos(absoluto);
+  criarManifesto(absoluto, aut);
+  criarHashes(absoluto, aut);
 }
 
 // Cria o Dossiê Digital completo para uma autorização recém-assinada e
