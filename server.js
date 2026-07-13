@@ -54,7 +54,7 @@ db.autorizacoes.ensureIndex({ fieldName: 'codigo', unique: true, sparse: true })
 });
 
 const STORAGE_BASE = process.env.STORAGE_DIR || path.join(__dirname, 'storage');
-['originais','assinados'].forEach(d => fs.mkdirSync(path.join(STORAGE_BASE, d), { recursive: true }));
+['originais','assinados','dossies','temporarios','backups'].forEach(d => fs.mkdirSync(path.join(STORAGE_BASE, d), { recursive: true }));
 const evidenceOrchestrator = criarEvidenceIngestionOrchestrator({ storageBase: STORAGE_BASE });
 
 // ═══════════════════════════════════════════════════════
@@ -1460,6 +1460,197 @@ function calcularHashEvidencias(registroAssinatura) {
   return crypto.createHash('sha256').update(serializarCanonico(registroAssinatura)).digest('hex');
 }
 
+// ═══════════════════════════════════════════════════════
+// DOSSIÊ DIGITAL — estrutura oficial (Constituição Técnica, Cap. 4)
+// Esta seção cria apenas a fundação estrutural do Dossiê: pastas e arquivos
+// com o schema definitivo, ainda em conteúdo mínimo/placeholder. Assinatura
+// do manifesto, criptografia, TSA e cadeia de custódia completa pertencem
+// a sprints futuras.
+// ═══════════════════════════════════════════════════════
+const VERSAO_SCHEMA_DOSSIE = 1;
+
+// Categorias fixas de evidência do Dossiê — única fonte da verdade, usada
+// tanto para criar as subpastas físicas quanto para o índice do manifesto.
+const CATEGORIAS_DOSSIE = ['assinatura', 'biometria', 'documentos', 'anexos', 'assinantes_adicionais', 'custodia'];
+
+// Resolve o caminho do Dossiê a partir do código e da data de assinatura.
+// Nenhuma outra função deve recalcular esse caminho — ele é gravado no NeDB
+// e sempre lido de lá (Constituição, Cap. 4).
+function resolverCaminhoDossie(codigo, assinadoEm) {
+  const data = new Date(assinadoEm);
+  const ano  = String(data.getFullYear());
+  const mes  = String(data.getMonth() + 1).padStart(2, '0');
+  const relativo = path.join('dossies', ano, mes, codigo);
+  return { relativo, absoluto: path.join(STORAGE_BASE, relativo) };
+}
+
+// Cria a árvore de diretórios do Dossiê (raiz + subpastas de evidência).
+function criarEstruturaDossie(absoluto) {
+  fs.mkdirSync(absoluto, { recursive: true });
+  CATEGORIAS_DOSSIE.forEach(p =>
+    fs.mkdirSync(path.join(absoluto, p), { recursive: true })
+  );
+}
+
+// Grava o manifesto.json — índice estrutural do Dossiê. Não contém dado
+// pessoal do proprietário (esse dado já pertence ao documento da autorização
+// no NeDB); só referências e metadados necessários para auditoria/preservação.
+// write-once: gravado apenas aqui, nunca reescrito (Constituição Técnica,
+// Cap. 4 — Decisão 1 da Micro-Sprint 8.2.A). Informação operacional mutável
+// (status de preservação, verificação de integridade) pertence exclusivamente
+// a metadata.json.
+function criarManifesto(absoluto, aut) {
+  const manifesto = {
+    versaoSchema:  VERSAO_SCHEMA_DOSSIE,
+    codigo:        aut.codigo,
+    versaoFluxo:     null,
+    versaoDocumento: null,
+    versaoSistema:   null,
+    imobiliariaId: aut.imobiliariaId || null,
+    corretorId:    aut.corretorId    || null,
+    estrutura: {
+      categorias: CATEGORIAS_DOSSIE,
+      arquivosIndice: {
+        hashes:   'hashes.json',
+        metadata: 'metadata.json',
+        timeline: 'timeline.json',
+        custodia: 'custodia/eventos.json'
+      }
+    },
+    criadoEm:          aut.criadoEm   || null,
+    assinadoEm:        aut.assinadoEm || null,
+    preservadoEm:      new Date().toISOString(),
+    origem:            'nativo',
+    politicaAssinaturaId: null,
+    politicaVersao:       null
+  };
+  fs.writeFileSync(path.join(absoluto, 'manifesto.json'), JSON.stringify(manifesto, null, 2));
+}
+
+// Calcula o hash SHA-256 do conteúdo real de manifesto.json já gravado em
+// disco — hash do arquivo, não de uma reconstrução em memória, para que a
+// verificação futura seja sempre "reler o arquivo e recalcular".
+function calcularHashManifesto(absoluto) {
+  const conteudo = fs.readFileSync(path.join(absoluto, 'manifesto.json'));
+  return crypto.createHash('sha256').update(conteudo).digest('hex');
+}
+
+// Grava o hashes.json — núcleo imutável de integridade.
+// Categorias reais de evidência do catálogo oficial
+// (CATALOGO_ARQUIVOS_INCOMING, src/services/evidence/constants.js).
+// Não inclui 'custodia' — essa não é uma categoria de arquivo de evidência,
+// é a trilha de custódia do próprio Dossiê (criarCustodiaEventos).
+const CATEGORIAS_EVIDENCIA_VALIDAS = new Set(['assinatura', 'biometria', 'documentos', 'assinantes_adicionais', 'anexos']);
+
+// Extrai e valida a categoria a partir de caminhoRelativo — formato
+// "categoria/nome" garantido pelo catálogo oficial. categoria não existe
+// como campo próprio em nenhum objeto do pipeline de evidências hoje; nunca
+// aceita caminho malformado ou categoria fora do conjunto oficial em silêncio.
+function categoriaDoCaminhoRelativo(caminhoRelativo) {
+  if (typeof caminhoRelativo !== 'string' || caminhoRelativo.length === 0) {
+    throw new Error(`Dossiê: caminhoRelativo de evidência inválido: ${String(caminhoRelativo)}`);
+  }
+  const partes = caminhoRelativo.split('/');
+  if (partes.length !== 2 || !partes[0] || !partes[1]) {
+    throw new Error(`Dossiê: caminhoRelativo fora do formato categoria/nome: ${caminhoRelativo}`);
+  }
+  const [categoria] = partes;
+  if (!CATEGORIAS_EVIDENCIA_VALIDAS.has(categoria)) {
+    throw new Error(`Dossiê: categoria de evidência desconhecida: ${categoria}`);
+  }
+  return categoria;
+}
+
+// Referencia (sem copiar/mover) os arquivos já gravados pelo EvidenceStorage,
+// usando exclusivamente dados já persistidos em aut.evidenciasRecebidas —
+// nenhum hash recalculado, nenhum acesso a disco, nenhuma mutação da lista
+// original. Autorizações sem evidenciasRecebidas (nenhuma hoje, mas sem
+// pressupor) resultam em lista vazia. Ordenada por caminhoRelativo para não
+// depender da ordem de submissão do formulário (Marco 5.2).
+function montarArquivosEvidenciaParaHashes(aut) {
+  const arquivos = aut.evidenciasRecebidas?.arquivos || [];
+  const caminhoIncoming = aut.evidenciasRecebidas?.caminhoIncoming || '';
+
+  const lista = arquivos.map((arquivo) => ({
+    categoria:       categoriaDoCaminhoRelativo(arquivo.caminhoRelativo),
+    caminhoRelativo: arquivo.caminhoRelativo,
+    caminhoStorage:  path.posix.join(caminhoIncoming, arquivo.caminhoRelativo),
+    mimeType:        arquivo.mimeType,
+    tamanhoBytes:    arquivo.tamanhoBytes,
+    sha256:          arquivo.sha256,
+    criadoEm:        arquivo.criadoEm
+  }));
+
+  return lista.sort((a, b) => a.caminhoRelativo.localeCompare(b.caminhoRelativo));
+}
+
+function criarHashes(absoluto, aut) {
+  const hashes = {
+    versaoSchema: VERSAO_SCHEMA_DOSSIE,
+    algoritmo:    'SHA-256',
+    hashDadosAutorizacao: aut.hashDadosAutorizacao || null,
+    hashEvidencias:       aut.registroAssinatura?.hashEvidencias || null,
+    arquivos:             montarArquivosEvidenciaParaHashes(aut),
+    hashManifesto:        calcularHashManifesto(absoluto),
+    assinadoPeloServidor: false,
+    carimboTempo:         null
+  };
+  fs.writeFileSync(path.join(absoluto, 'hashes.json'), JSON.stringify(hashes, null, 2));
+}
+
+// Grava o metadata.json — bookkeeping operacional, mutável.
+function criarMetadata(absoluto) {
+  const metadata = {
+    versaoSchema: VERSAO_SCHEMA_DOSSIE,
+    statusPreservacao: 'ativo',
+    ultimaVerificacaoIntegridade: null,
+    tags: []
+  };
+  fs.writeFileSync(path.join(absoluto, 'metadata.json'), JSON.stringify(metadata, null, 2));
+}
+
+// Grava o timeline.json — trilha do processo de assinatura (populada em sprint futura).
+function criarTimeline(absoluto) {
+  const timeline = { versaoSchema: VERSAO_SCHEMA_DOSSIE, eventos: [] };
+  fs.writeFileSync(path.join(absoluto, 'timeline.json'), JSON.stringify(timeline, null, 2));
+}
+
+// Grava o custodia/eventos.json — cadeia de custódia (populada em sprint futura).
+function criarCustodiaEventos(absoluto) {
+  const eventos = { versaoSchema: VERSAO_SCHEMA_DOSSIE, eventos: [] };
+  fs.writeFileSync(path.join(absoluto, 'custodia', 'eventos.json'), JSON.stringify(eventos, null, 2));
+}
+
+// Orquestra a criação dos arquivos do Dossiê — cada arquivo continua sendo
+// responsabilidade de uma função própria; esta só coordena a sequência.
+function criarEstruturaInicialDossie(absoluto, aut) {
+  criarEstruturaDossie(absoluto);
+  criarManifesto(absoluto, aut);
+  criarHashes(absoluto, aut);
+  criarMetadata(absoluto);
+  criarTimeline(absoluto);
+  criarCustodiaEventos(absoluto);
+}
+
+// Cria o Dossiê Digital completo para uma autorização recém-assinada e
+// persiste seu caminho no NeDB. Falha aqui NÃO desfaz a assinatura já
+// persistida (mesmo padrão de tolerância a erro já usado em
+// gerarESalvarPDFAssinatura) — apenas registra aviso no log.
+async function criarDossieDigital(aut) {
+  try {
+    const { relativo, absoluto } = resolverCaminhoDossie(aut.codigo, aut.assinadoEm);
+    criarEstruturaInicialDossie(absoluto, aut);
+    await db.autorizacoes.update({ codigo: aut.codigo }, { $set: { dossiePath: relativo } });
+  } catch (e) {
+    await log(
+      'aviso',
+      `Falha ao criar estrutura do Dossiê Digital da autorização ${aut.codigo}: ${e.message}`,
+      null,
+      aut.imobiliariaId || null
+    );
+  }
+}
+
 // Erro específico de decodificação de dataURL — nunca inclui o conteúdo
 // recebido na mensagem (a rota devolve 422 sem expor Base64).
 class EvidenceDataUrlError extends Error {}
@@ -1582,7 +1773,8 @@ app.post('/api/autorizacoes/assinar', async (req, res) => {
           caminhoRelativo: a.caminhoRelativo,
           sha256:          a.sha256,
           mimeType:        a.mimeType,
-          tamanhoBytes:    a.tamanhoBytes
+          tamanhoBytes:    a.tamanhoBytes,
+          criadoEm:        a.criadoEm
         }))
       },
       validacoes:    { otp: otp||[], facial: facial||null, liveness: liveness||null, uploads: uploads||[] },
@@ -1612,6 +1804,7 @@ app.post('/api/autorizacoes/assinar', async (req, res) => {
       await db.autorizacoes.insert(aut);
     }
     await gerarESalvarPDFAssinatura(aut);
+    await criarDossieDigital(aut);
     // Alerta se imobiliariaId ficou null — indica link gerado sem salvar rascunho
     if (!aut.imobiliariaId) {
       await log('aviso', `Autorização ${codigo} assinada SEM imobiliariaId — não aparecerá no painel`, null, null);
