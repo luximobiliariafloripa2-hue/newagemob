@@ -1687,25 +1687,48 @@ function criarMetadata(absoluto) {
   fs.writeFileSync(path.join(absoluto, 'metadata.json'), JSON.stringify(metadata, null, 2));
 }
 
-// Grava o timeline.json — trilha do processo de assinatura (populada em sprint futura).
-function criarTimeline(absoluto) {
-  const timeline = { versaoSchema: VERSAO_SCHEMA_DOSSIE, eventos: [] };
+// Grava o timeline.json — projeção oficial de eventosNormalizados (fonte
+// única, Microetapa 5.5.3) filtrada por categoria 'timeline'/'ambas'. Não
+// reconstrói, não gera e não interpreta evento algum — só lê o campo
+// `categoria` já atribuído pelo Catálogo Oficial. filter() preserva a
+// ordem original e não muta os objetos de evento. Contrato de
+// eventosNormalizados (array) já validado por quem chama
+// (criarEstruturaInicialDossie) — não revalidado aqui.
+function criarTimeline(absoluto, eventosNormalizados) {
+  const eventosTimeline = eventosNormalizados.filter(
+    (evento) => evento.categoria === 'timeline' || evento.categoria === 'ambas'
+  );
+  const timeline = { versaoSchema: VERSAO_SCHEMA_DOSSIE, eventos: eventosTimeline };
   fs.writeFileSync(path.join(absoluto, 'timeline.json'), JSON.stringify(timeline, null, 2));
 }
 
-// Grava o custodia/eventos.json — cadeia de custódia (populada em sprint futura).
-function criarCustodiaEventos(absoluto) {
-  const eventos = { versaoSchema: VERSAO_SCHEMA_DOSSIE, eventos: [] };
+// Grava o custodia/eventos.json — projeção oficial de eventosNormalizados
+// (mesma fonte única) filtrada por categoria 'custodia'/'ambas'. Mesmas
+// garantias de criarTimeline: sem reconstrução, sem geração, sem mutação,
+// ordem preservada, contrato já validado pelo chamador.
+function criarCustodiaEventos(absoluto, eventosNormalizados) {
+  const eventosCustodia = eventosNormalizados.filter(
+    (evento) => evento.categoria === 'custodia' || evento.categoria === 'ambas'
+  );
+  const eventos = { versaoSchema: VERSAO_SCHEMA_DOSSIE, eventos: eventosCustodia };
   fs.writeFileSync(path.join(absoluto, 'custodia', 'eventos.json'), JSON.stringify(eventos, null, 2));
 }
 
 // Orquestra a criação dos arquivos do Dossiê — cada arquivo continua sendo
 // responsabilidade de uma função própria; esta só coordena a sequência.
-function criarEstruturaInicialDossie(absoluto, aut) {
+// Valida o contrato de eventosNormalizados ANTES de qualquer gravação —
+// nenhuma pasta/arquivo é criado se o argumento for inválido, evitando
+// Dossiê parcialmente criado em disco (Microetapa 5.5.4).
+function criarEstruturaInicialDossie(absoluto, aut, eventosNormalizados) {
+  if (!Array.isArray(eventosNormalizados)) {
+    throw new TypeError(
+      'criarEstruturaInicialDossie: eventosNormalizados deve ser um array.'
+    );
+  }
   criarEstruturaDossie(absoluto);
   criarMetadata(absoluto);
-  criarTimeline(absoluto);
-  criarCustodiaEventos(absoluto);
+  criarTimeline(absoluto, eventosNormalizados);
+  criarCustodiaEventos(absoluto, eventosNormalizados);
   criarManifesto(absoluto, aut);
   criarHashes(absoluto, aut);
 }
@@ -1714,10 +1737,10 @@ function criarEstruturaInicialDossie(absoluto, aut) {
 // persiste seu caminho no NeDB. Falha aqui NÃO desfaz a assinatura já
 // persistida (mesmo padrão de tolerância a erro já usado em
 // gerarESalvarPDFAssinatura) — apenas registra aviso no log.
-async function criarDossieDigital(aut) {
+async function criarDossieDigital(aut, eventosNormalizados) {
   try {
     const { relativo, absoluto } = resolverCaminhoDossie(aut.codigo, aut.assinadoEm);
-    criarEstruturaInicialDossie(absoluto, aut);
+    criarEstruturaInicialDossie(absoluto, aut, eventosNormalizados);
     await db.autorizacoes.update({ codigo: aut.codigo }, { $set: { dossiePath: relativo } });
   } catch (e) {
     await log(
@@ -1949,7 +1972,7 @@ app.post('/api/autorizacoes/assinar', async (req, res) => {
     }
     eventosNormalizados.push(construirEventoBackend('assinatura_realizada', {}, contextoEventoBackend));
     await gerarESalvarPDFAssinatura(aut);
-    await criarDossieDigital(aut);
+    await criarDossieDigital(aut, eventosNormalizados);
     // Alerta se imobiliariaId ficou null — indica link gerado sem salvar rascunho
     if (!aut.imobiliariaId) {
       await log('aviso', `Autorização ${codigo} assinada SEM imobiliariaId — não aparecerá no painel`, null, null);
