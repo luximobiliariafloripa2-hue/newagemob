@@ -18,6 +18,7 @@ const { ATORES_EVENTO } = require('./src/services/events/constants');
 const { validarEstrutura: validarEstruturaEventos, EventValidationError } = require('./src/services/events/EventShapeValidator');
 const { normalizarEventos } = require('./src/services/events/EventNormalizer');
 const { enriquecerEventosComServidor } = require('./src/services/events/EventServerEnrichment');
+const { construirEventoBackend } = require('./src/services/events/EventBackendEmitter');
 
 const app  = express();
 const PORT = process.env.PORT || 3000;
@@ -1864,7 +1865,18 @@ app.post('/api/autorizacoes/assinar', async (req, res) => {
     const eventosIgnorados = eventosProcessados.ignorados;
     // eventosNormalizados/eventosIgnorados existem só em memória nesta
     // microetapa — nenhuma gravação em NeDB, Timeline, Custódia ou
-    // Manifesto ainda (integração com o Dossiê é a Microetapa 5.5.3).
+    // Manifesto ainda (integração com o Dossiê é a Microetapa 5.5.4).
+
+    // Contexto para eventos gerados pelo próprio backend (ator: sistema,
+    // não proprietário) — mesma dataHoraServidorOficial/ip/tenantId/codigo
+    // já resolvidos acima para os eventos declarados pelo cliente.
+    const contextoEventoBackend = Object.freeze({
+      codigo,
+      tenantId: rascunho?.imobiliariaId || null,
+      ip: req.ip,
+      dataHoraServidor: dataHoraServidorOficial,
+      ator: ATORES_EVENTO.SISTEMA
+    });
 
     // Ingestão das evidências binárias (assinatura, selfie, documentos,
     // assinantes adicionais) — precisa terminar com sucesso antes de qualquer
@@ -1879,6 +1891,11 @@ app.post('/api/autorizacoes/assinar', async (req, res) => {
         assinatura, selfie, documentos, assinantes
       });
       resultadoIngestao = await evidenceOrchestrator.ingerir(payloadEvidencias);
+      eventosNormalizados.push(construirEventoBackend(
+        'evidencia_ingerida',
+        { referencia: resultadoIngestao.caminhoIncoming },
+        contextoEventoBackend
+      ));
     } catch (erroIngestao) {
       if (erroIngestao instanceof EvidenceDataUrlError || erroIngestao.name === 'EvidenceValidationError') {
         return res.status(422).json({ erro: 'Falha na validação das evidências.', violacoes: erroIngestao.violacoes || [erroIngestao.message] });
@@ -1930,6 +1947,7 @@ app.post('/api/autorizacoes/assinar', async (req, res) => {
     } else {
       await db.autorizacoes.insert(aut);
     }
+    eventosNormalizados.push(construirEventoBackend('assinatura_realizada', {}, contextoEventoBackend));
     await gerarESalvarPDFAssinatura(aut);
     await criarDossieDigital(aut);
     // Alerta se imobiliariaId ficou null — indica link gerado sem salvar rascunho
