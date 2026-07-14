@@ -5,7 +5,8 @@
 //
 // Eventos fora do escopo do Dossiê ou que só podem nascer do backend não
 // são silenciosamente apagados: voltam em `ignorados`, cada um com seu
-// `motivo` (fora_do_escopo_dossie | somente_gerado_pelo_backend), para que
+// `motivo` (fora_do_escopo_dossie | somente_gerado_pelo_backend) e o
+// `dataHoraCliente` original quando existir, para que
 // quem chamar preserve transparência de auditoria sobre tudo que chegou no
 // payload do cliente, mesmo o que não entra no Dossiê.
 //
@@ -26,7 +27,7 @@ function normalizarEventos(eventosBrutos) {
     const resolvido = resolverTipoOficial(eventoBruto.tipo);
 
     if (resolvido === FORA_DO_ESCOPO_DOSSIE || resolvido === SOMENTE_GERADO_PELO_BACKEND) {
-      ignorados.push({ tipoOriginal: eventoBruto.tipo, motivo: resolvido });
+      ignorados.push({ tipoOriginal: eventoBruto.tipo, motivo: resolvido, dataHoraCliente: eventoBruto.dataHora || null });
       return;
     }
 

@@ -14,6 +14,10 @@ const crypto     = require('crypto');
 const { gerarAutorizacaoPDF } = require('./services/pdf');
 const { LIMITES_EVIDENCIA } = require('./src/services/evidence/constants');
 const { criarEvidenceIngestionOrchestrator } = require('./src/services/evidence/EvidenceIngestionOrchestrator');
+const { ATORES_EVENTO } = require('./src/services/events/constants');
+const { validarEstrutura: validarEstruturaEventos, EventValidationError } = require('./src/services/events/EventShapeValidator');
+const { normalizarEventos } = require('./src/services/events/EventNormalizer');
+const { enriquecerEventosComServidor } = require('./src/services/events/EventServerEnrichment');
 
 const app  = express();
 const PORT = process.env.PORT || 3000;
@@ -1811,6 +1815,56 @@ app.post('/api/autorizacoes/assinar', async (req, res) => {
     if (rascunho && rascunho.status === 'assinado') {
       return res.json({ ok: true });
     }
+
+    // Relógio oficial da requisição: cada requisição possui apenas um
+    // único instante oficial do servidor. Capturado uma única vez, no
+    // início desta integração — nenhum outro `new Date()` deve nascer
+    // neste bloco. Futuramente Timeline, Custódia, Manifesto, Hashes e
+    // demais artefatos do Dossiê também deverão reaproveitar exatamente
+    // este mesmo instante, nunca recalcular o seu próprio — evita
+    // pequenas diferenças de milissegundos entre artefatos jurídicos da
+    // mesma submissão.
+    const dataHoraServidorOficial = new Date().toISOString();
+
+    // Eventos jurídicos declarados pelo cliente (Microetapa 5.5.2 —
+    // integra src/services/events/). Roda antes de qualquer I/O da rota:
+    // um `eventos` malformado nunca aciona a ingestão de evidências nem
+    // toca o NeDB — 422 imediato. `eventos` ausente equivale a [].
+    const eventosBrutos = req.body.eventos || [];
+    let eventosProcessados;
+    try {
+      validarEstruturaEventos(eventosBrutos);
+      eventosProcessados = normalizarEventos(eventosBrutos);
+    } catch (erroEventos) {
+      if (erroEventos instanceof EventValidationError) {
+        return res.status(422).json({ erro: 'Falha na validação dos eventos.', violacoes: erroEventos.violacoes });
+      }
+      throw erroEventos;
+    }
+
+    // contextoEvento representa o contexto oficial e imutável desta
+    // requisição — IP, dataHoraServidor, ator, tenantId e código nunca
+    // sofrem alteração depois de criados (Object.freeze). tenantId segue
+    // exatamente a mesma resolução já usada por `aut` (mais abaixo, na
+    // montagem do objeto principal), incluindo a mesma tolerância a
+    // tenant ausente — a Microetapa 5.5.2 só integra a pipeline de
+    // eventos, não introduz regra de negócio nova sobre a autorização.
+    // contextoEvento é também um contexto evolutivo: campos futuros
+    // (requestId, traceId, ambiente, versaoBackend, hashManifesto,
+    // certificado, carimboDoTempo, chainId etc.) poderão ser incorporados
+    // aqui sem alterar a assinatura de enriquecerEventosComServidor.
+    const contextoEvento = Object.freeze({
+      codigo,
+      tenantId: rascunho?.imobiliariaId || null,
+      ip: req.ip,
+      dataHoraServidor: dataHoraServidorOficial,
+      ator: ATORES_EVENTO.PROPRIETARIO
+    });
+    const eventosNormalizados = enriquecerEventosComServidor(eventosProcessados.normalizados, contextoEvento);
+    const eventosIgnorados = eventosProcessados.ignorados;
+    // eventosNormalizados/eventosIgnorados existem só em memória nesta
+    // microetapa — nenhuma gravação em NeDB, Timeline, Custódia ou
+    // Manifesto ainda (integração com o Dossiê é a Microetapa 5.5.3).
 
     // Ingestão das evidências binárias (assinatura, selfie, documentos,
     // assinantes adicionais) — precisa terminar com sucesso antes de qualquer

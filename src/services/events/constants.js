@@ -17,9 +17,26 @@ const LIMITES_EVENTO = {
   maxTamanhoCampoTexto: 200
 };
 
+// Preparado para evolução futura (admin, corretor, sistema, auditor,
+// assinante adicional) sem exigir mudança na assinatura de
+// EventServerEnrichment.js — novos atores só precisam de uma entrada aqui
+// e de um contextoEvento.ator correspondente em quem chamar.
+const ATORES_EVENTO = Object.freeze({
+  PROPRIETARIO:        'proprietario',
+  ADMIN:               'admin',
+  CORRETOR:            'corretor',
+  SISTEMA:             'sistema',
+  AUDITOR:             'auditor',
+  ASSINANTE_ADICIONAL: 'assinante_adicional'
+});
+
+const ATORES_EVENTO_VALIDOS = new Set(Object.values(ATORES_EVENTO));
+
 module.exports = {
   VERSAO_SCHEMA_EVENTOS,
   CATEGORIAS_EVENTO_VALIDAS,
   ORIGENS_EVENTO_VALIDAS,
-  LIMITES_EVENTO
+  LIMITES_EVENTO,
+  ATORES_EVENTO,
+  ATORES_EVENTO_VALIDOS
 };
