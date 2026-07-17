@@ -1536,7 +1536,7 @@ function contarEvidenciasPorCategoria(aut) {
 // quantidade por categoria — detalhe (hash, caminho, mimeType) continua
 // exclusivamente em hashes.json, sem duplicação. Nenhum hash é recalculado,
 // nenhum arquivo é copiado ou movido.
-function montarComponentesManifesto(absoluto, aut) {
+function montarComponentesManifesto(absoluto, aut, { eventosTimeline, eventosCustodia }) {
   const evidenciasPorCategoria = contarEvidenciasPorCategoria(aut);
   const categorias = {};
   CATEGORIAS_EVIDENCIA_VALIDAS.forEach((categoria) => {
@@ -1558,12 +1558,12 @@ function montarComponentesManifesto(absoluto, aut) {
     timeline: {
       caminho: 'timeline.json',
       presenteNoMomentoDoManifesto: fs.existsSync(path.join(absoluto, 'timeline.json')),
-      estadoConteudo: 'vazio'
+      estadoConteudo: eventosTimeline.length > 0 ? 'preenchido' : 'vazio'
     },
     custodia: {
       caminho: 'custodia/eventos.json',
       presenteNoMomentoDoManifesto: fs.existsSync(path.join(absoluto, 'custodia', 'eventos.json')),
-      estadoConteudo: 'vazio'
+      estadoConteudo: eventosCustodia.length > 0 ? 'preenchido' : 'vazio'
     },
     pdfOficial: {
       caminho: `assinados/${aut.codigo}.pdf`,
@@ -1576,7 +1576,7 @@ function montarComponentesManifesto(absoluto, aut) {
   };
 }
 
-function criarManifesto(absoluto, aut) {
+function criarManifesto(absoluto, aut, { eventosTimeline, eventosCustodia }) {
   const manifesto = {
     versaoSchema:  VERSAO_SCHEMA_DOSSIE,
     codigo:        aut.codigo,
@@ -1594,7 +1594,11 @@ function criarManifesto(absoluto, aut) {
         custodia: 'custodia/eventos.json'
       }
     },
-    componentes:       montarComponentesManifesto(absoluto, aut),
+    componentes:       montarComponentesManifesto(
+      absoluto,
+      aut,
+      { eventosTimeline, eventosCustodia }
+    ),
     criadoEm:          aut.criadoEm   || null,
     assinadoEm:        aut.assinadoEm || null,
     preservadoEm:      new Date().toISOString(),
@@ -1687,29 +1691,21 @@ function criarMetadata(absoluto) {
   fs.writeFileSync(path.join(absoluto, 'metadata.json'), JSON.stringify(metadata, null, 2));
 }
 
-// Grava o timeline.json — projeção oficial de eventosNormalizados (fonte
-// única, Microetapa 5.5.3) filtrada por categoria 'timeline'/'ambas'. Não
-// reconstrói, não gera e não interpreta evento algum — só lê o campo
-// `categoria` já atribuído pelo Catálogo Oficial. filter() preserva a
-// ordem original e não muta os objetos de evento. Contrato de
-// eventosNormalizados (array) já validado por quem chama
-// (criarEstruturaInicialDossie) — não revalidado aqui.
-function criarTimeline(absoluto, eventosNormalizados) {
-  const eventosTimeline = eventosNormalizados.filter(
-    (evento) => evento.categoria === 'timeline' || evento.categoria === 'ambas'
-  );
+// Grava o timeline.json — serializa eventosTimeline, já filtrado por
+// categoria 'timeline'/'ambas' exclusivamente em criarEstruturaInicialDossie
+// (Microetapa 5.5.5). Não filtra, não reconstrói, não gera evento algum —
+// só recebe o array pronto e grava. Contrato de eventosTimeline (array) já
+// garantido por quem chama.
+function criarTimeline(absoluto, eventosTimeline) {
   const timeline = { versaoSchema: VERSAO_SCHEMA_DOSSIE, eventos: eventosTimeline };
   fs.writeFileSync(path.join(absoluto, 'timeline.json'), JSON.stringify(timeline, null, 2));
 }
 
-// Grava o custodia/eventos.json — projeção oficial de eventosNormalizados
-// (mesma fonte única) filtrada por categoria 'custodia'/'ambas'. Mesmas
-// garantias de criarTimeline: sem reconstrução, sem geração, sem mutação,
-// ordem preservada, contrato já validado pelo chamador.
-function criarCustodiaEventos(absoluto, eventosNormalizados) {
-  const eventosCustodia = eventosNormalizados.filter(
-    (evento) => evento.categoria === 'custodia' || evento.categoria === 'ambas'
-  );
+// Grava o custodia/eventos.json — serializa eventosCustodia, já filtrado por
+// categoria 'custodia'/'ambas' exclusivamente em criarEstruturaInicialDossie
+// (Microetapa 5.5.5). Mesmas garantias de criarTimeline: sem filtro, sem
+// reconstrução, sem geração, array já pronto recebido por parâmetro.
+function criarCustodiaEventos(absoluto, eventosCustodia) {
   const eventos = { versaoSchema: VERSAO_SCHEMA_DOSSIE, eventos: eventosCustodia };
   fs.writeFileSync(path.join(absoluto, 'custodia', 'eventos.json'), JSON.stringify(eventos, null, 2));
 }
@@ -1718,18 +1714,29 @@ function criarCustodiaEventos(absoluto, eventosNormalizados) {
 // responsabilidade de uma função própria; esta só coordena a sequência.
 // Valida o contrato de eventosNormalizados ANTES de qualquer gravação —
 // nenhuma pasta/arquivo é criado se o argumento for inválido, evitando
-// Dossiê parcialmente criado em disco (Microetapa 5.5.4).
+// Dossiê parcialmente criado em disco (Microetapa 5.5.4). Único ponto de
+// filtragem por categoria do Dossiê (Microetapa 5.5.5): eventosTimeline e
+// eventosCustodia são derivados aqui, uma única vez, e repassados prontos
+// para Timeline, Custódia e Manifesto — nenhuma dessas funções filtra por
+// conta própria.
 function criarEstruturaInicialDossie(absoluto, aut, eventosNormalizados) {
   if (!Array.isArray(eventosNormalizados)) {
     throw new TypeError(
       'criarEstruturaInicialDossie: eventosNormalizados deve ser um array.'
     );
   }
+  const eventosTimeline = eventosNormalizados.filter(
+    (evento) => evento.categoria === 'timeline' || evento.categoria === 'ambas'
+  );
+  const eventosCustodia = eventosNormalizados.filter(
+    (evento) => evento.categoria === 'custodia' || evento.categoria === 'ambas'
+  );
+
   criarEstruturaDossie(absoluto);
   criarMetadata(absoluto);
-  criarTimeline(absoluto, eventosNormalizados);
-  criarCustodiaEventos(absoluto, eventosNormalizados);
-  criarManifesto(absoluto, aut);
+  criarTimeline(absoluto, eventosTimeline);
+  criarCustodiaEventos(absoluto, eventosCustodia);
+  criarManifesto(absoluto, aut, { eventosTimeline, eventosCustodia });
   criarHashes(absoluto, aut);
 }
 
