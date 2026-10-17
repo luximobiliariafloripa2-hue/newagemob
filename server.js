@@ -1672,6 +1672,33 @@ function montarArquivosEvidenciaParaHashes(aut) {
   return lista.sort((a, b) => a.caminhoRelativo.localeCompare(b.caminhoRelativo));
 }
 
+// Calcula o SHA-256 agregado sobre o conjunto protegido do Dossiê — hash
+// canônico agregado (opção aprovada na auditoria do hash raiz), não Merkle
+// Tree. Conjunto protegido: hashDadosAutorizacao, hashEvidencias, os sha256
+// de arquivos (na ordem determinística já existente) e os sha256 de cada
+// componentesDossie (manifesto, timeline, custodia, pdfOficial). Nunca
+// inclui metadata.json (mutável), assinadoPeloServidor/carimboTempo (ainda
+// não preenchidos nesta fase — incluí-los invalidaria retroativamente o
+// hashRaiz quando forem preenchidos) nem o próprio hashRaiz. Recebe o
+// objeto hashes já montado (antes de hashRaiz existir nele) e só lê dele os
+// campos do conjunto protegido — nunca serializa hashes.json inteiro, para
+// que o valor seja sempre recalculável relendo apenas os campos já
+// persistidos em hashes.json.
+function calcularHashRaizDossie(hashes) {
+  const conjuntoProtegido = {
+    hashDadosAutorizacao: hashes.hashDadosAutorizacao,
+    hashEvidencias:       hashes.hashEvidencias,
+    arquivos:             hashes.arquivos.map((arquivo) => arquivo.sha256),
+    componentesDossie: {
+      manifesto:  hashes.componentesDossie.manifesto.sha256,
+      timeline:   hashes.componentesDossie.timeline.sha256,
+      custodia:   hashes.componentesDossie.custodia.sha256,
+      pdfOficial: hashes.componentesDossie.pdfOficial.sha256
+    }
+  };
+  return crypto.createHash('sha256').update(serializarCanonico(conjuntoProtegido)).digest('hex');
+}
+
 function criarHashes(absoluto, aut) {
   const hashes = {
     versaoSchema: VERSAO_SCHEMA_DOSSIE,
@@ -1708,6 +1735,7 @@ function criarHashes(absoluto, aut) {
     assinadoPeloServidor: false,
     carimboTempo:         null
   };
+  hashes.hashRaiz = calcularHashRaizDossie(hashes);
   fs.writeFileSync(path.join(absoluto, 'hashes.json'), JSON.stringify(hashes, null, 2));
 }
 
