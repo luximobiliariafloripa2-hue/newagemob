@@ -1609,12 +1609,18 @@ function criarManifesto(absoluto, aut, { eventosTimeline, eventosCustodia }) {
   fs.writeFileSync(path.join(absoluto, 'manifesto.json'), JSON.stringify(manifesto, null, 2));
 }
 
-// Calcula o hash SHA-256 do conteúdo real de manifesto.json já gravado em
-// disco — hash do arquivo, não de uma reconstrução em memória, para que a
-// verificação futura seja sempre "reler o arquivo e recalcular".
-function calcularHashManifesto(absoluto) {
-  const conteudo = fs.readFileSync(path.join(absoluto, 'manifesto.json'));
+// Calcula o hash SHA-256 do conteúdo real de um arquivo do Dossiê já
+// gravado em disco — hash do arquivo, não de uma reconstrução em memória,
+// para que a verificação futura seja sempre "reler o arquivo e recalcular".
+function calcularHashArquivoDossie(absoluto, caminhoRelativo) {
+  const conteudo = fs.readFileSync(path.join(absoluto, caminhoRelativo));
   return crypto.createHash('sha256').update(conteudo).digest('hex');
+}
+
+// Calcula o hash do manifesto.json utilizando o helper genérico de hash
+// dos arquivos oficiais do Dossiê Digital.
+function calcularHashManifesto(absoluto) {
+  return calcularHashArquivoDossie(absoluto, 'manifesto.json');
 }
 
 // Grava o hashes.json — núcleo imutável de integridade.
@@ -1669,11 +1675,29 @@ function montarArquivosEvidenciaParaHashes(aut) {
 function criarHashes(absoluto, aut) {
   const hashes = {
     versaoSchema: VERSAO_SCHEMA_DOSSIE,
+
+    // Versão do formato específico de hashes.json.
+    // Independente da versão global do schema do Dossiê Digital.
+    versaoFormatoHashes: 2,
+
     algoritmo:    'SHA-256',
     hashDadosAutorizacao: aut.hashDadosAutorizacao || null,
     hashEvidencias:       aut.registroAssinatura?.hashEvidencias || null,
     arquivos:             montarArquivosEvidenciaParaHashes(aut),
-    hashManifesto:        calcularHashManifesto(absoluto),
+    componentesDossie: {
+      manifesto: {
+        caminho: 'manifesto.json',
+        sha256: calcularHashArquivoDossie(absoluto, 'manifesto.json')
+      },
+      timeline: {
+        caminho: 'timeline.json',
+        sha256: calcularHashArquivoDossie(absoluto, 'timeline.json')
+      },
+      custodia: {
+        caminho: 'custodia/eventos.json',
+        sha256: calcularHashArquivoDossie(absoluto, 'custodia/eventos.json')
+      }
+    },
     assinadoPeloServidor: false,
     carimboTempo:         null
   };
