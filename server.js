@@ -1474,6 +1474,90 @@ function calcularHashEvidencias(registroAssinatura) {
 // ═══════════════════════════════════════════════════════
 const VERSAO_SCHEMA_DOSSIE = 1;
 
+// Carrega a chave Ed25519 de assinatura do Dossie.
+// Deriva a chave publica da propria privada.
+function carregarChaveAssinaturaDossie(pem) {
+  const privateKey = crypto.createPrivateKey(pem);
+  if (privateKey.asymmetricKeyType !== 'ed25519') {
+    throw new Error('algoritmo de chave invalido');
+  }
+  const publicKey = crypto.createPublicKey(privateKey);
+  const spkiDer = publicKey.export({ type: 'spki', format: 'der' });
+  const publicKeyPem = publicKey.export({ type: 'spki', format: 'pem' });
+  const keyId = crypto.createHash('sha256').update(spkiDer).digest('hex');
+  return {
+    privateKey: privateKey,
+    publicKey: publicKey,
+    publicKeyPem: publicKeyPem,
+    keyId: keyId
+  };
+}
+
+let dossieSigningPrivateKey = null;
+let dossieSigningPublicKey = null;
+let dossieSigningPublicKeyPem = null;
+let dossieSigningKeyId = null;
+
+if (process.env.DOSSIE_SIGNING_PRIVATE_KEY) {
+  try {
+    const chave = carregarChaveAssinaturaDossie(
+      process.env.DOSSIE_SIGNING_PRIVATE_KEY
+    );
+    dossieSigningPrivateKey = chave.privateKey;
+    dossieSigningPublicKey = chave.publicKey;
+    dossieSigningPublicKeyPem = chave.publicKeyPem;
+    dossieSigningKeyId = chave.keyId;
+  } catch (e) {
+    if (process.env.NODE_ENV === 'production') {
+      console.error('ERRO FATAL: chave Ed25519 do Dossie invalida.');
+      process.exit(1);
+    }
+    console.warn('AVISO: Dossie sem assinatura criptografica do servidor.');
+  }
+} else if (process.env.NODE_ENV === 'production') {
+  console.error('ERRO FATAL: chave Ed25519 do Dossie nao configurada.');
+  process.exit(1);
+} else {
+  console.warn('AVISO: Dossie sem assinatura criptografica do servidor.');
+}
+
+// Assina os 32 bytes do hashRaiz com Ed25519 e verifica a
+// propria assinatura antes de devolve-la.
+function assinarHashRaizDossie(hashRaiz) {
+  if (!dossieSigningPrivateKey) {
+    return null;
+  }
+
+  const dados = Buffer.from(hashRaiz, 'hex');
+
+  const assinaturaBuffer = crypto.sign(
+    null,
+    dados,
+    dossieSigningPrivateKey
+  );
+
+  const assinaturaValida = crypto.verify(
+    null,
+    dados,
+    dossieSigningPublicKey,
+    assinaturaBuffer
+  );
+
+  if (assinaturaValida !== true) {
+    throw new Error('falha na verificacao da assinatura do Dossie');
+  }
+
+  return {
+    algoritmo: 'Ed25519',
+    keyId: dossieSigningKeyId,
+    valor: assinaturaBuffer.toString('base64'),
+    encoding: 'base64',
+    assinadoEm: new Date().toISOString(),
+    hashRaiz: hashRaiz,
+    chavePublica: dossieSigningPublicKeyPem
+  };
+}
+
 // Categorias fixas de evidência do Dossiê — única fonte da verdade, usada
 // tanto para criar as subpastas físicas quanto para o índice do manifesto.
 const CATEGORIAS_DOSSIE = ['assinatura', 'biometria', 'documentos', 'anexos', 'assinantes_adicionais', 'custodia'];
@@ -1736,6 +1820,17 @@ function criarHashes(absoluto, aut) {
     carimboTempo:         null
   };
   hashes.hashRaiz = calcularHashRaizDossie(hashes);
+
+  const assinatura = assinarHashRaizDossie(hashes.hashRaiz);
+
+  if (assinatura) {
+    hashes.assinatura = assinatura;
+    hashes.assinadoPeloServidor = true;
+  } else {
+    hashes.assinatura = null;
+    hashes.assinadoPeloServidor = false;
+  }
+
   fs.writeFileSync(path.join(absoluto, 'hashes.json'), JSON.stringify(hashes, null, 2));
 }
 
