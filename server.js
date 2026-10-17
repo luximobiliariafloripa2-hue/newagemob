@@ -1696,6 +1696,13 @@ function criarHashes(absoluto, aut) {
       custodia: {
         caminho: 'custodia/eventos.json',
         sha256: calcularHashArquivoDossie(absoluto, 'custodia/eventos.json')
+      },
+      pdfOficial: {
+        caminho: `assinados/${aut.codigo}.pdf`,
+        sha256: calcularHashArquivoDossie(
+          path.dirname(caminhoPdfAssinatura(aut.codigo)),
+          path.basename(caminhoPdfAssinatura(aut.codigo))
+        )
       }
     },
     assinadoPeloServidor: false,
