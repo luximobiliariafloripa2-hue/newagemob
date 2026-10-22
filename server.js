@@ -19,6 +19,7 @@ const { validarEstrutura: validarEstruturaEventos, EventValidationError } = requ
 const { normalizarEventos } = require('./src/services/events/EventNormalizer');
 const { enriquecerEventosComServidor } = require('./src/services/events/EventServerEnrichment');
 const { construirEventoBackend } = require('./src/services/events/EventBackendEmitter');
+const { carregarConfiguracaoTsa, solicitarCarimboTempo } = require('./src/services/tsa/Rfc3161TimestampClient');
 
 const app  = express();
 const PORT = process.env.PORT || 3000;
@@ -1521,6 +1522,30 @@ if (process.env.DOSSIE_SIGNING_PRIVATE_KEY) {
   console.warn('AVISO: Dossie sem assinatura criptografica do servidor.');
 }
 
+// Configuração do carimbo de tempo RFC 3161 (Marco 5 — TSA). Mesmo padrão
+// da chave Ed25519: em produção, ausente/incompleta/inválida é erro fatal;
+// em desenvolvimento, o Dossiê segue com carimboTempo 'nao_configurado'.
+// Só o código do erro é registrado — nunca valores das variáveis.
+let configuracaoTsa = null;
+
+try {
+  configuracaoTsa = carregarConfiguracaoTsa(process.env);
+} catch (e) {
+  if (process.env.NODE_ENV === 'production') {
+    console.error(`ERRO FATAL: configuracao TSA invalida (${e.codigo || 'desconhecido'}).`);
+    process.exit(1);
+  }
+  console.warn(`AVISO: configuracao TSA invalida (${e.codigo || 'desconhecido'}); Dossie sem carimbo de tempo.`);
+}
+
+if (!configuracaoTsa) {
+  if (process.env.NODE_ENV === 'production') {
+    console.error('ERRO FATAL: TSA do Dossie nao configurado (TSA_URL e TSA_TRUSTED_ROOTS).');
+    process.exit(1);
+  }
+  console.warn('AVISO: Dossie sem carimbo de tempo RFC 3161.');
+}
+
 // Assina os 32 bytes do hashRaiz com Ed25519 e verifica a
 // propria assinatura antes de devolve-la.
 function assinarHashRaizDossie(hashRaiz) {
@@ -1783,7 +1808,24 @@ function calcularHashRaizDossie(hashes) {
   return crypto.createHash('sha256').update(serializarCanonico(conjuntoProtegido)).digest('hex');
 }
 
-function criarHashes(absoluto, aut) {
+// Representação protegida pelo carimbo de tempo RFC 3161: hashRaiz mais a
+// assinatura Ed25519 que o cobre, para provar que ambos existiam em genTime.
+// Só esses quatro campos, serializados canonicamente; carimboTempo nunca
+// entra no hashRaiz. Devolve os bytes canônicos e o SHA-256 deles.
+function calcularDigestCarimboTempo(hashes) {
+  const representacao = Buffer.from(serializarCanonico({
+    algoritmo:  hashes.assinatura.algoritmo,
+    hashRaiz:   hashes.hashRaiz,
+    keyId:      hashes.assinatura.keyId,
+    assinatura: hashes.assinatura.valor
+  }), 'utf8');
+  return {
+    representacao,
+    digest: crypto.createHash('sha256').update(representacao).digest()
+  };
+}
+
+async function criarHashes(absoluto, aut) {
   const hashes = {
     versaoSchema: VERSAO_SCHEMA_DOSSIE,
 
@@ -1831,6 +1873,29 @@ function criarHashes(absoluto, aut) {
     hashes.assinadoPeloServidor = false;
   }
 
+  // Sem assinatura Ed25519 (só em desenvolvimento) não há o que carimbar.
+  // Falha da TSA nunca impede a gravação: fica registrada em carimboTempo.
+  if (hashes.assinatura) {
+    hashes.carimboTempo = await solicitarCarimboTempo(calcularDigestCarimboTempo(hashes), configuracaoTsa);
+    hashes.carimboTempo.representacao = {
+      campos: ['algoritmo', 'hashRaiz', 'keyId', 'assinatura'],
+      serializacao: 'canonica-v1'
+    };
+    if (configuracaoTsa && hashes.carimboTempo.status !== 'valido') {
+      console.warn(`AVISO: carimbo de tempo do Dossie ${aut.codigo} nao obtido (${hashes.carimboTempo.status}/${hashes.carimboTempo.motivo}).`);
+    }
+  } else {
+    hashes.carimboTempo = {
+      padrao:        'RFC3161',
+      status:        'nao_aplicado',
+      motivo:        'sem_assinatura_servidor',
+      algoritmoHash: 'SHA-256',
+      hashCarimbado: null,
+      tentadoEm:     null,
+      token:         null
+    };
+  }
+
   fs.writeFileSync(path.join(absoluto, 'hashes.json'), JSON.stringify(hashes, null, 2));
 }
 
@@ -1873,7 +1938,7 @@ function criarCustodiaEventos(absoluto, eventosCustodia) {
 // eventosCustodia são derivados aqui, uma única vez, e repassados prontos
 // para Timeline, Custódia e Manifesto — nenhuma dessas funções filtra por
 // conta própria.
-function criarEstruturaInicialDossie(absoluto, aut, eventosNormalizados) {
+async function criarEstruturaInicialDossie(absoluto, aut, eventosNormalizados) {
   if (!Array.isArray(eventosNormalizados)) {
     throw new TypeError(
       'criarEstruturaInicialDossie: eventosNormalizados deve ser um array.'
@@ -1891,7 +1956,7 @@ function criarEstruturaInicialDossie(absoluto, aut, eventosNormalizados) {
   criarTimeline(absoluto, eventosTimeline);
   criarCustodiaEventos(absoluto, eventosCustodia);
   criarManifesto(absoluto, aut, { eventosTimeline, eventosCustodia });
-  criarHashes(absoluto, aut);
+  await criarHashes(absoluto, aut);
 }
 
 // Cria o Dossiê Digital completo para uma autorização recém-assinada e
@@ -1901,7 +1966,7 @@ function criarEstruturaInicialDossie(absoluto, aut, eventosNormalizados) {
 async function criarDossieDigital(aut, eventosNormalizados) {
   try {
     const { relativo, absoluto } = resolverCaminhoDossie(aut.codigo, aut.assinadoEm);
-    criarEstruturaInicialDossie(absoluto, aut, eventosNormalizados);
+    await criarEstruturaInicialDossie(absoluto, aut, eventosNormalizados);
     await db.autorizacoes.update({ codigo: aut.codigo }, { $set: { dossiePath: relativo } });
   } catch (e) {
     await log(
@@ -1910,6 +1975,7 @@ async function criarDossieDigital(aut, eventosNormalizados) {
       null,
       aut.imobiliariaId || null
     );
+    throw e;
   }
 }
 
