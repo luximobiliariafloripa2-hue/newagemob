@@ -2269,9 +2269,25 @@ async function conferirCarimboTempoDossie(hashes) {
   }
 }
 
+// Autorização assinada pelo fluxo que exige Dossiê Digital: só esse fluxo
+// grava evidenciasRecebidas. Critério único usado pela idempotência da
+// assinatura e por verificarIntegridadeDossie (Marco 6, Bloqueador 2).
+function pertenceAoFluxoComDossie(aut) {
+  return Boolean(aut && aut.evidenciasRecebidas);
+}
+
 // Verificação completa, somente leitura. Inconsistências viram veredito
 // 'inconsistente'; exceção inesperada (defeito interno) é propagada.
 async function verificarIntegridadeDossie(aut) {
+  if (!aut.dossiePath && pertenceAoFluxoComDossie(aut)) {
+    return {
+      situacao:           'inconsistente',
+      integridade:        'invalida',
+      assinaturaServidor: 'nao_disponivel',
+      carimboTempo:       { situacao: 'nao_disponivel' },
+      motivo:             'dossie_ausente'
+    };
+  }
   if (!aut.dossiePath) {
     return {
       situacao:           'nao_disponivel',
@@ -2405,8 +2421,13 @@ app.post('/api/autorizacoes/assinar', async (req, res) => {
     const rascunho = await db.autorizacoes.findOne({ codigo });
     // Idempotência: se esta autorização já foi assinada, não reprocessa
     // (evita duplicar PDF, Dossiê, log e notificação em caso de reenvio)
+    // Fluxo com Dossiê só é idempotente com dossiePath persistido; sem ele,
+    // a conclusão nunca é confirmada (sem reprocessar o Dossiê).
     if (rascunho && rascunho.status === 'assinado') {
-      return res.json({ ok: true });
+      if (rascunho.dossiePath || !pertenceAoFluxoComDossie(rascunho)) {
+        return res.json({ ok: true });
+      }
+      return res.status(409).json({ erro: 'Autorização assinada com Dossiê Digital pendente.' });
     }
 
     // Relógio oficial da requisição: cada requisição possui apenas um
