@@ -38,10 +38,13 @@ function normalizarEventos(eventosBrutos) {
       throw new Error(`EventNormalizer: tipo "${resolvido}" normalizado mas ausente do Catálogo Oficial.`);
     }
 
+    // Todo evento que passa por aqui veio de req.body.eventos: é sempre uma
+    // declaração do cliente, nunca confirmação do backend — a origem do
+    // catálogo não é herdada (Marco 6, Bloqueador 1).
     normalizados.push({
       tipo:            classificacao.tipo,
       categoria:       classificacao.categoria,
-      origem:          classificacao.origem,
+      origem:          'declarado',
       valor:           classificacao.valor,
       detalhe:         eventoBruto.detalhe || '',
       dataHoraCliente: eventoBruto.dataHora,
