@@ -362,14 +362,27 @@ async function validarRespostaTsa(respostaDer, esperado) {
         : 'status_recusado'
     );
   }
-  if (!resposta.timeStampToken || resposta.timeStampToken.contentType !== OID_SIGNED_DATA) {
+
+  const resultado = await validarTokenTsa(resposta.timeStampToken, esperado);
+  return {
+    ...resultado,
+    // TimeStampToken (ContentInfo) exatamente como recebido, sem re-codificar.
+    token: Buffer.from(asn1.result.valueBlock.value[1].valueBeforeDecodeView)
+  };
+}
+
+// Validação do TimeStampToken (ContentInfo -> SignedData -> TSTInfo), comum
+// à resposta online e ao token já gravado. Qualquer divergência lança
+// FalhaTsa com status 'falha_validacao'.
+async function validarTokenTsa(contentInfo, esperado) {
+  if (!contentInfo || contentInfo.contentType !== OID_SIGNED_DATA) {
     falhaValidacao('token_ausente');
   }
 
   let signedData = null;
   let tstInfo = null;
   try {
-    signedData = new pkijs.SignedData({ schema: resposta.timeStampToken.content });
+    signedData = new pkijs.SignedData({ schema: contentInfo.content });
     const encap = signedData.encapContentInfo;
     if (encap.eContentType !== OID_CT_TSTINFO || !encap.eContent) throw new Error('econtent');
     tstInfo = pkijs.TSTInfo.fromBER(encap.eContent.valueBlock.valueHexView);
@@ -420,7 +433,7 @@ async function validarRespostaTsa(respostaDer, esperado) {
 
   const certificado = verificacao.signerCertificate;
   validarEkuTimestamping(certificado);
-  const certificadoDer = derOriginalDoCertificado(resposta.timeStampToken.content, certificado);
+  const certificadoDer = derOriginalDoCertificado(contentInfo.content, certificado);
   if (!certificadoDer) falhaValidacao('certificado_signatario_ausente');
   validarEssCertId(signedData.signerInfos[0], certificadoDer);
 
@@ -433,10 +446,50 @@ async function validarRespostaTsa(respostaDer, esperado) {
       issuer: nomeDistinto(certificado.issuer),
       serial: hex(certificado.serialNumber.valueBlock.valueHexView),
       sha256: crypto.createHash('sha256').update(certificadoDer).digest('hex')
-    },
-    // TimeStampToken (ContentInfo) exatamente como recebido, sem re-codificar.
-    token: Buffer.from(asn1.result.valueBlock.value[1].valueBeforeDecodeView)
+    }
   };
+}
+
+// Verificação offline de um carimbo já gravado em hashes.json: as mesmas
+// validações do carimbo online (assinatura CMS, cadeia até as raízes na data
+// genTime, EKU, ESSCertID, messageImprint, nonce e política gravados), sem
+// rede. Nunca lança; sem raízes configuradas o resultado é 'nao_verificavel'.
+async function verificarTokenArmazenado(carimboTempo, { representacao, digest }, raizes) {
+  if (!raizes || raizes.length === 0) {
+    return { situacao: 'nao_verificavel', motivo: 'tsa_raizes_nao_configuradas' };
+  }
+  try {
+    const { token, nonce, politica, genTime, serial } = carimboTempo;
+    if (typeof token !== 'string' || typeof politica !== 'string' ||
+        typeof nonce !== 'string' || !/^([0-9a-f]{2})+$/.test(nonce)) {
+      falhaValidacao('carimbo_incompleto');
+    }
+    const tokenDer = Buffer.from(token, 'base64');
+    if (tokenDer.toString('base64') !== token) falhaValidacao('token_malformado');
+    const asn1Token = asn1js.fromBER(paraArrayBuffer(tokenDer));
+    if (asn1Token.offset === -1 || asn1Token.offset !== tokenDer.byteLength) {
+      falhaValidacao('token_malformado');
+    }
+    let contentInfo = null;
+    try {
+      contentInfo = new pkijs.ContentInfo({ schema: asn1Token.result });
+    } catch {
+      falhaValidacao('token_malformado');
+    }
+    const resultado = await validarTokenTsa(contentInfo, {
+      representacao,
+      digest,
+      nonce: Buffer.from(nonce, 'hex'),
+      politicaOid: politica,
+      raizes
+    });
+    if (resultado.genTime !== genTime || resultado.serial !== serial) {
+      falhaValidacao('metadados_divergentes');
+    }
+    return { situacao: 'valido', genTime: resultado.genTime };
+  } catch (e) {
+    return { situacao: 'invalido', motivo: e instanceof FalhaTsa ? e.motivo : 'erro_interno' };
+  }
 }
 
 // Solicita e valida um carimbo sobre `representacao` (bytes canônicos), cujo
@@ -504,5 +557,6 @@ async function solicitarCarimboTempo({ representacao, digest }, config) {
 module.exports = {
   carregarConfiguracaoTsa,
   solicitarCarimboTempo,
+  verificarTokenArmazenado,
   ErroConfiguracaoTsa
 };

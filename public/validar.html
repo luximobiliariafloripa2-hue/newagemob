@@ -27,6 +27,11 @@ main{flex:1;max-width:640px;margin:40px auto;padding:0 20px;width:100%}
 .status-err{text-align:center;padding:20px 0 28px}
 .status-err .icon{width:72px;height:72px;border-radius:50%;background:var(--red);color:#fff;font-size:32px;display:flex;align-items:center;justify-content:center;margin:0 auto 16px}
 .status-err h2{font-family:'Sora',sans-serif;font-size:22px;font-weight:800;color:var(--red);margin-bottom:6px}
+.status-err p{color:var(--ink2);font-size:14px}
+.status-neutral{text-align:center;padding:20px 0 28px}
+.status-neutral .icon{width:72px;height:72px;border-radius:50%;background:#B45309;color:#fff;font-size:32px;display:flex;align-items:center;justify-content:center;margin:0 auto 16px}
+.status-neutral h2{font-family:'Sora',sans-serif;font-size:22px;font-weight:800;color:#B45309;margin-bottom:6px}
+.status-neutral p{color:var(--ink2);font-size:14px}
 .divider{border:none;border-top:1px solid var(--line);margin:20px 0}
 .row{display:flex;justify-content:space-between;align-items:flex-start;padding:10px 0;border-bottom:1px solid var(--paper);gap:16px;font-size:14px}
 .row:last-child{border-bottom:none}
@@ -101,7 +106,7 @@ async function verificar(code){
     const d = await r.json();
     document.getElementById('loading').style.display='none';
     document.getElementById('result').style.display='block';
-    renderResult(d, code);
+    renderResult(d, code, r.status);
   } catch(e) {
     document.getElementById('loading').style.display='none';
     document.getElementById('result').style.display='block';
@@ -109,12 +114,64 @@ async function verificar(code){
   }
 }
 
-function renderResult(d, code){
+function esc(v){
+  return String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+// Texto público do carimbo de tempo quando o Dossiê é íntegro sem carimbo
+// válido — nunca torna o Dossiê inválido.
+const CARIMBO_TEXTO = {
+  indisponivel:    'Não disponível para este registro',
+  nao_configurado: 'Não aplicado a este registro',
+  nao_verificavel: 'Não pôde ser verificado no momento',
+  nao_disponivel:  'Não disponível para este registro'
+};
+
+// Bloco de status conforme verificacao.situacao (GET /api/validar/:codigo).
+function renderVerificacaoHTML(v){
+  if(v.situacao === 'integro_com_carimbo' || v.situacao === 'integro_sem_carimbo'){
+    const ct = v.carimboTempo || {};
+    const carimbo = v.situacao === 'integro_com_carimbo'
+      ? `<span class="badge b-green">Validado${ct.genTime ? ' · ' + new Date(ct.genTime).toLocaleString('pt-BR') : ''}</span>`
+      : `<span class="badge b-gray">${CARIMBO_TEXTO[ct.situacao] || 'Não disponível para este registro'}</span>`;
+    return `
+    <div class="status-ok">
+      <div class="icon">✓</div>
+      <h2>Dossiê íntegro</h2>
+      <p>${esc(v.mensagem || 'A integridade criptográfica do Dossiê Digital foi confirmada.')}</p>
+    </div>
+    <div class="row"><span>Integridade criptográfica</span><b><span class="badge b-green">Confirmada</span></b></div>
+    <div class="row"><span>Assinatura do servidor</span><b><span class="badge b-green">Validada</span></b></div>
+    <div class="row"><span>Carimbo de tempo</span><b>${carimbo}</b></div>`;
+  }
+  if(v.situacao === 'inconsistente'){
+    return `
+    <div class="status-err">
+      <div class="icon">!</div>
+      <h2>Integridade não confirmada</h2>
+      <p>${esc(v.mensagem || '')} A verificação encontrou inconsistências e a integridade criptográfica do Dossiê Digital não pôde ser confirmada.</p>
+    </div>`;
+  }
+  return `
+    <div class="status-neutral">
+      <div class="icon">i</div>
+      <h2>Verificação criptográfica não disponível</h2>
+      <p>A autorização foi localizada, mas a verificação criptográfica do Dossiê Digital não está disponível para este registro.</p>
+    </div>`;
+}
+
+function renderResult(d, code, httpStatus){
   const el = document.getElementById('result');
-  if(!d.valido){
+  if(httpStatus === 404 || d.encontrado === false){
     el.innerHTML = renderErroHTML(code);
     return;
   }
+  if(!d.verificacao){
+    renderErro('Não foi possível verificar o documento. Tente novamente em instantes.');
+    return;
+  }
+  const integro = d.valido === true &&
+    (d.verificacao.situacao === 'integro_com_carimbo' || d.verificacao.situacao === 'integro_sem_carimbo');
 
   const statusLabel = {
     assinado:'Assinado · válido', ativa:'Ativo · válido', ativo:'Ativo · válido',
@@ -128,18 +185,7 @@ function renderResult(d, code){
   const tipoLabel = d.tipo==='exclusiva' ? '⭐ Com exclusividade' : 'Sem exclusividade';
 
   el.innerHTML = `
-    ${isValido
-      ? `<div class="status-ok">
-           <div class="icon">✓</div>
-           <h2>Documento autêntico</h2>
-           <p>Esta autorização de venda é válida e foi assinada eletronicamente.</p>
-         </div>`
-      : `<div class="status-err">
-           <div class="icon">!</div>
-           <h2>Documento não assinado</h2>
-           <p>Este código existe no sistema, mas a autorização ainda não foi assinada pelo proprietário.</p>
-         </div>`
-    }
+    ${renderVerificacaoHTML(d.verificacao)}
     <hr class="divider">
     <div class="row"><span>Código de validação</span><b>${code}</b></div>
     <div class="row"><span>Status</span><b><span class="badge ${statusBadge[d.status]||'b-gray'}">${statusLabel[d.status]||d.status}</span></b></div>
@@ -158,7 +204,7 @@ function renderResult(d, code){
     </div>
     <p style="font-size:12px;color:var(--ink3);margin-top:8px">
       Este código é único e gerado a partir do conteúdo do documento no momento da assinatura.
-      Qualquer alteração posterior produziria um hash diferente, tornando a fraude detectável.
+      Qualquer alteração posterior produziria um hash diferente, tornando a alteração detectável.
     </p>` : ''}
 
     ${(isValido && d.pdfDisponivel) ? `
@@ -168,15 +214,16 @@ function renderResult(d, code){
          ⬇ Baixar PDF oficial</a>
     </div>` : ''}
 
-    ${isValido ? `
+    ${(isValido && integro) ? `
     <div class="legal">
       ✅ <b>Validade jurídica confirmada.</b> Este documento possui assinatura eletrônica com validade nos termos
       do art. 10, §2º da MP 2.200-2/2001 e da Lei nº 14.063/2020. A autenticidade é verificável por este link
       a qualquer momento.
-    </div>` : `
+    </div>` : ''}
+    ${!isValido ? `
     <div class="warning">
       ⚠️ Este documento ainda não foi assinado pelo proprietário.
-    </div>`}
+    </div>` : ''}
   `;
 }
 
@@ -184,7 +231,7 @@ function renderErroHTML(code){
   return `
     <div class="status-err">
       <div class="icon">✕</div>
-      <h2>Código não encontrado</h2>
+      <h2>Autorização não encontrada</h2>
       <p>O código <b>${code}</b> não foi localizado em nossa base de dados.</p>
     </div>
     <hr class="divider">

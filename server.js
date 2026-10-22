@@ -19,7 +19,7 @@ const { validarEstrutura: validarEstruturaEventos, EventValidationError } = requ
 const { normalizarEventos } = require('./src/services/events/EventNormalizer');
 const { enriquecerEventosComServidor } = require('./src/services/events/EventServerEnrichment');
 const { construirEventoBackend } = require('./src/services/events/EventBackendEmitter');
-const { carregarConfiguracaoTsa, solicitarCarimboTempo } = require('./src/services/tsa/Rfc3161TimestampClient');
+const { carregarConfiguracaoTsa, solicitarCarimboTempo, verificarTokenArmazenado } = require('./src/services/tsa/Rfc3161TimestampClient');
 
 const app  = express();
 const PORT = process.env.PORT || 3000;
@@ -1522,6 +1522,53 @@ if (process.env.DOSSIE_SIGNING_PRIVATE_KEY) {
   console.warn('AVISO: Dossie sem assinatura criptografica do servidor.');
 }
 
+// Chaves Ed25519 confiáveis para a verificação pública do Dossiê, indexadas
+// por keyId (SHA-256 do SPKI DER, mesmo cálculo de carregarChaveAssinaturaDossie).
+// A chave derivada de DOSSIE_SIGNING_PRIVATE_KEY entra automaticamente;
+// DOSSIE_TRUSTED_PUBLIC_KEYS (opcional) acrescenta chaves históricas em
+// SPKI PEM. Erros usam códigos fixos, nunca conteúdo de chave no log.
+function carregarChavesPublicasConfiaveisDossie(conteudo) {
+  const padraoBloco = /-----BEGIN [A-Z0-9 ]+-----[\s\S]*?-----END [A-Z0-9 ]+-----/g;
+  const blocos = conteudo.match(padraoBloco) || [];
+  if (blocos.length === 0) throw new Error('nenhuma_chave');
+  if (conteudo.replace(padraoBloco, '').trim() !== '') throw new Error('conteudo_invalido');
+  return blocos.map((bloco) => {
+    if (!bloco.startsWith('-----BEGIN PUBLIC KEY-----') || !bloco.endsWith('-----END PUBLIC KEY-----')) {
+      throw new Error('bloco_nao_publico');
+    }
+    let publicKey;
+    try {
+      publicKey = crypto.createPublicKey(bloco);
+    } catch {
+      throw new Error('chave_ilegivel');
+    }
+    if (publicKey.asymmetricKeyType !== 'ed25519') throw new Error('algoritmo_invalido');
+    const keyId = crypto.createHash('sha256')
+      .update(publicKey.export({ type: 'spki', format: 'der' }))
+      .digest('hex');
+    return { keyId, publicKey };
+  });
+}
+
+const dossieChavesConfiaveis = new Map();
+
+if (dossieSigningKeyId) {
+  dossieChavesConfiaveis.set(dossieSigningKeyId, dossieSigningPublicKey);
+}
+
+if ((process.env.DOSSIE_TRUSTED_PUBLIC_KEYS || '').trim()) {
+  try {
+    const chaves = carregarChavesPublicasConfiaveisDossie(process.env.DOSSIE_TRUSTED_PUBLIC_KEYS);
+    for (const { keyId, publicKey } of chaves) dossieChavesConfiaveis.set(keyId, publicKey);
+  } catch (e) {
+    if (process.env.NODE_ENV === 'production') {
+      console.error(`ERRO FATAL: DOSSIE_TRUSTED_PUBLIC_KEYS invalida (${e.message}).`);
+      process.exit(1);
+    }
+    console.warn(`AVISO: DOSSIE_TRUSTED_PUBLIC_KEYS invalida (${e.message}); ignorada.`);
+  }
+}
+
 // Configuração do carimbo de tempo RFC 3161 (Marco 5 — TSA). Mesmo padrão
 // da chave Ed25519: em produção, ausente/incompleta/inválida é erro fatal;
 // em desenvolvimento, o Dossiê segue com carimboTempo 'nao_configurado'.
@@ -1979,6 +2026,301 @@ async function criarDossieDigital(aut, eventosNormalizados) {
   }
 }
 
+// ═══════════════════════════════════════════════════════
+// VERIFICAÇÃO PÚBLICA DO DOSSIÊ (Marco 5) — somente leitura.
+// integridade = conteúdo protegido por hashRaiz + assinatura Ed25519.
+// carimboTempo = verificação RFC 3161 separada; não é protegido pelo
+// hashRaiz e nunca altera o resultado da integridade.
+// ═══════════════════════════════════════════════════════
+const HEX_SHA256 = /^[0-9a-f]{64}$/;
+
+const MENSAGENS_VERIFICACAO_DOSSIE = {
+  integro_com_carimbo: 'Dossiê Digital íntegro: conteúdo e assinatura do servidor conferem, com carimbo de tempo RFC 3161 válido.',
+  integro_sem_carimbo: 'Dossiê Digital íntegro: conteúdo e assinatura do servidor conferem. Carimbo de tempo RFC 3161 ausente ou não verificável.',
+  inconsistente:       'O Dossiê Digital desta autorização não confere com os registros oficiais.',
+  nao_disponivel:      'Não existe Dossiê Digital disponível para verificação desta autorização.'
+};
+
+// Inconsistência detectada na verificação. A mensagem é sempre um código
+// fixo — nunca caminho, conteúdo ou detalhe de exceção.
+class InconsistenciaDossie extends Error {
+  constructor(motivo) {
+    super(motivo);
+    this.motivo = motivo;
+  }
+}
+
+function inconsistenciaDossie(motivo) {
+  throw new InconsistenciaDossie(motivo);
+}
+
+// Resolve `relativo` a partir de `base` e exige que o resultado fique
+// estritamente dentro de `limite` — recusa '..', caminho absoluto e
+// qualquer escape por normalização.
+function resolverCaminhoContido(base, relativo, limite) {
+  if (typeof relativo !== 'string' || relativo.length === 0 || relativo.includes('\0')) {
+    inconsistenciaDossie('caminho_invalido');
+  }
+  const alvo = path.resolve(base, relativo);
+  if (!alvo.startsWith(path.resolve(limite) + path.sep)) {
+    inconsistenciaDossie('caminho_invalido');
+  }
+  return alvo;
+}
+
+// Relê o arquivo e compara o SHA-256 atual com o gravado (mesma função de
+// hash usada na criação do Dossiê).
+function conferirHashArquivoDossie(caminhoAbsoluto, sha256Gravado, tipo) {
+  if (typeof sha256Gravado !== 'string' || !HEX_SHA256.test(sha256Gravado)) {
+    inconsistenciaDossie(`${tipo}_formato_invalido`);
+  }
+  let atual;
+  try {
+    atual = calcularHashArquivoDossie(path.dirname(caminhoAbsoluto), path.basename(caminhoAbsoluto));
+  } catch {
+    inconsistenciaDossie(`${tipo}_ilegivel`);
+  }
+  if (atual !== sha256Gravado) inconsistenciaDossie(`${tipo}_divergente`);
+}
+
+// Normaliza uma lista de evidências para o par caminhoRelativo → sha256,
+// ordenada por caminhoRelativo, sem modificar a lista original. Recusa
+// formato inválido e caminhoRelativo duplicado.
+function normalizarArquivosEvidencia(lista) {
+  const vistos = new Set();
+  const normalizada = lista.map((arquivo) => {
+    if (!arquivo || typeof arquivo !== 'object' ||
+        typeof arquivo.caminhoRelativo !== 'string' || arquivo.caminhoRelativo.length === 0 ||
+        typeof arquivo.sha256 !== 'string' || !HEX_SHA256.test(arquivo.sha256)) {
+      inconsistenciaDossie('evidencia_formato_invalido');
+    }
+    if (vistos.has(arquivo.caminhoRelativo)) inconsistenciaDossie('evidencia_duplicada');
+    vistos.add(arquivo.caminhoRelativo);
+    return { caminhoRelativo: arquivo.caminhoRelativo, sha256: arquivo.sha256 };
+  });
+  return normalizada.sort((a, b) => {
+    if (a.caminhoRelativo < b.caminhoRelativo) return -1;
+    if (a.caminhoRelativo > b.caminhoRelativo) return 1;
+    return 0;
+  });
+}
+
+// Conteúdo protegido: caminho do Dossiê, hashes.json, vínculo com o NeDB,
+// evidências, componentes oficiais e hashRaiz. Devolve hashes já conferido.
+function conferirConteudoProtegidoDossie(aut) {
+  // Caminho do Dossiê: só a partir do dossiePath persistido, contido em
+  // STORAGE_BASE/dossies e no formato AAAA/MM/<codigo>.
+  const baseDossies = path.resolve(STORAGE_BASE, 'dossies');
+  const absoluto = resolverCaminhoContido(STORAGE_BASE, aut.dossiePath, baseDossies);
+  const partesDossie = path.relative(baseDossies, absoluto).split(path.sep);
+  if (partesDossie.length !== 3 || !/^\d{4}$/.test(partesDossie[0]) ||
+      !/^\d{2}$/.test(partesDossie[1]) || partesDossie[2] !== aut.codigo) {
+    inconsistenciaDossie('caminho_invalido');
+  }
+
+  let hashes;
+  try {
+    hashes = JSON.parse(fs.readFileSync(path.join(absoluto, 'hashes.json'), 'utf8'));
+  } catch {
+    inconsistenciaDossie('hashes_ilegivel');
+  }
+  if (!hashes || typeof hashes !== 'object' ||
+      hashes.versaoFormatoHashes !== 2 || hashes.algoritmo !== 'SHA-256' ||
+      !Array.isArray(hashes.arquivos) ||
+      !hashes.componentesDossie || typeof hashes.componentesDossie !== 'object' ||
+      typeof hashes.hashRaiz !== 'string' || !HEX_SHA256.test(hashes.hashRaiz)) {
+    inconsistenciaDossie('hashes_formato_invalido');
+  }
+
+  // Vínculo NeDB ↔ Dossiê: os dados públicos exibidos saem do NeDB e
+  // precisam corresponder aos hashes protegidos pelo hashRaiz.
+  if (hashes.hashDadosAutorizacao !== aut.hashDadosAutorizacao ||
+      hashes.hashDadosAutorizacao !== calcularHashDadosAutorizacao(aut)) {
+    inconsistenciaDossie('vinculo_autorizacao_divergente');
+  }
+  const registro = aut.registroAssinatura;
+  if (!registro || typeof registro !== 'object') inconsistenciaDossie('vinculo_evidencias_divergente');
+  // hashEvidencias é calculado sobre o registroAssinatura antes de o
+  // próprio campo hashEvidencias ser acrescentado a ele.
+  const { hashEvidencias: hashEvidenciasRegistro, ...registroSemHash } = registro;
+  if (hashes.hashEvidencias !== hashEvidenciasRegistro ||
+      hashes.hashEvidencias !== calcularHashEvidencias(registroSemHash)) {
+    inconsistenciaDossie('vinculo_evidencias_divergente');
+  }
+
+  // Evidências: localizadas pela pasta de incoming persistida no NeDB e pelo
+  // caminhoRelativo validado (categoria/nome) — nunca por caminhoStorage.
+  const baseTenants = path.resolve(STORAGE_BASE, 'tenants');
+  const dirIncoming = resolverCaminhoContido(STORAGE_BASE, aut.evidenciasRecebidas?.caminhoIncoming, baseTenants);
+  const partesIncoming = path.relative(baseTenants, dirIncoming).split(path.sep);
+  if (partesIncoming.length !== 3 || partesIncoming[1] !== 'incoming' || partesIncoming[2] !== aut.codigo) {
+    inconsistenciaDossie('caminho_invalido');
+  }
+  // O hashRaiz cobre só a lista de sha256, não o par caminhoRelativo →
+  // sha256; esse par é ancorado item a item em evidenciasRecebidas.arquivos
+  // persistido no NeDB.
+  const arquivosRegistro = aut.evidenciasRecebidas?.arquivos;
+  if (!Array.isArray(arquivosRegistro) || arquivosRegistro.length !== hashes.arquivos.length) {
+    inconsistenciaDossie('vinculo_arquivos_divergente');
+  }
+  const arquivosDossie = normalizarArquivosEvidencia(hashes.arquivos);
+  const arquivosNeDB = normalizarArquivosEvidencia(arquivosRegistro);
+  arquivosDossie.forEach((arquivo, indice) => {
+    if (arquivo.caminhoRelativo !== arquivosNeDB[indice].caminhoRelativo ||
+        arquivo.sha256 !== arquivosNeDB[indice].sha256) {
+      inconsistenciaDossie('vinculo_arquivos_divergente');
+    }
+  });
+  for (const arquivo of hashes.arquivos) {
+    if (!arquivo || typeof arquivo !== 'object') inconsistenciaDossie('evidencia_formato_invalido');
+    try {
+      categoriaDoCaminhoRelativo(arquivo.caminhoRelativo);
+    } catch {
+      inconsistenciaDossie('evidencia_formato_invalido');
+    }
+    const caminhoEvidencia = resolverCaminhoContido(dirIncoming, arquivo.caminhoRelativo, dirIncoming);
+    conferirHashArquivoDossie(caminhoEvidencia, arquivo.sha256, 'evidencia');
+  }
+
+  // Componentes oficiais em caminhos fixos; o PDF oficial sempre pelo
+  // caminho canônico do código, nunca pelo texto gravado.
+  const componentes = hashes.componentesDossie;
+  const caminhosComponentes = {
+    manifesto: 'manifesto.json',
+    timeline:  'timeline.json',
+    custodia:  'custodia/eventos.json'
+  };
+  for (const [nome, caminhoRelativo] of Object.entries(caminhosComponentes)) {
+    const componente = componentes[nome];
+    if (!componente || componente.caminho !== caminhoRelativo) inconsistenciaDossie('componente_formato_invalido');
+    conferirHashArquivoDossie(resolverCaminhoContido(absoluto, caminhoRelativo, absoluto), componente.sha256, 'componente');
+  }
+  const pdfOficial = componentes.pdfOficial;
+  if (!pdfOficial || pdfOficial.caminho !== `assinados/${aut.codigo}.pdf`) {
+    inconsistenciaDossie('componente_formato_invalido');
+  }
+  conferirHashArquivoDossie(caminhoPdfAssinatura(aut.codigo), pdfOficial.sha256, 'componente');
+
+  // hashRaiz pela mesma função canônica da criação.
+  if (calcularHashRaizDossie(hashes) !== hashes.hashRaiz) inconsistenciaDossie('hash_raiz_divergente');
+
+  return hashes;
+}
+
+// Assinatura Ed25519 do servidor sobre os 32 bytes do hashRaiz. O keyId
+// precisa pertencer a dossieChavesConfiaveis (chave atual ou histórica
+// configurada); a chave pública embutida no Dossiê só é conferida por
+// coerência com o keyId, e crypto.verify usa sempre a chave confiável.
+function conferirAssinaturaServidorDossie(hashes) {
+  const assinatura = hashes.assinatura;
+  if (!assinatura || typeof assinatura !== 'object' || hashes.assinadoPeloServidor !== true) {
+    inconsistenciaDossie('assinatura_ausente');
+  }
+  if (assinatura.algoritmo !== 'Ed25519' || assinatura.encoding !== 'base64' ||
+      assinatura.hashRaiz !== hashes.hashRaiz || typeof assinatura.valor !== 'string' ||
+      typeof assinatura.chavePublica !== 'string' || typeof assinatura.keyId !== 'string') {
+    inconsistenciaDossie('assinatura_formato_invalido');
+  }
+  const chaveConfiavel = dossieChavesConfiaveis.get(assinatura.keyId);
+  if (!chaveConfiavel) inconsistenciaDossie('assinatura_chave_nao_confiavel');
+  let chavePublicaEmbutida;
+  try {
+    chavePublicaEmbutida = crypto.createPublicKey(assinatura.chavePublica);
+  } catch {
+    inconsistenciaDossie('assinatura_chave_invalida');
+  }
+  if (chavePublicaEmbutida.asymmetricKeyType !== 'ed25519') inconsistenciaDossie('assinatura_chave_invalida');
+  const keyIdEmbutida = crypto.createHash('sha256')
+    .update(chavePublicaEmbutida.export({ type: 'spki', format: 'der' }))
+    .digest('hex');
+  if (keyIdEmbutida !== assinatura.keyId) inconsistenciaDossie('assinatura_keyid_divergente');
+  const valor = Buffer.from(assinatura.valor, 'base64');
+  if (valor.length !== 64 || valor.toString('base64') !== assinatura.valor) {
+    inconsistenciaDossie('assinatura_formato_invalido');
+  }
+  if (crypto.verify(null, Buffer.from(hashes.hashRaiz, 'hex'), chaveConfiavel, valor) !== true) {
+    inconsistenciaDossie('assinatura_invalida');
+  }
+}
+
+// Carimbo de tempo, verificado à parte: hashCarimbado precisa corresponder
+// à representação canônica atual e, quando gravado como 'valido', o token é
+// validado offline. Sem TSA_TRUSTED_ROOTS o token fica 'nao_verificavel'.
+async function conferirCarimboTempoDossie(hashes) {
+  const carimbo = hashes.carimboTempo;
+  if (carimbo === null || carimbo === undefined) return { situacao: 'nao_disponivel' };
+  if (typeof carimbo !== 'object' || carimbo.padrao !== 'RFC3161') {
+    return { situacao: 'invalido', motivo: 'carimbo_formato_invalido' };
+  }
+  const { representacao, digest } = calcularDigestCarimboTempo(hashes);
+  if (carimbo.hashCarimbado !== digest.toString('hex')) {
+    return { situacao: 'invalido', motivo: 'hash_carimbado_divergente' };
+  }
+  switch (carimbo.status) {
+    case 'valido':
+      return verificarTokenArmazenado(carimbo, { representacao, digest }, configuracaoTsa ? configuracaoTsa.raizes : null);
+    case 'indisponivel':
+    case 'falha_validacao':
+      return { situacao: 'indisponivel' };
+    case 'nao_configurado':
+      return { situacao: 'nao_configurado' };
+    default:
+      return { situacao: 'invalido', motivo: 'carimbo_status_desconhecido' };
+  }
+}
+
+// Verificação completa, somente leitura. Inconsistências viram veredito
+// 'inconsistente'; exceção inesperada (defeito interno) é propagada.
+async function verificarIntegridadeDossie(aut) {
+  if (!aut.dossiePath) {
+    return {
+      situacao:           'nao_disponivel',
+      integridade:        'nao_disponivel',
+      assinaturaServidor: 'nao_disponivel',
+      carimboTempo:       { situacao: 'nao_disponivel' },
+      motivo:             'dossie_inexistente'
+    };
+  }
+
+  let hashes;
+  let assinaturaServidor = 'nao_verificada';
+  try {
+    hashes = conferirConteudoProtegidoDossie(aut);
+    assinaturaServidor = 'invalida';
+    conferirAssinaturaServidorDossie(hashes);
+    assinaturaServidor = 'valida';
+  } catch (e) {
+    if (!(e instanceof InconsistenciaDossie)) throw e;
+    return {
+      situacao:           'inconsistente',
+      integridade:        'invalida',
+      assinaturaServidor: e.motivo === 'assinatura_ausente' ? 'ausente' : assinaturaServidor,
+      carimboTempo:       { situacao: 'nao_verificado' },
+      motivo:             e.motivo
+    };
+  }
+
+  const carimboTempo = await conferirCarimboTempoDossie(hashes);
+  // Um carimbo gravado que não confere indica adulteração do Dossiê, mas a
+  // integridade do conteúdo protegido continua reportada à parte.
+  if (carimboTempo.situacao === 'invalido') {
+    return {
+      situacao:           'inconsistente',
+      integridade:        'valida',
+      assinaturaServidor,
+      carimboTempo,
+      motivo:             'carimbo_tempo_invalido'
+    };
+  }
+  return {
+    situacao:           carimboTempo.situacao === 'valido' ? 'integro_com_carimbo' : 'integro_sem_carimbo',
+    integridade:        'valida',
+    assinaturaServidor,
+    carimboTempo,
+    motivo:             null
+  };
+}
+
 // Erro específico de decodificação de dataURL — nunca inclui o conteúdo
 // recebido na mensagem (a rota devolve 422 sem expor Base64).
 class EvidenceDataUrlError extends Error {}
@@ -2428,11 +2770,16 @@ function caminhoPdfAssinatura(codigo) {
 app.get('/api/validar/:codigo', async (req, res) => {
   try {
     const aut = await db.autorizacoes.findOne({ codigo: req.params.codigo });
-    if (!aut) return res.status(404).json({ valido: false, erro: 'Código não encontrado.' });
+    if (!aut) return res.status(404).json({ encontrado: false, valido: false, erro: 'Código não encontrado.' });
+
+    // valido reflete a verificação do Dossiê — não mais a simples existência
+    // do registro. Detalhes em verificacao, sem caminhos, chaves ou tokens.
+    const verificacao = await verificarIntegridadeDossie(aut);
 
     // Retorna apenas dados necessários para validação — sem dados sensíveis
     res.json({
-      valido:     true,
+      encontrado: true,
+      valido:     verificacao.situacao === 'integro_com_carimbo' || verificacao.situacao === 'integro_sem_carimbo',
       codigo:     aut.codigo,
       status:     aut.status,
       tipo:       aut.tipo || 'simples',
@@ -2451,7 +2798,12 @@ app.get('/api/validar/:codigo', async (req, res) => {
       imobiliaria: {
         nome: aut.imobiliariaNome || null
       },
-      pdfDisponivel: fs.existsSync(caminhoPdfAssinatura(aut.codigo))
+      pdfDisponivel: fs.existsSync(caminhoPdfAssinatura(aut.codigo)),
+      verificacao: {
+        ...verificacao,
+        mensagem:     MENSAGENS_VERIFICACAO_DOSSIE[verificacao.situacao],
+        verificadoEm: new Date().toISOString()
+      }
     });
   } catch(e) { res.status(500).json({ valido: false, erro: 'Erro interno.' }); }
 });
