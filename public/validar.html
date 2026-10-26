@@ -187,20 +187,20 @@ function renderResult(d, code, httpStatus){
   el.innerHTML = `
     ${renderVerificacaoHTML(d.verificacao)}
     <hr class="divider">
-    <div class="row"><span>Código de validação</span><b>${code}</b></div>
-    <div class="row"><span>Status</span><b><span class="badge ${statusBadge[d.status]||'b-gray'}">${statusLabel[d.status]||d.status}</span></b></div>
-    <div class="row"><span>Proprietário</span><b>${d.proprietario.nome}</b></div>
-    <div class="row"><span>CPF (parcial)</span><b>${d.proprietario.cpf}</b></div>
-    <div class="row"><span>Imóvel</span><b>${d.imovel.tipo} · ${d.imovel.bairro}, ${d.imovel.cidade}</b></div>
+    <div class="row"><span>Código de validação</span><b>${esc(code)}</b></div>
+    <div class="row"><span>Status</span><b><span class="badge ${statusBadge[d.status]||'b-gray'}">${esc(statusLabel[d.status]||d.status)}</span></b></div>
+    <div class="row"><span>Proprietário</span><b>${esc(d.proprietario.nome)}</b></div>
+    <div class="row"><span>CPF (parcial)</span><b>${esc(d.proprietario.cpf)}</b></div>
+    <div class="row"><span>Imóvel</span><b>${esc(d.imovel.tipo)} · ${esc(d.imovel.bairro)}, ${esc(d.imovel.cidade)}</b></div>
     <div class="row"><span>Modalidade</span><b>${tipoLabel}</b></div>
     <div class="row"><span>Data da assinatura</span><b>${d.assinadoEm ? new Date(d.assinadoEm).toLocaleString('pt-BR') : '—'}</b></div>
-    <div class="row"><span>Validade</span><b>${d.vencimento || '365 dias a partir da assinatura'}</b></div>
-    ${d.imobiliaria?.nome ? `<div class="row"><span>Imobiliária</span><b>${d.imobiliaria.nome}</b></div>` : ''}
+    <div class="row"><span>Validade</span><b>${esc(d.vencimento || '365 dias a partir da assinatura')}</b></div>
+    ${d.imobiliaria?.nome ? `<div class="row"><span>Imobiliária</span><b>${esc(d.imobiliaria.nome)}</b></div>` : ''}
 
     ${d.hash ? `
     <div class="hash-box">
       <label>Hash SHA-256 do documento</label>
-      <code>${d.hash}</code>
+      <code>${esc(d.hash)}</code>
     </div>
     <p style="font-size:12px;color:var(--ink3);margin-top:8px">
       Este código é único e gerado a partir do conteúdo do documento no momento da assinatura.
@@ -209,7 +209,7 @@ function renderResult(d, code, httpStatus){
 
     ${(isValido && d.pdfDisponivel) ? `
     <div style="margin-top:16px;text-align:center">
-      <a href="/api/autorizacoes/${code}/pdf" target="_blank" rel="noopener"
+      <a href="/api/autorizacoes/${esc(code)}/pdf" target="_blank" rel="noopener"
          style="display:inline-block;padding:10px 22px;background:var(--navy);color:#fff;border-radius:10px;text-decoration:none;font-size:14px;font-weight:700">
          ⬇ Baixar PDF oficial</a>
     </div>` : ''}
@@ -232,7 +232,7 @@ function renderErroHTML(code){
     <div class="status-err">
       <div class="icon">✕</div>
       <h2>Autorização não encontrada</h2>
-      <p>O código <b>${code}</b> não foi localizado em nossa base de dados.</p>
+      <p>O código <b>${esc(code)}</b> não foi localizado em nossa base de dados.</p>
     </div>
     <hr class="divider">
     <p style="font-size:13.5px;color:var(--ink2);line-height:1.7;margin-bottom:16px">
