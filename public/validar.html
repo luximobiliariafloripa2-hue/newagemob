@@ -174,13 +174,15 @@ function renderResult(d, code, httpStatus){
     (d.verificacao.situacao === 'integro_com_carimbo' || d.verificacao.situacao === 'integro_sem_carimbo');
 
   const statusLabel = {
-    assinado:'Assinado · válido', ativa:'Ativo · válido', ativo:'Ativo · válido',
+    assinado:'Assinado', ativa:'Ativo', ativo:'Ativo',
     rascunho:'Rascunho · não assinado', cancelado:'Cancelado', aguardando:'Aguardando assinatura'
   };
   const statusBadge = {
     assinado:'b-green', ativa:'b-green', ativo:'b-green',
     rascunho:'b-gray', cancelado:'b-red', aguardando:'b-gold'
   };
+  // Verde só com integridade confirmada pela verificação — nunca pelo status.
+  const corStatus = (statusBadge[d.status] === 'b-green' && !integro) ? 'b-gray' : (statusBadge[d.status] || 'b-gray');
   const isValido = ['assinado','ativa','ativo'].includes(d.status);
   const tipoLabel = d.tipo==='exclusiva' ? '⭐ Com exclusividade' : 'Sem exclusividade';
 
@@ -188,7 +190,7 @@ function renderResult(d, code, httpStatus){
     ${renderVerificacaoHTML(d.verificacao)}
     <hr class="divider">
     <div class="row"><span>Código de validação</span><b>${esc(code)}</b></div>
-    <div class="row"><span>Status</span><b><span class="badge ${statusBadge[d.status]||'b-gray'}">${esc(statusLabel[d.status]||d.status)}</span></b></div>
+    <div class="row"><span>Status</span><b><span class="badge ${corStatus}">${esc(statusLabel[d.status]||d.status)}</span></b></div>
     <div class="row"><span>Proprietário</span><b>${esc(d.proprietario.nome)}</b></div>
     <div class="row"><span>CPF (parcial)</span><b>${esc(d.proprietario.cpf)}</b></div>
     <div class="row"><span>Imóvel</span><b>${esc(d.imovel.tipo)} · ${esc(d.imovel.bairro)}, ${esc(d.imovel.cidade)}</b></div>
@@ -211,7 +213,7 @@ function renderResult(d, code, httpStatus){
     <div style="margin-top:16px;text-align:center">
       <a href="/api/autorizacoes/${esc(code)}/pdf" target="_blank" rel="noopener"
          style="display:inline-block;padding:10px 22px;background:var(--navy);color:#fff;border-radius:10px;text-decoration:none;font-size:14px;font-weight:700">
-         ⬇ Baixar PDF oficial</a>
+         ${integro ? '⬇ Baixar PDF oficial' : '⬇ Baixar PDF registrado (integridade não confirmada)'}</a>
     </div>` : ''}
 
     ${(isValido && integro) ? `
