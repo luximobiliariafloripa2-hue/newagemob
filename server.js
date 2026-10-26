@@ -2419,6 +2419,12 @@ app.post('/api/autorizacoes/assinar', async (req, res) => {
     const venc = new Date(); venc.setDate(venc.getDate() + 365);
     // Busca rascunho existente para preservar imobiliariaId
     const rascunho = await db.autorizacoes.findOne({ codigo });
+    // Só conclui autorização com rascunho legítimo criado pelo AGEMOB
+    // (POST /api/autorizacoes ou /rascunho, sempre com imobiliariaId) —
+    // nunca cria registro a partir de código escolhido pelo cliente.
+    if (!rascunho || !rascunho.imobiliariaId) {
+      return res.status(404).json({ erro: 'Autorização não encontrada.' });
+    }
     // Idempotência: se esta autorização já foi assinada, não reprocessa
     // (evita duplicar PDF, Dossiê, log e notificação em caso de reenvio)
     // Fluxo com Dossiê só é idempotente com dossiePath persistido; sem ele,
@@ -2428,6 +2434,10 @@ app.post('/api/autorizacoes/assinar', async (req, res) => {
         return res.json({ ok: true });
       }
       return res.status(409).json({ erro: 'Autorização assinada com Dossiê Digital pendente.' });
+    }
+    // Cancelada, inserida manualmente ou em qualquer outro estado: não assina.
+    if (rascunho.status !== 'rascunho') {
+      return res.status(409).json({ erro: 'Autorização indisponível para assinatura.' });
     }
 
     // Relógio oficial da requisição: cada requisição possui apenas um
