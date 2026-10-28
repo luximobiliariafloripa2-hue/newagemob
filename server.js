@@ -2672,14 +2672,48 @@ async function enviarEmailBrevo(destino, assunto, texto, html, nomeImob) {
   return r.json();
 }
 
+// OTP de confirmação por e-mail do proprietário. A rota é pública, mas o
+// e-mail é montado só aqui: o cliente informa apenas o rascunho, o destino e
+// o código OTP — assunto, corpo e remetente nunca vêm do request.
+const FORMATO_CODIGO_AUTORIZACAO = /^[A-Z0-9]{4,32}$/;
+const FORMATO_EMAIL_DESTINO = /^[^\s@,;<>"'()\[\]\\]+@[^\s@,;<>"'()\[\]\\]+\.[^\s@,;<>"'()\[\]\\]+$/;
+const TAMANHO_MAXIMO_EMAIL = 254;
+
+function escaparHtmlEmail(valor) {
+  return String(valor).replace(/[&<>"']/g, (c) => (
+    { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+  ));
+}
+
+function montarEmailOtp(codigoOtp, codigo, nomeImob) {
+  const aviso = `Ele confirma a sua assinatura eletrônica da autorização de venda (código ${codigo}). Não compartilhe este código com ninguém.`;
+  return {
+    assunto: 'Seu código de verificação — AGEMOB',
+    texto: `Seu código de verificação é: ${codigoOtp}\n\n${aviso}\n\nEquipe ${nomeImob}`,
+    html: `<p>Seu código de verificação é: <b style="font-size:22px">${codigoOtp}</b></p>`
+      + `<p>${escaparHtmlEmail(aviso)}</p><p>Equipe ${escaparHtmlEmail(nomeImob)}</p>`
+  };
+}
+
 app.post('/api/enviar-email', emailLimiter, async (req, res) => {
   try {
-    const { destino, assunto, texto, html, nomeImob } = req.body;
-    if (!destino || !assunto || (!texto && !html)) return res.status(422).json({ erro: 'Campos obrigatórios.' });
+    const { codigo, destino, codigoOtp } = req.body || {};
+    if (typeof codigo !== 'string' || !FORMATO_CODIGO_AUTORIZACAO.test(codigo)
+      || typeof codigoOtp !== 'string' || !/^\d{6}$/.test(codigoOtp)
+      || typeof destino !== 'string' || destino.length > TAMANHO_MAXIMO_EMAIL || !FORMATO_EMAIL_DESTINO.test(destino)) {
+      return res.status(422).json({ erro: 'Dados inválidos.' });
+    }
     if (!process.env.BREVO_API_KEY) return res.status(503).json({ erro: 'E-mail não configurado.' });
-    await enviarEmailBrevo(destino, assunto, texto, html, nomeImob);
+
+    const aut = await db.autorizacoes.findOne({ codigo });
+    const imob = aut?.imobiliariaId ? await db.imobiliarias.findOne({ _id: aut.imobiliariaId }) : null;
+    if (!aut || !imob?.nome) return res.status(404).json({ erro: 'Autorização não encontrada.' });
+    if (aut.status !== 'rascunho') return res.status(409).json({ erro: 'Autorização não está mais disponível para assinatura.' });
+
+    const { assunto, texto, html } = montarEmailOtp(codigoOtp, codigo, imob.nome);
+    await enviarEmailBrevo(destino, assunto, texto, html, imob.nome);
     res.json({ ok: true });
-  } catch(e) { res.status(500).json({ erro: e.message }); }
+  } catch(e) { res.status(500).json({ erro: 'Falha ao enviar e-mail.' }); }
 });
 
 // Configuração fluxo pública (para o proprietário buscar sem auth)

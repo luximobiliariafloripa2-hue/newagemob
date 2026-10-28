@@ -4329,10 +4329,7 @@ v2EnviarOTP = async function(id){
   }
   if(id==='conf_email'){
     showToast('Enviando código por e-mail…','info');
-    enviadoReal = await v2EnviarEmailReal(destino,
-      'Seu código de verificação — AGEMOB',
-      'Seu código de verificação é: '+codigo+'\n\nEle confirma a sua assinatura eletrônica da autorização de venda (código '+(AG.code||'')+'). Não compartilhe este código com ninguém.\n\nEquipe Lux House Imóveis',
-      '<p>Seu código de verificação é: <b style="font-size:22px">'+codigo+'</b></p><p>Ele confirma a sua assinatura eletrônica da autorização de venda (código '+(AG.code||'')+'). Não compartilhe este código com ninguém.</p><p>Equipe Lux House Imóveis</p>');
+    enviadoReal = await v2EnviarEmailReal(destino, codigo);
   }
   const d = document.getElementById('v2DemoOTP');
   if(enviadoReal){
@@ -4348,13 +4345,13 @@ v2EnviarOTP = async function(id){
   const i0=document.getElementById('v2otp0'); if(i0) i0.focus();
 };
 
-/** Envia e-mail real via servidor (Gmail SMTP). Retorna true/false. */
-async function v2EnviarEmailReal(destino, assunto, texto, html){
+/** Pede ao servidor o envio do OTP por e-mail (o servidor monta o conteúdo). Retorna true/false. */
+async function v2EnviarEmailReal(destino, codigoOtp){
   try{
     const r = await fetch('/api/enviar-email', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ destino, assunto, texto, html })
+      body: JSON.stringify({ codigo: AG.code, destino, codigoOtp })
     });
     return r.ok;
   }catch(e){ return false; }
