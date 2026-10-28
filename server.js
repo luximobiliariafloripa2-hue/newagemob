@@ -1064,17 +1064,36 @@ app.post('/api/cadastro', async (req, res) => {
 
 app.get('/api/base-url', (req, res) => res.json({ baseUrl: getBaseUrl(req) }));
 
+// Campos que o formulário público do proprietário pré-preenche — nada além
+// disso sai pela rota, mesmo que o rascunho tenha outros campos gravados.
+const CAMPOS_PREENCHIMENTO_PROPRIETARIO = ['nome', 'cpf', 'nasc', 'civil', 'prof', 'zap', 'email'];
+const CAMPOS_PREENCHIMENTO_IMOVEL = ['tipo', 'valor', 'end', 'num', 'comp', 'bairro', 'cidade'];
+
+function selecionarCampos(obj, campos) {
+  if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return null;
+  const selecionado = {};
+  for (const campo of campos) {
+    if (obj[campo] !== undefined) selecionado[campo] = obj[campo];
+  }
+  return selecionado;
+}
+
 // Buscar dados de uma autorização pelo código (para pré-preencher link assistido)
 app.get('/api/autorizacoes/codigo/:codigo', async (req, res) => {
-  const aut = await db.autorizacoes.findOne({ codigo: req.params.codigo });
-  if (!aut) return res.json(null);
-  // Rota pública (sem auth) — expõe só o necessário para o pré-preenchimento do
-  // formulário do proprietário, sem vazar imobiliariaId/corretor/hash/evidências.
-  res.json({
-    preenchidoPorCorretor: aut.preenchidoPorCorretor || false,
-    proprietario: aut.proprietario || null,
-    imovel:       aut.imovel       || null
-  });
+  try {
+    const aut = await db.autorizacoes.findOne({ codigo: req.params.codigo });
+    // Rota pública (sem auth): só o rascunho é pré-preenchível. Assinada,
+    // cancelada ou inexistente respondem igual (null), sem revelar o status —
+    // a consulta pública da assinada é /api/validar/:codigo, com dados mascarados.
+    if (!aut || aut.status !== 'rascunho') return res.json(null);
+    res.json({
+      preenchidoPorCorretor: aut.preenchidoPorCorretor || false,
+      proprietario: selecionarCampos(aut.proprietario, CAMPOS_PREENCHIMENTO_PROPRIETARIO),
+      imovel:       selecionarCampos(aut.imovel, CAMPOS_PREENCHIMENTO_IMOVEL)
+    });
+  } catch (e) {
+    res.status(500).json({ erro: 'Erro interno.' });
+  }
 });
 
 // Buscar dados da imobiliária pelo slug (para branding no link do proprietário)
