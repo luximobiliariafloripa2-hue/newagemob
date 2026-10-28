@@ -243,7 +243,38 @@ async function gerarCodigoUnico() {
   throw new Error('Não foi possível gerar um código único. Tente novamente.');
 }
 
+// Origem pública oficial. Em produção é obrigatória e validada no startup
+// (antes do seed e do listen): entra na URL de validação do PDF oficial, que é
+// selado no Dossiê. Só origem HTTPS pura; erros usam código fixo, sem o valor.
+function normalizarBaseUrlProducao(valor) {
+  const texto = (valor || '').trim();
+  if (!texto) throw new Error('BASE_URL_ausente');
+  let url;
+  try {
+    url = new URL(texto);
+  } catch {
+    throw new Error('BASE_URL_invalida');
+  }
+  if (url.protocol !== 'https:') throw new Error('BASE_URL_nao_https');
+  // [?#] cobre "?" e "#" vazios, que o URL descarta de search/hash.
+  if (url.username || url.password || url.search || url.hash || url.pathname !== '/' || /[?#]/.test(texto)) {
+    throw new Error('BASE_URL_formato_invalido');
+  }
+  return url.origin;
+}
+
+let baseUrlProducao = null;
+if (process.env.NODE_ENV === 'production') {
+  try {
+    baseUrlProducao = normalizarBaseUrlProducao(process.env.BASE_URL);
+  } catch (e) {
+    console.error(`ERRO FATAL: BASE_URL invalida (${e.message}).`);
+    process.exit(1);
+  }
+}
+
 function getBaseUrl(req) {
+  if (baseUrlProducao) return baseUrlProducao;
   if (process.env.BASE_URL) return process.env.BASE_URL.replace(/\/$/, '');
   if (req) return `${req.protocol}://${req.get('host')}`;
   return 'http://localhost:' + PORT;
