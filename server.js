@@ -103,7 +103,52 @@ app.get('/api/sse', authMiddleware(['admin','corretor']), (req, res) => {
 // ═══════════════════════════════════════════════════════
 // SEED — Super Admin + Planos + Pacotes + Lux House
 // ═══════════════════════════════════════════════════════
+// Senhas padrão do seed de desenvolvimento. Em produção nunca criam conta e,
+// se uma conta existente ainda as aceitar, o startup é recusado — sem rotação
+// automática e sem tocar no hash. Erros carregam só um código fixo.
+const SENHAS_PADRAO_SEED = ['LuxAdmin2026!', 'lux2026'];
+
+class ErroSeed extends Error {
+  constructor(codigo) {
+    super(codigo);
+    this.codigo = codigo;
+  }
+}
+
+function senhaSeedAusente(valor) {
+  return !(valor || '').trim();
+}
+
+async function aceitaSenhaPadraoSeed(usuario) {
+  for (const senha of SENHAS_PADRAO_SEED) {
+    if (await bcrypt.compare(senha, usuario.senha || '')) return true;
+  }
+  return false;
+}
+
+// Roda antes de qualquer escrita do seed, só em produção.
+async function verificarCredenciaisSeedProducao() {
+  const superAdmins = await db.usuarios.find({ role: 'super_admin' });
+  const luxHouse = await db.imobiliarias.findOne({ slug: 'lux-house' });
+
+  if (superAdmins.length === 0) {
+    if (senhaSeedAusente(process.env.SUPER_ADMIN_PASS)) throw new ErroSeed('SUPER_ADMIN_PASS_ausente');
+    if (SENHAS_PADRAO_SEED.includes(process.env.SUPER_ADMIN_PASS)) throw new ErroSeed('credencial_padrao_ativa');
+  }
+  if (!luxHouse) {
+    if (senhaSeedAusente(process.env.LUX_ADMIN_PASS)) throw new ErroSeed('LUX_ADMIN_PASS_ausente');
+    if (SENHAS_PADRAO_SEED.includes(process.env.LUX_ADMIN_PASS)) throw new ErroSeed('credencial_padrao_ativa');
+  }
+
+  const luxAdmins = await db.usuarios.find({ email: 'admin', imobiliariaSlug: 'lux-house' });
+  for (const usuario of [...superAdmins, ...luxAdmins]) {
+    if (await aceitaSenhaPadraoSeed(usuario)) throw new ErroSeed('credencial_padrao_ativa');
+  }
+}
+
 async function seed() {
+  if (process.env.NODE_ENV === 'production') await verificarCredenciaisSeedProducao();
+
   // Super admin
   const superAdmin = await db.usuarios.findOne({ role: 'super_admin' });
   if (!superAdmin) {
@@ -3047,4 +3092,7 @@ seed().then(() => {
     console.log(`\n  AGEMOB v2 rodando em http://localhost:${PORT}`);
     console.log(`  BASE_URL: ${process.env.BASE_URL || '(automático)'}\n`);
   });
-}).catch(console.error);
+}).catch((e) => {
+  console.error(`ERRO FATAL: seed falhou (${e instanceof ErroSeed ? e.codigo : 'desconhecido'}).`);
+  process.exit(1);
+});
