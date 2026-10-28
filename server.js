@@ -3,6 +3,20 @@
  * Multi-tenant · JWT Auth · Super Admin · RBAC
  */
 require('dotenv').config();
+
+// Modo de execução explícito, antes de qualquer outra coisa: sem isso a
+// produção cairia em modo desenvolvimento e desligaria as proteções de
+// produção (seed, BASE_URL, Ed25519, TSA). Mensagens fixas, sem o valor.
+const MODOS_EXECUCAO = ['development', 'production'];
+if (!MODOS_EXECUCAO.includes(process.env.NODE_ENV)) {
+  console.error('ERRO FATAL: NODE_ENV deve ser "development" ou "production".');
+  process.exit(1);
+}
+if (process.env.RENDER === 'true' && process.env.NODE_ENV !== 'production') {
+  console.error('ERRO FATAL: ambiente Render exige NODE_ENV="production".');
+  process.exit(1);
+}
+
 const express    = require('express');
 const path       = require('path');
 const fs         = require('fs');
