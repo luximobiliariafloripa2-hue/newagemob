@@ -1019,6 +1019,19 @@ app.get('/api/pacotes', async (_req, res) => {
   res.json(await db.pacotes.find({ ativo: true }).sort({ quantidade: 1 }));
 });
 
+// Planos vendáveis para a landing e a pré-seleção do checkout (M9-03), público
+// e só leitura. Mesma regra de vendável do checkout InfinitePay (ativo, não
+// trial, preço ≥ R$ 1,00); o checkout continua decidindo preço pelo planoId.
+app.get('/api/planos/publicos', async (_req, res) => {
+  try {
+    const planos = await db.planos.find({ ativo: true });
+    res.json(planos
+      .filter(p => p.slug !== 'trial' && typeof p.valorMensal === 'number' && Number.isFinite(p.valorMensal) && Math.round(p.valorMensal * 100) >= 100)
+      .sort((a, b) => a.valorMensal - b.valorMensal)
+      .map(p => ({ _id: p._id, slug: p.slug, nome: p.nome, valorMensal: p.valorMensal, limite: p.limite, maxUsuarios: p.maxUsuarios })));
+  } catch(e) { res.status(500).json({ erro: 'Erro interno.' }); }
+});
+
 app.post('/api/admin/pacotes', authMiddleware(['super_admin']), async (req, res) => {
   const { nome, quantidade, valor } = req.body;
   if (!nome || !quantidade) return res.status(422).json({ erro: 'Nome e quantidade obrigatórios.' });

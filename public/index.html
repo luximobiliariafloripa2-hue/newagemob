@@ -616,12 +616,12 @@ label{display:block;font-size:13px;font-weight:600;color:var(--ink-2);margin-bot
 <main class="wrap" id="viewAdmin">
   <div class="page-head">
     <div>
-      <h1>Painel da Imobiliária</h1>
-      <p>Lux House Imóveis Ltda. · CNPJ 48.192.939/0001-21 · Jurerê Internacional, Florianópolis/SC</p>
+      <h1 id="painelTitulo">Painel</h1>
+      <p id="painelSubtitulo"></p>
     </div>
     <div style="display:flex;gap:10px">
       <button class="btn btn-ghost btn-lg" id="btnRefresh" onclick="refreshPainel()" title="Atualizar autorizações">🔄 Atualizar</button>
-      <button class="btn btn-ghost btn-lg" onclick="abrirComprarCreditos()">💳 Comprar Créditos</button>
+      <button class="btn btn-ghost btn-lg" id="btnComprarCreditos" onclick="abrirComprarCreditos()">💳 Comprar Créditos</button>
       <button class="btn btn-ghost btn-lg" onclick="abrirBoletos()">📄 Boletos</button>
       <button class="btn btn-primary btn-lg" onclick="novaAutorizacao()">+ NOVA AUTORIZAÇÃO</button>
     </div>
@@ -1379,8 +1379,22 @@ async function carregarAutorizacoes(){
 let _realtimeInterval = null;
 let _sseConexao = null;
 
+// Título e identificação do tenant logado (só apresentação). Sessão antiga
+// sem os dados da conta cai no nome da conta/usuário — nunca em outro tenant.
+function renderCabecalhoPainel(){
+  const u = Auth.user || {};
+  const im = u.imobiliaria || {};
+  const tipo = im.tipoCliente;
+  document.getElementById('painelTitulo').textContent =
+    tipo === 'corretor' ? 'Painel do Corretor' : tipo === 'imobiliaria' ? 'Painel da Imobiliária' : 'Painel';
+  const nome = im.razaoSocial || im.nome || u.imobiliariaNome || u.nome || '';
+  const doc = tipo === 'corretor' ? (im.cpf ? 'CPF ' + im.cpf : '') : (im.cnpj ? 'CNPJ ' + im.cnpj : '');
+  document.getElementById('painelSubtitulo').textContent = [nome, doc].filter(Boolean).join(' · ');
+}
+
 function iniciarAtualizacaoRealtime(){
   if(isRotaProprietario()) return;
+  renderCabecalhoPainel();
   carregarAutorizacoes();
   carregarUsoPlaino();
 
@@ -1693,6 +1707,7 @@ async function gerarLinkAssistido(){
       headers: Auth.headers(),
       body: JSON.stringify(dados)
     });
+    if(r.status === 402){ tratarErroLimite(await r.json()); return; }
     if(!r.ok) throw new Error('Falha ao salvar');
     const salvo = await r.json();
     AG.code = salvo.codigo;
@@ -2468,48 +2483,83 @@ async function criarImobiliaria(){
   }catch(e){showToast('Erro: '+e.message,'error');}
 }
 
-/* Barra de consumo do painel da imobiliária */
+/* Barra de assinatura e consumo do painel */
+const _dataBR = v => { const d = v ? new Date(v) : null; return d && !isNaN(d) ? d.toLocaleDateString('pt-BR') : ''; };
+
+// Só apresenta: o acesso é decidido pelo backend (acesso.statusEfetivo).
+// Compra só para o titular (role admin), fora do modo suporte e de conta suspensa.
+function apresentarAssinatura(d){
+  const acesso = d.acesso || {}, sub = d.sub || {}, trial = acesso.trial;
+  const st = acesso.statusEfetivo;
+  const titular = Auth.user?.role === 'admin' && !Auth.user?.modoSuporte;
+  const nomePlano = sub.planoNome || Auth.user?.imobiliaria?.planoNome || '—';
+  const uso = `${d.usadas} de ${d.limite===-1?'∞':d.limite} utilizadas este mês`;
+  let a;
+  if(st === 'trial_ativo'){
+    const dias = trial && trial.expiraEm ? Math.max(0, Math.ceil((new Date(trial.expiraEm) - Date.now()) / 86400000)) : 0;
+    a = { titulo: 'Teste grátis — 1 autorização ou 7 dias',
+          texto: `${trial?.usadas ?? d.usadas} de ${trial?.limite ?? d.limite} autorização grátis usada · ${dias} dia${dias===1?'':'s'} restante${dias===1?'':'s'}`,
+          cta: 'Assinar plano' };
+  } else if(st === 'trial_expirado'){
+    a = { titulo: 'Seu teste terminou', texto: 'Seus dados continuam disponíveis. Assine um plano para criar novas autorizações.', cta: 'Assinar plano' };
+  } else if(st === 'ativo'){
+    const venc = _dataBR(sub.planoVencimento);
+    a = { titulo: `Plano ${nomePlano}`, texto: (venc ? `Válido até ${venc} · ` : '') + uso, cta: venc ? 'Renovar plano' : null, secundario: true };
+  } else if(st === 'vencido'){
+    a = { titulo: 'Seu plano venceu', texto: 'Seus dados continuam disponíveis. Renove para criar novas autorizações.', cta: 'Renovar plano' };
+  } else if(st === 'aguardando_pagamento'){
+    a = { titulo: 'Pagamento pendente', texto: 'Conclua a assinatura do plano para criar novas autorizações.', cta: 'Assinar plano' };
+  } else if(st === 'suspenso'){
+    a = { titulo: 'Conta suspensa', texto: 'Fale com o suporte AGEMOB.', cta: null };
+  } else {
+    a = { titulo: `Plano ${nomePlano}`, texto: acesso.motivo || uso, cta: null };
+  }
+  a.bloqueado = acesso.podeOperar === false;
+  if(!titular) a.cta = null;
+  if(a.bloqueado && st !== 'suspenso' && Auth.user?.role === 'corretor'){
+    a.texto = 'Fale com o administrador da sua imobiliária para regularizar o plano.';
+  }
+  return a;
+}
+
+function irParaCheckout(){ window.location.href = '/checkout.html'; }
+
 async function carregarUsoPlaino(){
   try{
     const r=await fetch('/api/minha-assinatura',{headers:Auth.headers()});
     if(!r.ok) return;
     const d=await r.json();
     const banner=document.getElementById('usoPlanoBanner'); if(!banner) return;
-    const cor=d.pct>=100?'var(--red)':d.pct>=90?'#DC6803':d.pct>=80?'var(--gold)':'var(--brand)';
-    const bgAlerta=d.alerta==='critico'?'#FEF3F2':d.alerta==='urgente'?'#FFF6ED':d.alerta==='aviso'?'var(--gold-soft)':'var(--brand-soft)';
-    const bordAlerta=d.alerta==='critico'?'var(--red)':d.alerta==='urgente'?'#DC6803':d.alerta==='aviso'?'var(--gold)':'var(--brand)';
-    const sub=d.sub||{};
     const acesso=d.acesso||{};
-    const trial=acesso.trial;
-    const renovacao=sub.renewalDate?new Date(sub.renewalDate).toLocaleDateString('pt-BR'):'—';
-    const diasTrial=trial&&trial.expiraEm?Math.max(0,Math.ceil((new Date(trial.expiraEm)-Date.now())/86400000)):0;
-    const titulo=trial?'Teste grátis':`Plano ${esc(sub.planoNome||'—')}`;
-    const consumo=trial
-      ?`${d.usadas} de ${d.limite} autorização gratuita · ${acesso.podeOperar?`${diasTrial} dia${diasTrial===1?'':'s'} restante${diasTrial===1?'':'s'}`:'encerrado'}`
-      :`${d.usadas} de ${d.limite===-1?'∞':d.limite} utilizadas este mês`;
+    const a=apresentarAssinatura(d);
+    const btnCreditos=document.getElementById('btnComprarCreditos');
+    if(btnCreditos) btnCreditos.style.display = acesso.trial ? 'none' : '';
+    const cor=a.bloqueado?'var(--red)':d.pct>=100?'var(--red)':d.pct>=90?'#DC6803':d.pct>=80?'var(--gold)':'var(--brand)';
+    const bgAlerta=a.bloqueado||d.alerta==='critico'?'#FEF3F2':d.alerta==='urgente'?'#FFF6ED':d.alerta==='aviso'?'var(--gold-soft)':'var(--brand-soft)';
+    const bordAlerta=a.bloqueado||d.alerta==='critico'?'var(--red)':d.alerta==='urgente'?'#DC6803':d.alerta==='aviso'?'var(--gold)':'var(--brand)';
+    const botao=a.cta?(a.secundario
+      ?`<button onclick="irParaCheckout()" style="background:transparent;color:var(--brand);border:1.5px solid var(--brand);border-radius:8px;padding:5px 13px;font-size:12.5px;font-weight:700;cursor:pointer">${esc(a.cta)}</button>`
+      :`<button onclick="irParaCheckout()" style="background:var(--brand);color:#fff;border:none;border-radius:8px;padding:6px 14px;font-size:12.5px;font-weight:700;cursor:pointer">${esc(a.cta)}</button>`):'';
     banner.innerHTML=`<div style="background:${bgAlerta};border:1.5px solid ${bordAlerta};border-radius:14px;padding:16px 20px;margin-bottom:4px">
-      ${acesso.podeOperar===false?`<p style="margin:0 0 10px;font-size:13.5px;font-weight:700;color:var(--red)">🔒 ${esc(acesso.motivo||'Novas autorizações bloqueadas.')}</p>`:''}
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px">
         <div>
-          <b style="font-family:'Sora',sans-serif;font-size:14px">${titulo}</b>
-          <span style="margin-left:10px;font-size:13px;color:var(--ink-2)">${consumo}</span>
+          <b style="font-family:'Sora',sans-serif;font-size:14px">${a.bloqueado?'🔒 ':''}${esc(a.titulo)}</b>
+          <div style="margin-top:2px;font-size:13px;color:var(--ink-2)">${esc(a.texto)}</div>
         </div>
         <div style="display:flex;gap:8px;align-items:center">
-          ${d.extras>0?`<span class="badge b-blue">💰 ${d.extras} extra${d.extras>1?'s':''}</span>`:''}
-          ${trial?'':`<span style="font-size:12px;color:var(--ink-3)">Renova ${renovacao}</span>`}
+          ${d.extras>0&&!acesso.trial?`<span class="badge b-blue">💰 ${d.extras} extra${d.extras>1?'s':''}</span>`:''}
           <span style="font-weight:700;font-size:15px;color:${cor}">${d.pct}%</span>
-          <button onclick="window.open('/checkout.html','_blank')" style="background:var(--brand);color:#fff;border:none;border-radius:8px;padding:6px 14px;font-size:12.5px;font-weight:700;cursor:pointer">Assinar Plano</button>
+          ${botao}
         </div>
       </div>
       <div style="height:8px;background:rgba(0,0,0,.08);border-radius:99px">
         <div style="height:100%;border-radius:99px;background:${cor};width:${Math.min(d.pct,100)}%;transition:width .6s"></div>
       </div>
-      ${d.alerta?`<p style="margin-top:8px;font-size:13px;font-weight:600;color:${cor}">${d.alerta==='critico'?'🔴 Limite atingido. Adquira créditos extras ou faça upgrade.':d.alerta==='urgente'?'🟠 Você está próximo do limite do seu plano.':'🟡 Você já utilizou 80% das autorizações do seu plano.'}</p>`:''}
+      ${d.alerta&&!a.bloqueado?`<p style="margin-top:8px;font-size:13px;font-weight:600;color:${cor}">${d.alerta==='critico'?'🔴 Limite atingido. Adquira créditos extras ou faça upgrade.':d.alerta==='urgente'?'🟠 Você está próximo do limite do seu plano.':'🟡 Você já utilizou 80% das autorizações do seu plano.'}</p>`:''}
     </div>`;
   }catch(e){}
 }
 
-function tratarErroLimite(d){ showToast(d.erro||'Limite atingido.','error'); carregarUsoPlaino(); }
 
 // ══ COMPRAR CRÉDITOS ══
 let _pacoteParaComprar = null;

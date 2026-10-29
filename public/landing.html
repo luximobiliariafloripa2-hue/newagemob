@@ -350,50 +350,53 @@ footer a{color:var(--gold2);font-weight:600}
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-top:48px;align-items:start">
 
       <!-- START -->
-      <div style="background:#fff;border:1.5px solid var(--line);border-radius:18px;padding:26px 22px;transition:.2s;box-shadow:0 1px 3px rgba(0,0,0,.06)" onmouseover="this.style.transform='translateY(-4px)';this.style.boxShadow='0 12px 40px rgba(0,0,0,.12)'" onmouseout="this.style.transform='';this.style.boxShadow='0 1px 3px rgba(0,0,0,.06)'">
+      <div data-plano-card="start" style="background:#fff;border:1.5px solid var(--line);border-radius:18px;padding:26px 22px;transition:.2s;box-shadow:0 1px 3px rgba(0,0,0,.06)" onmouseover="this.style.transform='translateY(-4px)';this.style.boxShadow='0 12px 40px rgba(0,0,0,.12)'" onmouseout="this.style.transform='';this.style.boxShadow='0 1px 3px rgba(0,0,0,.06)'">
         <div style="font-size:12px;font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Start</div>
-        <div style="font-family:'Sora',sans-serif;font-size:32px;font-weight:800;color:var(--navy)">R$&nbsp;29<span style="font-size:16px;font-weight:600">,90/mês</span></div>
+        <div style="font-family:'Sora',sans-serif;font-size:32px;font-weight:800;color:var(--navy)" data-plano-preco="start">R$&nbsp;29<span style="font-size:16px;font-weight:600">,90/mês</span></div>
         <div style="font-size:13px;color:var(--ink-2);margin:8px 0 20px">Corretor autônomo iniciante</div>
         <ul style="list-style:none;display:flex;flex-direction:column;gap:9px;margin-bottom:24px">
-          <li style="font-size:13.5px;display:flex;gap:8px;align-items:center"><span style="color:var(--navy);font-weight:800">✓</span> 10 autorizações por mês</li>
-          <li style="font-size:13.5px;display:flex;gap:8px;align-items:center"><span style="color:var(--navy);font-weight:800">✓</span> 1 usuário</li>
+          <li style="font-size:13.5px;display:flex;gap:8px;align-items:center"><span style="color:var(--navy);font-weight:800">✓</span> <span data-plano-limite="start">10 autorizações por mês</span></li>
+          <li style="font-size:13.5px;display:flex;gap:8px;align-items:center"><span style="color:var(--navy);font-weight:800">✓</span> <span data-plano-usuarios="start">1 usuário</span></li>
           <li style="font-size:13.5px;display:flex;gap:8px;align-items:center"><span style="color:var(--navy);font-weight:800">✓</span> Dashboard Gerencial</li>
           <li style="font-size:13.5px;display:flex;gap:8px;align-items:center"><span style="color:var(--navy);font-weight:800">✓</span> Relatórios</li>
           <li style="font-size:13.5px;display:flex;gap:8px;align-items:center"><span style="color:var(--navy);font-weight:800">✓</span> Assinatura Digital</li>
         </ul>
+        <div data-plano-nota="start" style="font-size:12px;color:var(--ink-3);margin:-12px 0 16px;display:none">Usuários adicionais disponíveis para imobiliárias.</div>
         <button onclick="abrirCadastro('start')" class="btn" style="width:100%;background:var(--paper);border:1.5px solid var(--navy);color:var(--navy);border-radius:10px;padding:11px">Começar →</button>
       </div>
 
       <!-- PRO — DESTAQUE -->
-      <div style="background:linear-gradient(145deg,var(--navy),#0d4a6e);border:2px solid var(--gold);border-radius:18px;padding:26px 22px;transform:scale(1.04);box-shadow:0 20px 60px rgba(4,39,59,.35);position:relative">
+      <div data-plano-card="pro" style="background:linear-gradient(145deg,var(--navy),#0d4a6e);border:2px solid var(--gold);border-radius:18px;padding:26px 22px;transform:scale(1.04);box-shadow:0 20px 60px rgba(4,39,59,.35);position:relative">
         <div style="position:absolute;top:-14px;left:50%;transform:translateX(-50%);background:var(--gold);color:#fff;border-radius:99px;padding:5px 16px;font-size:12px;font-weight:800;white-space:nowrap">⭐ Mais vendido</div>
         <div style="font-size:12px;font-weight:700;color:rgba(255,255,255,.6);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Pro</div>
-        <div style="font-family:'Sora',sans-serif;font-size:32px;font-weight:800;color:#fff">R$&nbsp;49<span style="font-size:16px;font-weight:600">,90/mês</span></div>
+        <div style="font-family:'Sora',sans-serif;font-size:32px;font-weight:800;color:#fff" data-plano-preco="pro">R$&nbsp;49<span style="font-size:16px;font-weight:600">,90/mês</span></div>
         <div style="font-size:13px;color:rgba(255,255,255,.65);margin:8px 0 20px">Corretor ou imobiliária</div>
         <ul style="list-style:none;display:flex;flex-direction:column;gap:9px;margin-bottom:24px">
-          <li style="font-size:13.5px;display:flex;gap:8px;align-items:center;color:#fff"><span style="color:var(--gold2);font-weight:800">✓</span> 25 autorizações por mês</li>
-          <li style="font-size:13.5px;display:flex;gap:8px;align-items:center;color:#fff"><span style="color:var(--gold2);font-weight:800">✓</span> 2 usuários</li>
+          <li style="font-size:13.5px;display:flex;gap:8px;align-items:center;color:#fff"><span style="color:var(--gold2);font-weight:800">✓</span> <span data-plano-limite="pro">25 autorizações por mês</span></li>
+          <li style="font-size:13.5px;display:flex;gap:8px;align-items:center;color:#fff"><span style="color:var(--gold2);font-weight:800">✓</span> <span data-plano-usuarios="pro">2 usuários</span></li>
           <li style="font-size:13.5px;display:flex;gap:8px;align-items:center;color:#fff"><span style="color:var(--gold2);font-weight:800">✓</span> Dashboard Gerencial</li>
           <li style="font-size:13.5px;display:flex;gap:8px;align-items:center;color:#fff"><span style="color:var(--gold2);font-weight:800">✓</span> Relatórios</li>
           <li style="font-size:13.5px;display:flex;gap:8px;align-items:center;color:#fff"><span style="color:var(--gold2);font-weight:800">✓</span> Gestão de Equipes</li>
           <li style="font-size:13.5px;display:flex;gap:8px;align-items:center;color:#fff"><span style="color:var(--gold2);font-weight:800">✓</span> Assinatura Digital</li>
         </ul>
+        <div data-plano-nota="pro" style="font-size:12px;color:rgba(255,255,255,.65);margin:-12px 0 16px;">Usuários adicionais disponíveis para imobiliárias.</div>
         <button onclick="abrirCadastro('pro')" class="btn btn-gold" style="width:100%;border-radius:10px;padding:12px;font-size:15px">Começar →</button>
       </div>
 
       <!-- PRIME -->
-      <div style="background:#fff;border:1.5px solid var(--line);border-radius:18px;padding:26px 22px;transition:.2s;box-shadow:0 1px 3px rgba(0,0,0,.06)" onmouseover="this.style.transform='translateY(-4px)';this.style.boxShadow='0 12px 40px rgba(0,0,0,.12)'" onmouseout="this.style.transform='';this.style.boxShadow='0 1px 3px rgba(0,0,0,.06)'">
+      <div data-plano-card="prime" style="background:#fff;border:1.5px solid var(--line);border-radius:18px;padding:26px 22px;transition:.2s;box-shadow:0 1px 3px rgba(0,0,0,.06)" onmouseover="this.style.transform='translateY(-4px)';this.style.boxShadow='0 12px 40px rgba(0,0,0,.12)'" onmouseout="this.style.transform='';this.style.boxShadow='0 1px 3px rgba(0,0,0,.06)'">
         <div style="font-size:12px;font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Prime</div>
-        <div style="font-family:'Sora',sans-serif;font-size:32px;font-weight:800;color:var(--navy)">R$&nbsp;79<span style="font-size:16px;font-weight:600">,90/mês</span></div>
+        <div style="font-family:'Sora',sans-serif;font-size:32px;font-weight:800;color:var(--navy)" data-plano-preco="prime">R$&nbsp;79<span style="font-size:16px;font-weight:600">,90/mês</span></div>
         <div style="font-size:13px;color:var(--ink-2);margin:8px 0 20px">Imobiliária com equipe</div>
         <ul style="list-style:none;display:flex;flex-direction:column;gap:9px;margin-bottom:24px">
-          <li style="font-size:13.5px;display:flex;gap:8px;align-items:center"><span style="color:var(--navy);font-weight:800">✓</span> 40 autorizações por mês</li>
-          <li style="font-size:13.5px;display:flex;gap:8px;align-items:center"><span style="color:var(--navy);font-weight:800">✓</span> Até 5 usuários</li>
+          <li style="font-size:13.5px;display:flex;gap:8px;align-items:center"><span style="color:var(--navy);font-weight:800">✓</span> <span data-plano-limite="prime">40 autorizações por mês</span></li>
+          <li style="font-size:13.5px;display:flex;gap:8px;align-items:center"><span style="color:var(--navy);font-weight:800">✓</span> <span data-plano-usuarios="prime">Até 5 usuários</span></li>
           <li style="font-size:13.5px;display:flex;gap:8px;align-items:center"><span style="color:var(--navy);font-weight:800">✓</span> Dashboard Gerencial</li>
           <li style="font-size:13.5px;display:flex;gap:8px;align-items:center"><span style="color:var(--navy);font-weight:800">✓</span> Relatórios</li>
           <li style="font-size:13.5px;display:flex;gap:8px;align-items:center"><span style="color:var(--navy);font-weight:800">✓</span> Gestão de Equipes</li>
           <li style="font-size:13.5px;display:flex;gap:8px;align-items:center"><span style="color:var(--navy);font-weight:800">✓</span> Assinatura Digital</li>
         </ul>
+        <div data-plano-nota="prime" style="font-size:12px;color:var(--ink-3);margin:-12px 0 16px;">Usuários adicionais disponíveis para imobiliárias.</div>
         <button onclick="abrirCadastro('prime')" class="btn" style="width:100%;background:var(--paper);border:1.5px solid var(--navy);color:var(--navy);border-radius:10px;padding:11px">Começar →</button>
       </div>
 
@@ -410,7 +413,7 @@ footer a{color:var(--gold2);font-weight:600}
           <li style="font-size:13.5px;display:flex;gap:8px;align-items:center"><span style="color:var(--navy);font-weight:800">✓</span> Gestão de Equipes</li>
           <li style="font-size:13.5px;display:flex;gap:8px;align-items:center"><span style="color:var(--navy);font-weight:800">✓</span> Assinatura Digital</li>
         </ul>
-        <a href="https://wa.me/5548999999999?text=Olá, tenho interesse no plano Corporate do AGEMOB" target="_blank" class="btn" style="display:flex;width:100%;background:var(--paper);border:1.5px solid var(--navy);color:var(--navy);border-radius:10px;padding:11px;justify-content:center">Falar com consultor →</a>
+        <div class="btn" aria-disabled="true" style="display:flex;width:100%;background:var(--paper);border:1.5px solid var(--line);color:var(--ink-3);border-radius:10px;padding:11px;justify-content:center;cursor:default">Contato comercial em breve</div>
       </div>
     </div>
 
@@ -425,12 +428,12 @@ footer a{color:var(--gold2);font-weight:600}
           <p style="margin-top:10px;font-size:14px;color:var(--ink-2);line-height:1.7">Você pode comprar créditos extras ou fazer upgrade do plano. Novas autorizações ficam bloqueadas até que o saldo seja recarregado.</p>
         </details>
         <details style="border:1.5px solid var(--line);border-radius:12px;padding:16px 18px;cursor:pointer">
-          <summary style="font-weight:700;font-size:15px;color:var(--navy);list-style:none;display:flex;justify-content:space-between">Posso cancelar quando quiser? <span>+</span></summary>
-          <p style="margin-top:10px;font-size:14px;color:var(--ink-2);line-height:1.7">Sim. Sem fidelidade, sem multa. Você pode cancelar a qualquer momento pelo painel ou entrando em contato com o suporte.</p>
+          <summary style="font-weight:700;font-size:15px;color:var(--navy);list-style:none;display:flex;justify-content:space-between">Existe renovação automática? <span>+</span></summary>
+          <p style="margin-top:10px;font-size:14px;color:var(--ink-2);line-height:1.7">Não. Sem renovação automática. Você paga quando quiser continuar usando — cada pagamento libera 30 dias do plano.</p>
         </details>
         <details style="border:1.5px solid var(--line);border-radius:12px;padding:16px 18px;cursor:pointer">
           <summary style="font-weight:700;font-size:15px;color:var(--navy);list-style:none;display:flex;justify-content:space-between">Existe período de teste gratuito? <span>+</span></summary>
-          <p style="margin-top:10px;font-size:14px;color:var(--ink-2);line-height:1.7">Sim. Ao criar sua conta, você recebe 1 autorização de teste completamente gratuita, sem precisar de cartão de crédito.</p>
+          <p style="margin-top:10px;font-size:14px;color:var(--ink-2);line-height:1.7">Sim. Ao criar sua conta você ganha 1 autorização grátis ou 7 dias, o que acontecer primeiro, sem precisar de cartão de crédito.</p>
         </details>
       </div>
     </div>
@@ -441,9 +444,9 @@ footer a{color:var(--gold2);font-weight:600}
 <section class="cta-final">
   <div class="container">
     <h2>Pronto para modernizar<br>sua captação?</h2>
-    <p>Comece agora com 1 autorização de teste grátis.<br>Sem cartão de crédito. Sem compromisso.</p>
+    <p>Comece agora com 1 autorização grátis ou 7 dias, o que acontecer primeiro.<br>Sem cartão de crédito. Sem compromisso.</p>
     <button class="btn btn-gold btn-lg" onclick="abrirCadastro()" style="font-size:17px;padding:17px 40px">
-      Cadastrar minha imobiliária →
+      Criar minha conta →
     </button>
     <p style="margin-top:20px;font-size:14px;color:rgba(255,255,255,.45)">Já tem conta? <a href="/index.html" style="color:var(--gold2)">Fazer login</a></p>
   </div>
@@ -540,7 +543,7 @@ footer a{color:var(--gold2);font-weight:600}
     <div class="sucesso-box" id="sucessoCadastro">
       <div class="check">✓</div>
       <h3>Conta criada com sucesso!</h3>
-      <p>Sua conta está configurada.<br>Você tem um <b>teste grátis</b> disponível.</p>
+      <p>Sua conta está configurada.<br>Seu <b>teste grátis</b>: 1 autorização ou 7 dias, o que acontecer primeiro.</p>
       <button class="btn btn-primary btn-lg" style="margin-top:24px;width:100%" onclick="irParaPainel()">Acessar o painel →</button>
     </div>
   </div>
@@ -575,7 +578,23 @@ const SoundManager=(()=>{
 
 let _tokenCadastro = null;
 
-function abrirCadastro(plano){
+// Titular já logado (sessão válida no backend) vai direto ao checkout do plano.
+// O papel vem da sessão salva; o checkout/backend continua sendo a autoridade.
+async function sessaoTitularValida(){
+  let token, user;
+  try { token = localStorage.getItem('agemob_token'); user = JSON.parse(localStorage.getItem('agemob_user') || 'null'); } catch(e) { return false; }
+  if(!token || user?.role !== 'admin') return false;
+  try {
+    const r = await fetch('/api/minha-assinatura', { headers: { 'Authorization': 'Bearer ' + token } });
+    return r.ok;
+  } catch(e) { return false; }
+}
+
+async function abrirCadastro(plano){
+  if(plano && await sessaoTitularValida()){
+    window.location.href = '/checkout.html?plano=' + encodeURIComponent(plano);
+    return;
+  }
   if(plano) window._planoEscolhido = plano;
   document.getElementById('modalCadastro').classList.add('open');
   mostrar('telaEscolha');
@@ -608,6 +627,7 @@ function maskTel(el){
 }
 
 async function cadastrar(tipo){
+  if(tipo !== 'imobiliaria' && tipo !== 'corretor') return;
   let payload, erroEl, btnId;
   if(tipo==='imobiliaria'){
     erroEl=document.getElementById('erroMsgImob'); btnId='btnCadastrar';
@@ -623,6 +643,7 @@ async function cadastrar(tipo){
     if(senha.length<6){erroEl.textContent='A senha deve ter pelo menos 6 caracteres.';erroEl.style.display='block';return;}
     payload={tipoCliente:'imobiliaria',nome,cnpj,creci,responsavel:resp,email,senha,telefone:tel,whatsapp:tel,plano:window._planoEscolhido||'start'};
   } else {
+    // tipo === 'corretor'
     erroEl=document.getElementById('erroMsgCorretor'); btnId='btnCadastrarCorretor';
     const nome=document.getElementById('cc_nome').value.trim();
     const cpf=document.getElementById('cc_cpf').value.trim();
@@ -656,10 +677,44 @@ function irParaPainel(){
   window.location.href = '/index.html';
 }
 
-// Atalho: Enter no último campo
+// Atalho: Enter no último campo de cada formulário
 document.getElementById('c_senha').addEventListener('keydown', e => {
-  if(e.key === 'Enter') cadastrar();
+  if(e.key === 'Enter') cadastrar('imobiliaria');
 });
+document.getElementById('cc_senha').addEventListener('keydown', e => {
+  if(e.key === 'Enter') cadastrar('corretor');
+});
+
+// Preços e limites oficiais (db.planos). Falhou → mantém o HTML estático.
+// Só textContent: nada vindo do backend vira HTML.
+async function carregarPlanosPublicos(){
+  let planos;
+  try {
+    const r = await fetch('/api/planos/publicos');
+    if(!r.ok) return;
+    planos = await r.json();
+  } catch(e) { return; }
+  if(!Array.isArray(planos) || !planos.length) return;
+  const porSlug = {};
+  planos.forEach(p => { if(p && typeof p.slug === 'string') porSlug[p.slug] = p; });
+  document.querySelectorAll('[data-plano-card]').forEach(card => {
+    const p = porSlug[card.getAttribute('data-plano-card')];
+    if(!p){ card.style.display = 'none'; return; }
+    const preco = card.querySelector('[data-plano-preco]');
+    if(preco && typeof p.valorMensal === 'number' && Number.isFinite(p.valorMensal)){
+      const [inteiro, centavos] = p.valorMensal.toFixed(2).split('.');
+      preco.firstChild.nodeValue = 'R$\u00a0' + inteiro;
+      preco.querySelector('span').textContent = ',' + centavos + '/mês';
+    }
+    const lim = card.querySelector('[data-plano-limite]');
+    if(lim && Number.isInteger(p.limite)) lim.textContent = p.limite === -1 ? 'Autorizações ilimitadas' : p.limite + ' autorizações por mês';
+    const usu = card.querySelector('[data-plano-usuarios]');
+    if(usu && Number.isInteger(p.maxUsuarios)) usu.textContent = p.maxUsuarios === -1 ? 'Usuários ilimitados' : p.maxUsuarios === 1 ? '1 usuário' : 'Até ' + p.maxUsuarios + ' usuários';
+    const nota = card.querySelector('[data-plano-nota]');
+    if(nota && Number.isInteger(p.maxUsuarios)) nota.style.display = (p.maxUsuarios === -1 || p.maxUsuarios > 1) ? '' : 'none';
+  });
+}
+carregarPlanosPublicos();
 </script>
 </body>
 </html>

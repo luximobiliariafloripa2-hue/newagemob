@@ -87,6 +87,7 @@ async function init(){
     if(!r.ok) throw new Error(d.erro || 'Erro ao carregar planos.');
     planos = d;
     renderPlanos();
+    preSelecionarPlano();
   } catch(e) {
     document.getElementById('planGrid').innerHTML = `<div class="alert alert-err">${esc(e.message || 'Erro ao carregar planos.')}</div>`;
   }
@@ -101,6 +102,22 @@ function renderPlanos(){
       <div class="price">${esc(brl(p.valorMensal))}<span>/30 dias</span></div>
     </div>`).join('');
   grid.querySelectorAll('.plan-card').forEach(el => el.addEventListener('click', () => selecionarPlano(Number(el.dataset.i), el)));
+}
+
+// ?plano=<slug> (landing) só pré-seleciona um card da lista oficial acima;
+// slug desconhecido segue sem pré-seleção. O pedido continua só com planoId.
+async function preSelecionarPlano(){
+  const slug = new URLSearchParams(window.location.search).get('plano');
+  if(!slug) return;
+  try {
+    const r = await fetch('/api/planos/publicos');
+    if(!r.ok) return;
+    const publicos = await r.json();
+    const alvo = Array.isArray(publicos) ? publicos.find(p => p.slug === slug) : null;
+    const i = alvo ? planos.findIndex(p => p._id === alvo._id) : -1;
+    const el = i >= 0 ? document.querySelector(`.plan-card[data-i="${i}"]`) : null;
+    if(el) selecionarPlano(i, el);
+  } catch(e) {}
 }
 
 function selecionarPlano(i, el){
