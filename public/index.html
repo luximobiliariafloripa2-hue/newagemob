@@ -1344,6 +1344,10 @@ const AG = {
   autorizacoes: []
 };
 const BRL = v => typeof v === 'number' ? v.toLocaleString('pt-BR',{style:'currency',currency:'BRL'}) : '—';
+// Escape para texto e atributos entre aspas duplas montados em HTML (mesma função de validar.html).
+function esc(v){
+  return String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
 
 /* ================= BUSCA AUTORIZAÇÕES DO SERVIDOR ================= */
 async function carregarAutorizacoes(){
@@ -2207,7 +2211,7 @@ async function carregarMetricasSuperAdmin(){
     const porPlano=d.porPlano||{};
     document.getElementById('saPorPlano').innerHTML=Object.entries(porPlano).map(([slug,p])=>`
       <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--line)">
-        <div><span style="font-weight:700;text-transform:capitalize">${p.nome||slug}</span></div>
+        <div><span style="font-weight:700;text-transform:capitalize">${esc(p.nome||slug)}</span></div>
         <div style="display:flex;gap:12px;align-items:center">
           <span style="font-size:13px;color:var(--ink-2)">${p.count} cliente${p.count!==1?'s':''}</span>
           <span style="font-size:13px;font-weight:600;color:var(--gold)">${BRL(p.mrr)}/mês</span>
@@ -2222,15 +2226,15 @@ async function carregarMetricasSuperAdmin(){
       <div class="panel" style="border-color:var(--gold);background:var(--gold-soft)">
         <h2 style="color:var(--gold);font-size:14px;margin-bottom:10px">⚠ Clientes próximos do limite</h2>
         ${alertas.map(a=>`<div style="display:flex;justify-content:space-between;font-size:13.5px;padding:4px 0">
-          <span>${a.nome}</span><span class="badge ${a.pct>=100?'b-red':a.pct>=90?'b-gold':'b-blue'}">${a.pct}%</span></div>`).join('')}
+          <span>${esc(a.nome)}</span><span class="badge ${a.pct>=100?'b-red':a.pct>=90?'b-gold':'b-blue'}">${a.pct}%</span></div>`).join('')}
       </div>`:'';
 
     // Ranking
     document.getElementById('saRanking').innerHTML=ranking.length?
       ranking.map((r,i)=>`<div style="display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid var(--line)">
         <span style="font-size:18px;font-weight:800;color:var(--ink-3);min-width:28px">${i+1}º</span>
-        <div style="flex:1"><div style="font-weight:600;font-size:13.5px">${r.nome}</div>
-        <div style="font-size:12px;color:var(--ink-3)">${r.plano} · ${r.usadas} utilizadas</div></div>
+        <div style="flex:1"><div style="font-weight:600;font-size:13.5px">${esc(r.nome)}</div>
+        <div style="font-size:12px;color:var(--ink-3)">${esc(r.plano)} · ${r.usadas} utilizadas</div></div>
         <div style="text-align:right">
           <div style="font-size:13px;font-weight:700;color:${r.pct>=90?'var(--red)':r.pct>=80?'var(--gold)':'var(--brand)'}">${r.pct}%</div>
           <div style="width:80px;height:6px;background:var(--line);border-radius:99px;margin-top:4px">
@@ -2249,7 +2253,7 @@ async function carregarSubscriptions(){
       const valorAtual = selPlano.value;
       selPlano.innerHTML = '<option value="">Todos os planos</option>' +
         planos.filter(p => p.ativo).map(p =>
-          `<option value="${p.slug}">${p.nome}</option>`
+          `<option value="${esc(p.slug)}">${esc(p.nome)}</option>`
         ).join('');
       selPlano.value = valorAtual; // preserva seleção atual
     } catch(e) { /* não bloqueia se falhar */ }
@@ -2279,10 +2283,10 @@ function renderSubscriptions(){
     const renovacao=s.renewalDate?new Date(s.renewalDate).toLocaleDateString('pt-BR'):'—';
     const trial=s.trialExpiration?`<div style="font-size:11px;color:var(--ink-3)">Trial até ${new Date(s.trialExpiration).toLocaleDateString('pt-BR')}</div>`:'';
     return `<tr>
-      <td><div class="prop">${s.nome}</div><div class="sub">${s.email}</div></td>
+      <td><div class="prop">${esc(s.nome)}</div><div class="sub">${esc(s.email)}</div></td>
       <td><span class="badge ${s.tipoCliente==='corretor'?'b-blue':'b-gray'}">${s.tipoCliente==='corretor'?'Corretor':'Imobiliária'}</span></td>
-      <td><span class="badge ${planoColors[s.planoSlug]||'b-gray'}">${s.planoNome}</span></td>
-      <td><span class="badge ${subStatusBadge[s.status]||'b-gray'}">${subStatusLabel[s.status]||s.status}</span>${trial}</td>
+      <td><span class="badge ${planoColors[s.planoSlug]||'b-gray'}">${esc(s.planoNome)}</span></td>
+      <td><span class="badge ${subStatusBadge[s.status]||'b-gray'}">${esc(subStatusLabel[s.status]||s.status)}</span>${trial}</td>
       <td>
         <div style="font-size:12.5px;margin-bottom:3px">${s.usadas}/${s.limite===-1?'∞':s.limite}</div>
         ${s.limite>0?`<div style="width:90px;height:5px;background:var(--line);border-radius:99px">
@@ -2294,10 +2298,10 @@ function renderSubscriptions(){
       <td style="white-space:nowrap">
         <div style="display:flex;flex-wrap:wrap;gap:4px">
           <button class="icon-btn" title="Editar cliente" onclick="abrirEditarCliente('${s._id}','${s.tipoCliente||'imobiliaria'}')" style="background:var(--brand-soft);border-color:var(--brand);color:var(--brand)">✏️</button>
-          <button class="icon-btn" title="Alterar plano" onclick="abrirAlterarPlano('${s._id}','${s.nome.replace(/'/g,'')}')">📋</button>
-          <button class="icon-btn" title="Créditos" onclick="abrirModalCreditos('${s._id}','${s.nome.replace(/'/g,'')}')">💰</button>
+          <button class="icon-btn" title="Alterar plano" data-nome="${esc(s.nome)}" onclick="abrirAlterarPlano('${s._id}',this.dataset.nome)">📋</button>
+          <button class="icon-btn" title="Créditos" data-nome="${esc(s.nome)}" onclick="abrirModalCreditos('${s._id}',this.dataset.nome)">💰</button>
           <button class="icon-btn" title="Resetar consumo" onclick="resetarConsumo('${s._id}')">🔄</button>
-          <button class="icon-btn" title="Modo Suporte — acessar conta" onclick="entrarModoSuporte('${s._id}','${s.nome.replace(/'/g,'')}')">🔑</button>
+          <button class="icon-btn" title="Modo Suporte — acessar conta" data-nome="${esc(s.nome)}" onclick="entrarModoSuporte('${s._id}',this.dataset.nome)">🔑</button>
           ${s.status==='active'||s.status==='trial'
             ?`<button class="icon-btn" title="Suspender" onclick="alterarStatusSA('${s._id}','suspended')">⏸</button>`
             :`<button class="icon-btn" title="Reativar" onclick="alterarStatusSA('${s._id}','active')">▶</button>`}
@@ -2312,7 +2316,7 @@ async function abrirAlterarPlano(imobId, nome){
   document.getElementById('apClienteNome').textContent=nome;
   const planos=await fetch('/api/admin/planos',{headers:Auth.headers()}).then(r=>r.json());
   document.getElementById('ap_planoId').innerHTML=planos.filter(p=>p.ativo).map(p=>
-    `<option value="${p._id}">${p.nome} — ${p.limite===-1?'Ilimitado':p.limite+' auth/mês'} — ${p.valorMensal>0?BRL(p.valorMensal)+'/mês':'Grátis'}</option>`).join('');
+    `<option value="${esc(p._id)}">${esc(p.nome)} — ${p.limite===-1?'Ilimitado':p.limite+' auth/mês'} — ${p.valorMensal>0?BRL(p.valorMensal)+'/mês':'Grátis'}</option>`).join('');
   document.getElementById('ap_motivo').value='';
   document.getElementById('modalAlterarPlano').classList.add('open');
 }
@@ -2390,12 +2394,12 @@ async function confirmarCreditos(){
 async function carregarPlanosSA(){
   const lista=await fetch('/api/admin/planos',{headers:Auth.headers()}).then(r=>r.json());
   document.getElementById('saPlanoBody').innerHTML=lista.map(p=>`<tr>
-    <td><b>${p.nome}</b></td>
+    <td><b>${esc(p.nome)}</b></td>
     <td>${p.limite===-1?'Ilimitado':p.limite}</td>
     <td>${p.valorMensal>0?BRL(p.valorMensal):'Grátis'}</td>
     <td>${p.maxUsuarios===-1?'Ilimitado':(p.maxUsuarios||1)}</td>
     <td><span class="badge ${p.ativo?'b-green':'b-red'}">${p.ativo?'Ativo':'Inativo'}</span></td>
-    <td><button class="icon-btn" onclick="editarPlano('${p._id}','${p.nome}',${p.limite},${p.valorMensal||0},${p.maxUsuarios||1})">✏️</button>
+    <td><button class="icon-btn" data-nome="${esc(p.nome)}" onclick="editarPlano('${p._id}',this.dataset.nome,${p.limite},${p.valorMensal||0},${p.maxUsuarios||1})">✏️</button>
         <button class="icon-btn" onclick="excluirPlano('${p._id}')">🗑</button></td>
   </tr>`).join('');
 }
@@ -2428,7 +2432,7 @@ async function excluirPlano(id){
 function abrirModalNovaImob(){
   fetch('/api/admin/planos',{headers:Auth.headers()}).then(r=>r.json()).then(planos=>{
     const sel=document.getElementById('ni_planoId');
-    sel.innerHTML=planos.filter(p=>p.ativo).map(p=>`<option value="${p._id}">${p.nome} (${p.limite===-1?'Ilimitado':p.limite+' auth/mês'})</option>`).join('');
+    sel.innerHTML=planos.filter(p=>p.ativo).map(p=>`<option value="${esc(p._id)}">${esc(p.nome)} (${p.limite===-1?'Ilimitado':p.limite+' auth/mês'})</option>`).join('');
   }).catch(()=>{});
   document.getElementById('modalNovaImob').classList.add('open');
 }
@@ -2686,14 +2690,14 @@ function filtrarBoletos(){
   });
 
   const renderLinha = (b) => `<tr>
-    <td style="font-weight:700;color:var(--brand)">${b.estado||'—'}</td>
-    <td>${b.cidade||'—'}</td>
-    <td><div style="font-weight:600">${b.imobiliariaNome||b.nome||'—'}</div></td>
-    <td><span class="badge ${b.planoNome?'b-green':'b-gray'}">${b.planoNome||'—'}</span></td>
+    <td style="font-weight:700;color:var(--brand)">${esc(b.estado||'—')}</td>
+    <td>${esc(b.cidade||'—')}</td>
+    <td><div style="font-weight:600">${esc(b.imobiliariaNome||b.nome||'—')}</div></td>
+    <td><span class="badge ${b.planoNome?'b-green':'b-gray'}">${esc(b.planoNome||'—')}</span></td>
     <td style="font-weight:700">R$ ${(b.valor||0).toFixed(2).replace('.',',')}/mês</td>
     <td>${b.vencimento?new Date(b.vencimento).toLocaleDateString('pt-BR'):'—'}</td>
     <td>${b.pagamentoEm?new Date(b.pagamentoEm).toLocaleDateString('pt-BR'):'—'}</td>
-    <td><span class="badge ${sColor[b.status]||'b-gray'}">${sLabel[b.status]||b.status}</span></td>
+    <td><span class="badge ${sColor[b.status]||'b-gray'}">${esc(sLabel[b.status]||b.status)}</span></td>
     <td style="white-space:nowrap">
       ${b.status!=='pago'?`<button class="icon-btn" title="Marcar como pago" onclick="marcarBoletoSA('${b._id}','pago')">✅</button>`:''}
       ${b.status!=='cancelado'?`<button class="icon-btn" title="Cancelar" onclick="marcarBoletoSA('${b._id}','cancelado')">✕</button>`:''}
@@ -2735,7 +2739,7 @@ async function abrirModalEmitirBoleto(){
   try {
     const r = await fetch('/api/admin/imobiliarias', { headers: Auth.headers() });
     const lista = await r.json();
-    document.getElementById('eb_imobId').innerHTML = lista.map(i=>`<option value="${i._id}">${i.nome}</option>`).join('');
+    document.getElementById('eb_imobId').innerHTML = lista.map(i=>`<option value="${esc(i._id)}">${esc(i.nome)}</option>`).join('');
   } catch(e) {}
   // Data padrão vencimento = 10 dias
   const venc = new Date(); venc.setDate(venc.getDate()+10);
