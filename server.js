@@ -34,6 +34,7 @@ const { normalizarEventos } = require('./src/services/events/EventNormalizer');
 const { enriquecerEventosComServidor } = require('./src/services/events/EventServerEnrichment');
 const { construirEventoBackend } = require('./src/services/events/EventBackendEmitter');
 const { carregarConfiguracaoTsa, solicitarCarimboTempo, verificarTokenArmazenado } = require('./src/services/tsa/Rfc3161TimestampClient');
+const { DIAS_TRIAL, avaliarAcessoImobiliaria, normalizarStatusFinanceiro } = require('./src/services/acesso/AcessoTenant');
 
 const app  = express();
 const PORT = process.env.PORT || 3000;
@@ -332,10 +333,22 @@ function authMiddleware(roles = []) {
       if (roles.length && !roles.includes(payload.role)) {
         return res.status(403).json({ erro: 'Acesso negado.' });
       }
-      next();
     } catch(e) {
       return res.status(401).json({ erro: 'Token inválido ou expirado.' });
     }
+    // Regra central: token de tenant só vale enquanto a conta pode ser consultada
+    // (token de 8h de conta desativada para na hora). Super Admin e modo suporte
+    // não passam por aqui.
+    if ((req.user.role === 'admin' || req.user.role === 'corretor') && !req.user.modoSuporte) {
+      try {
+        const { acesso } = await carregarAcessoTenant(req.user.imobiliariaId);
+        if (acesso.statusEfetivo === 'inexistente') return res.status(401).json({ erro: 'Sessão expirada. Faça login novamente.' });
+        if (!acesso.podeConsultar) return res.status(403).json({ erro: acesso.motivo });
+      } catch(e) {
+        return res.status(500).json({ erro: 'Erro interno.' });
+      }
+    }
+    next();
   };
 }
 function filtroImobiliaria(req, extra = {}) {
@@ -388,6 +401,11 @@ app.post('/api/auth/login', async (req, res) => {
 
     if (!ok) {
       return res.status(401).json({ erro: 'Credenciais inválidas.' });
+    }
+
+    if (user.role === 'admin' || user.role === 'corretor') {
+      const { acesso } = await carregarAcessoTenant(user.imobiliariaId);
+      if (!acesso.podeLogin) return res.status(403).json({ erro: acesso.motivo });
     }
 
     let imobiliaria = null;
@@ -495,6 +513,9 @@ app.post('/api/admin/imobiliarias', authMiddleware(['super_admin']), async (req,
     if (cpf)  { const ex = await db.imobiliarias.findOne({ cpf });  if(ex) return res.status(422).json({ erro: 'CPF já cadastrado.' }); }
     if (creci){ const ex = await db.imobiliarias.findOne({ creci }); if(ex) return res.status(422).json({ erro: 'CRECI já cadastrado.' }); }
 
+    const statusAdm = statusAdministrativoEntrada(status === undefined ? 'ativo' : status);
+    if (!statusAdm) return res.status(422).json({ erro: 'Status inválido.' });
+
     // Busca plano
     let plano = null;
     if (planoId) plano = await db.planos.findOne({ _id: planoId });
@@ -514,8 +535,8 @@ app.post('/api/admin/imobiliarias', authMiddleware(['super_admin']), async (req,
       planoId: plano?._id||null, planoSlug: plano?.slug||'pro', planoNome: plano?.nome||'Pro',
       limiteAutorizacoes: plano?.limite ?? 30,
       creditosExtras: 0,
-      status: status || 'ativo',
-      ativo: true,
+      status: statusAdm,
+      ativo: statusAdm !== 'inativo',
       criadoEm:     new Date().toISOString(),
       atualizadoEm: new Date().toISOString()
     });
@@ -557,8 +578,14 @@ app.patch('/api/admin/imobiliarias/:id', authMiddleware(['super_admin']), async 
 
     const upd = {
       nome, nomeFantasia, cnpj, creci, cpf, telefone, whatsapp, email,
-      responsavel, endereco, status, atualizadoEm: new Date().toISOString()
+      responsavel, endereco, atualizadoEm: new Date().toISOString()
     };
+    if (status !== undefined) {
+      const statusAdm = statusAdministrativoEntrada(status);
+      if (!statusAdm) return res.status(422).json({ erro: 'Status inválido.' });
+      upd.status = statusAdm;
+      upd.ativo = statusAdm !== 'inativo';
+    }
     if (limiteAutorizacoes !== undefined) upd.limiteAutorizacoes = limiteAutorizacoes;
 
     await db.imobiliarias.update({ _id: req.params.id }, { $set: upd });
@@ -593,7 +620,7 @@ app.patch('/api/admin/imobiliarias/:id', authMiddleware(['super_admin']), async 
 // Desativar/ativar imobiliária
 app.patch('/api/admin/imobiliarias/:id/status', authMiddleware(['super_admin']), async (req, res) => {
   const { ativo } = req.body;
-  await db.imobiliarias.update({ _id: req.params.id }, { $set: { ativo: !!ativo, atualizadoEm: new Date().toISOString() } });
+  await db.imobiliarias.update({ _id: req.params.id }, { $set: { status: ativo ? 'ativo' : 'inativo', ativo: !!ativo, atualizadoEm: new Date().toISOString() } });
   res.json({ ok: true });
 });
 
@@ -620,17 +647,18 @@ app.get('/api/admin/imobiliarias/:id/usuarios', authMiddleware(['super_admin']),
 const SubscriptionService = {
 
   async criar(imobiliariaId, planoId, status='trial') {
+    if (!STATUS_FINANCEIROS.includes(status)) throw new Error('Status de assinatura inválido.');
     const plano = await db.planos.findOne({ _id: planoId });
     if (!plano) throw new Error('Plano não encontrado.');
     const now = new Date();
     const renewal = new Date(now); renewal.setMonth(renewal.getMonth() + 1);
-    const trialExp = status === 'trial' ? new Date(now.getTime() + 7*24*60*60*1000).toISOString() : null;
+    const trialExp = status === 'trial' ? new Date(now.getTime() + DIAS_TRIAL*24*60*60*1000).toISOString() : null;
     const sub = await db.subscriptions.insert({
       imobiliariaId,
       planoId,
       planoSlug:            plano.slug,
       planoNome:            plano.nome,
-      status,                             // trial | active | suspended | canceled | delinquent
+      status,                             // trial | active | pending (eixo financeiro)
       billingType:          'monthly',
       valorMensal:          plano.valorMensal || 0,
       limiteAutorizacoes:   plano.limite,
@@ -713,11 +741,47 @@ const SubscriptionService = {
     });
   },
 
+  // Ações do painel (contrato da rota mantido) mapeadas nos dois eixos:
+  // suspended/canceled/active mexem no eixo administrativo (imob.status);
+  // active/delinquent/trial no financeiro (sub.status). Motivo financeiro
+  // nunca altera imob.ativo — isso derrubaria os links públicos.
   async alterarStatus(imobiliariaId, novoStatus) {
-    await db.subscriptions.update({ imobiliariaId }, { $set: { status: novoStatus, atualizadoEm: new Date().toISOString() } });
-    await db.imobiliarias.update({ _id: imobiliariaId }, { $set: { subscriptionStatus: novoStatus, ativo: novoStatus==='active'||novoStatus==='trial', atualizadoEm: new Date().toISOString() } });
+    const agora = new Date().toISOString();
+    const adm = { suspended: 'suspenso', canceled: 'inativo', active: 'ativo' }[novoStatus];
+    if (adm) {
+      await db.imobiliarias.update({ _id: imobiliariaId }, { $set: { status: adm, ativo: adm !== 'inativo', atualizadoEm: agora } });
+    }
+    const fin = { active: 'active', delinquent: 'pending', trial: 'trial' }[novoStatus];
+    if (fin) {
+      const set = { status: fin, atualizadoEm: agora };
+      if (fin === 'trial') set.trialExpiration = new Date(Date.now() + DIAS_TRIAL*24*60*60*1000).toISOString();
+      await db.subscriptions.update({ imobiliariaId }, { $set: set });
+      await db.imobiliarias.update({ _id: imobiliariaId }, { $set: { subscriptionStatus: fin, atualizadoEm: agora } });
+    }
   }
 };
+
+const STATUS_FINANCEIROS = ['trial', 'active', 'pending'];
+
+// Entrada do Super Admin para o eixo administrativo; 'cancelado' (opção do
+// formulário de edição) equivale a inativo. Retorna null se inválido.
+function statusAdministrativoEntrada(status) {
+  if (status === 'cancelado') return 'inativo';
+  return ['ativo', 'suspenso', 'inativo'].includes(status) ? status : null;
+}
+
+// Carrega imobiliária + subscription (+ plano trial e uso, só se em trial) e
+// aplica a regra central. Única porta de entrada para decisões de acesso.
+async function carregarAcessoTenant(imobiliariaId) {
+  const imob = imobiliariaId ? await db.imobiliarias.findOne({ _id: imobiliariaId }) : null;
+  const sub = imob ? await db.subscriptions.findOne({ imobiliariaId }) : null;
+  let planoTrial = null, usoTrial = 0;
+  if (sub && normalizarStatusFinanceiro(sub.status) === 'trial') {
+    planoTrial = await db.planos.findOne({ slug: 'trial' });
+    usoTrial = await db.autorizacoes.count({ imobiliariaId });
+  }
+  return { imob, sub, planoTrial, acesso: avaliarAcessoImobiliaria({ imob, sub, planoTrial, usoTrial, agora: new Date() }) };
+}
 
 // ═══════════════════════════════════════════════════════
 // BILLING SERVICE — Transações e MRR
@@ -786,40 +850,37 @@ const BillingService = {
 // ═══════════════════════════════════════════════════════
 // HELPERS SAAS — Controle de limite e créditos
 // ═══════════════════════════════════════════════════════
-async function verificarLimite(imobiliariaId) {
-  const imob = await db.imobiliarias.findOne({ _id: imobiliariaId });
-  if (!imob) return { ok: false, erro: 'Imobiliária não encontrada.' };
-  if (imob.status === 'suspenso') return { ok: false, erro: 'Conta suspensa. Entre em contato com o suporte.' };
-  if (imob.status === 'inativo') return { ok: false, erro: 'Conta inativa.' };
-
-  // Unlimited — sem limite
-  if (imob.limiteAutorizacoes === -1) return { ok: true };
-
-  // Conta autorizações do mês atual
+// Consumo da cota mensal do plano: autorizações do mês que não foram pagas
+// com crédito extra (registros antigos, sem `consumo`, contam como plano).
+async function contarUsoPlanoMes(imobiliariaId) {
   const now = new Date();
   const inicio = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-  const usadas = await db.autorizacoes.count({
-    imobiliariaId,
-    criadoEm: { $gte: inicio }
-  });
-
-  const limite = imob.limiteAutorizacoes || 0;
-  const extras = imob.creditosExtras || 0;
-
-  if (usadas < limite) return { ok: true, usadas, limite, extras, tipo: 'plano' };
-  if (usadas < limite + extras) return { ok: true, usadas, limite, extras, tipo: 'credito_extra' };
-
-  return {
-    ok: false,
-    erro: 'Você atingiu o limite de autorizações do seu plano. Adquira créditos adicionais ou faça upgrade.',
-    usadas, limite, extras
-  };
+  return db.autorizacoes.count({ imobiliariaId, criadoEm: { $gte: inicio }, consumo: { $ne: 'credito_extra' } });
 }
 
-async function consumirCredito(imobiliariaId, tipo) {
-  if (tipo === 'credito_extra') {
-    await db.imobiliarias.update({ _id: imobiliariaId }, { $inc: { creditosExtras: -1 } });
-  }
+// Decide se a imobiliária pode criar mais uma autorização e qual cota ela
+// consome: 'trial' | 'plano' | 'credito_extra'. O crédito extra é debitado
+// aqui, de forma atômica (só debita se ainda houver saldo).
+async function reservarAutorizacao(imobiliariaId) {
+  const { imob, acesso } = await carregarAcessoTenant(imobiliariaId);
+  // Token desatualizado (banco recriado) → 401 força novo login
+  if (acesso.statusEfetivo === 'inexistente') return { ok: false, status: 401, erro: 'Sessão expirada. Faça login novamente.' };
+  if (!acesso.podeOperar) return { ok: false, status: 402, erro: acesso.motivo, statusEfetivo: acesso.statusEfetivo };
+  if (acesso.trial) return { ok: true, consumo: 'trial' };
+
+  if (imob.limiteAutorizacoes === -1) return { ok: true, consumo: 'plano' };
+  const limite = imob.limiteAutorizacoes || 0;
+  const usadas = await contarUsoPlanoMes(imobiliariaId);
+  if (usadas < limite) return { ok: true, consumo: 'plano' };
+
+  const debitado = await db.imobiliarias.update({ _id: imobiliariaId, creditosExtras: { $gt: 0 } }, { $inc: { creditosExtras: -1 } });
+  if (debitado === 1) return { ok: true, consumo: 'credito_extra' };
+
+  return {
+    ok: false, status: 402,
+    erro: 'Você atingiu o limite de autorizações do seu plano. Adquira créditos adicionais ou faça upgrade.',
+    usadas, limite, extras: 0
+  };
 }
 
 function calcularPorcentagem(usadas, limite) {
@@ -1046,10 +1107,12 @@ app.get('/api/admin/ranking', authMiddleware(['super_admin']), async (_req, res)
 // ═══════════════════════════════════════════════════════
 app.get('/api/health', (_req, res) => res.json({ ok: true, ts: new Date().toISOString(), version: '2.0.0' }));
 
-// Auto-cadastro publico via landing page
+// Auto-cadastro publico via landing page — toda conta nova nasce em trial
+// (plano 'trial' de db.planos). O plano escolhido na landing não é aplicado.
 app.post('/api/cadastro', async (req, res) => {
+  const criados = { imob: null, usuario: null };
   try {
-    const { tipoCliente, nome, cnpj, cpf, creci, responsavel, email, telefone, whatsapp, senha, plano: planoSlugBody } = req.body;
+    const { tipoCliente, nome, cnpj, cpf, creci, responsavel, email, telefone, whatsapp, senha } = req.body;
     const tipo = tipoCliente === 'corretor'
       ? 'corretor'
       : 'imobiliaria';
@@ -1067,42 +1130,61 @@ app.post('/api/cadastro', async (req, res) => {
     const exEmail = await db.usuarios.findOne({ email: email.toLowerCase().trim() });
     if (exEmail) return res.status(422).json({ erro: 'E-mail ja cadastrado.' });
 
-    const slugPlano = ['start', 'pro', 'prime'].includes(planoSlugBody) ? planoSlugBody : 'start';
-    const plano = await db.planos.findOne({ slug: slugPlano });
+    const planoTrial = await db.planos.findOne({ slug: 'trial' });
+    if (!planoTrial) return res.status(503).json({ erro: 'Cadastro temporariamente indisponível. Tente novamente mais tarde.' });
+
     const slugBase = nome.toLowerCase().normalize('NFD')
       .replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
     const slug = slugBase + '-' + Date.now().toString(36);
 
-    const imob = await db.imobiliarias.insert({
+    // Nasce inativa: se qualquer passo abaixo falhar e o desfazer também
+    // falhar, a sobra nunca é uma conta operacional sem assinatura.
+    criados.imob = await db.imobiliarias.insert({
       tipoCliente: tipo, nome, razaoSocial:nome, nomeFantasia:nome,
       slug, cnpj: cnpj||'', cpf: cpf||'', creci: creci||'',
       email, telefone:telefone||'', whatsapp:whatsapp||'',
       responsavel:{ nome:responsavel, email },
       corPrimaria:'#04273B', corSecundaria:'#C9A227',
-      planoId:plano?._id||null, planoSlug:plano?.slug||'start', planoNome:plano?.nome||'Start',
-      limiteAutorizacoes:plano?.limite ?? 10, creditosExtras:0,
-      status:'ativo', ativo:true, origem:'landing',
+      planoId:planoTrial._id, planoSlug:planoTrial.slug, planoNome:planoTrial.nome,
+      limiteAutorizacoes:planoTrial.limite, creditosExtras:0,
+      status:'inativo', ativo:false, origem:'landing',
       criadoEm:new Date().toISOString(), atualizadoEm:new Date().toISOString()
     });
+    const imobId = criados.imob._id;
 
     const hash = await bcrypt.hash(senha, 10);
-    await db.usuarios.insert({
+    criados.usuario = await db.usuarios.insert({
       nome:responsavel, email:email.toLowerCase().trim(), senha:hash,
-      role:'admin', imobiliariaId:imob._id, imobiliariaSlug:slug,
+      role:'admin', imobiliariaId:imobId, imobiliariaSlug:slug,
       ativo:true, criadoEm:new Date().toISOString()
     });
 
-    await log('cadastro', `Novo cliente via landing (${tipo}): ${nome} (${email})`);
-    // Cria subscription trial
-    try { await SubscriptionService.criar(imob._id, plano?._id, 'trial'); } catch(e) { /* non-fatal */ }
+    await SubscriptionService.criar(imobId, planoTrial._id, 'trial');
+    await db.imobiliarias.update({ _id: imobId }, { $set: { status:'ativo', ativo:true, atualizadoEm:new Date().toISOString() } });
 
+    const { imob, acesso } = await carregarAcessoTenant(imobId);
+    if (acesso.statusEfetivo !== 'trial_ativo') throw new Error('Trial não ficou válido após o cadastro.');
+
+    await log('cadastro', `Novo cliente via landing (${tipo}): ${nome} (${email}) — trial`);
+
+    const usuario = criados.usuario;
     const token = jwt.sign({
-      userId:imob._id, nome:responsavel, email:email.toLowerCase().trim(),
-      role:'admin', imobiliariaId:imob._id, imobiliariaSlug:slug, imobiliariaNome:nome
+      userId:usuario._id, nome:usuario.nome, email:usuario.email,
+      role:'admin', imobiliariaId:imobId, imobiliariaSlug:slug, imobiliariaNome:nome
     }, JWT_SECRET, { expiresIn:'8h' });
 
-    res.json({ ok:true, token, imobiliaria:{ nome, slug, plano: plano?.nome || 'Start', limite: plano?.limite ?? 10 } });
+    res.json({
+      ok:true, token,
+      user:{ _id:usuario._id, nome:usuario.nome, email:usuario.email, role:'admin', imobiliariaId:imobId, imobiliariaSlug:slug, imobiliaria:imob },
+      imobiliaria:{ nome, slug, plano: planoTrial.nome, limite: acesso.trial.limite, trialExpiracao: acesso.trial.expiraEm }
+    });
   } catch(e) {
+    // Desfaz o que foi criado; nunca devolve token de conta parcial.
+    if (criados.imob) {
+      try { await db.subscriptions.remove({ imobiliariaId: criados.imob._id }, { multi: true }); } catch(_) {}
+      try { await db.usuarios.remove({ imobiliariaId: criados.imob._id }, { multi: true }); } catch(_) {}
+      try { await db.imobiliarias.remove({ _id: criados.imob._id }); } catch(_) {}
+    }
     res.status(500).json({ erro: 'Falha ao criar conta. Tente novamente.' });
   }
 });
@@ -1175,16 +1257,19 @@ app.post('/api/fluxo-config', authMiddleware(['admin','super_admin']), async (re
 // Camada de autorização reutilizável — centraliza a regra "quem pode criar
 // usuário em qual tenant", antes espalhada como checagem inline em cada rota.
 async function autorizarCriacaoUsuario(actor) {
-  const imob = await db.imobiliarias.findOne({ _id: actor.imobiliariaId });
+  const { imob, planoTrial, acesso } = await carregarAcessoTenant(actor.imobiliariaId);
   if (!imob) return { permitido: false, status: 404, erro: 'Imobiliária não encontrada.' };
   if (imob.tipoCliente !== 'imobiliaria') {
     return { permitido: false, status: 403, erro: 'Corretor autônomo não pode cadastrar subusuários.' };
   }
-  const plano = await db.planos.findOne({ _id: imob.planoId });
+  if (!acesso.podeOperar) return { permitido: false, status: 402, erro: acesso.motivo };
+  // maxUsuarios conta todos os usuários do tenant, administrador incluído.
+  // Em trial vale o plano 'trial', nunca o plano gravado na imobiliária.
+  const plano = acesso.trial ? planoTrial : await db.planos.findOne({ _id: imob.planoId });
   const maxUsuarios = plano?.maxUsuarios ?? 1;
   if (maxUsuarios !== -1) {
-    const total = await db.usuarios.count({ imobiliariaId: actor.imobiliariaId, role: 'corretor' });
-    if (total >= maxUsuarios) return { permitido: false, status: 403, erro: 'Limite de corretores do plano atingido.' };
+    const total = await db.usuarios.count({ imobiliariaId: actor.imobiliariaId });
+    if (total >= maxUsuarios) return { permitido: false, status: 403, erro: 'Limite de usuários do plano atingido.' };
   }
   return { permitido: true };
 }
@@ -1357,14 +1442,9 @@ app.get('/api/autorizacoes', authMiddleware(['admin','corretor','super_admin']),
 // Criar rascunho (link vazio) — com verificação de limite
 app.post('/api/autorizacoes', authMiddleware(['admin','corretor']), async (req, res) => {
   try {
-    const limite = await verificarLimite(req.user.imobiliariaId);
-    if (!limite.ok) {
-      // Se imobiliária não encontrada, o token está desatualizado (banco recriado)
-      // Retorna 401 para forçar novo login
-      if (limite.erro === 'Imobiliária não encontrada.') {
-        return res.status(401).json({ erro: 'Sessão expirada. Faça login novamente.' });
-      }
-      return res.status(402).json({ erro: limite.erro, usadas: limite.usadas, limiteTotal: (limite.limite||0)+(limite.extras||0) });
+    const reserva = await reservarAutorizacao(req.user.imobiliariaId);
+    if (!reserva.ok) {
+      return res.status(reserva.status).json({ erro: reserva.erro, usadas: reserva.usadas, limiteTotal: (reserva.limite||0)+(reserva.extras||0) });
     }
     const codigo = await gerarCodigoUnico();
     const linkPublico = `${getBaseUrl(req)}/autorizacao/${codigo}`;
@@ -1375,11 +1455,11 @@ app.post('/api/autorizacoes', authMiddleware(['admin','corretor']), async (req, 
       corretorId:      req.user.userId,
       corretorNome:    req.user.nome,
       status:          'rascunho',
+      consumo:         reserva.consumo,
       criadoEm:        new Date().toISOString(),
       atualizadoEm:    new Date().toISOString()
     };
     const salvo = await db.autorizacoes.insert(aut);
-    if (limite.tipo === 'credito_extra') await consumirCredito(req.user.imobiliariaId, 'credito_extra');
     await log('autorizacao', `Link vazio gerado: ${codigo}`, null, req.user.imobiliariaId);
     sseNotificar(req.user.imobiliariaId, 'autorizacao_nova', { codigo, status: 'rascunho' });
     res.json(salvo);
@@ -1391,13 +1471,8 @@ app.post('/api/autorizacoes/rascunho', authMiddleware(['admin','corretor']), asy
   try {
     const { proprietario, imovel } = req.body;
     if (!proprietario?.nome) return res.status(422).json({ erro: 'Dados incompletos.' });
-    const limite = await verificarLimite(req.user.imobiliariaId);
-    if (!limite.ok) {
-      if (limite.erro === 'Imobiliária não encontrada.') {
-        return res.status(401).json({ erro: 'Sessão expirada. Faça login novamente.' });
-      }
-      return res.status(402).json({ erro: limite.erro });
-    }
+    const reserva = await reservarAutorizacao(req.user.imobiliariaId);
+    if (!reserva.ok) return res.status(reserva.status).json({ erro: reserva.erro });
     const codigo = await gerarCodigoUnico();
     const linkPublico = `${getBaseUrl(req)}/autorizacao/${codigo}`;
     const aut = {
@@ -1405,6 +1480,7 @@ app.post('/api/autorizacoes/rascunho', authMiddleware(['admin','corretor']), asy
       proprietario, imovel,
       tipo:            null,
       status:          'rascunho',
+      consumo:         reserva.consumo,
       preenchidoPorCorretor: true,
       imobiliariaId:   req.user.imobiliariaId,
       imobiliariaSlug: req.user.imobiliariaSlug,
@@ -1421,15 +1497,16 @@ app.post('/api/autorizacoes/rascunho', authMiddleware(['admin','corretor']), asy
 });
 
 // Inserir autorização manualmente (pelo corretor/admin no painel)
-app.post('/api/autorizacoes/manual', async (req, res) => {
+// Conta na cota como qualquer outra autorização (no trial, consome a gratuita).
+app.post('/api/autorizacoes/manual', authMiddleware(['admin','corretor']), async (req, res) => {
   try {
-    const token = req.headers.authorization?.slice(7);
-    let user = null;
-    try { user = require('jsonwebtoken').verify(token, JWT_SECRET); } catch(e) {}
-    if (!user) return res.status(401).json({ erro: 'Não autorizado.' });
+    const user = req.user;
 
     const { proprietario, imovel, tipo, status, vencimento, corretor, inseridoManualmente } = req.body;
     if (!proprietario?.nome || !imovel?.end) return res.status(422).json({ erro: 'Dados incompletos.' });
+
+    const reserva = await reservarAutorizacao(user.imobiliariaId);
+    if (!reserva.ok) return res.status(reserva.status).json({ erro: reserva.erro });
 
     const codigo = await gerarCodigoUnico();
     const aut = {
@@ -1444,6 +1521,7 @@ app.post('/api/autorizacoes/manual', async (req, res) => {
       imobiliariaId:     user.imobiliariaId,
       imobiliariaSlug:   user.imobiliariaSlug,
       inseridoManualmente: !!inseridoManualmente,
+      consumo:           reserva.consumo,
       criadoEm:          new Date().toISOString(),
       atualizadoEm:      new Date().toISOString()
     };
@@ -2906,16 +2984,22 @@ app.get('/api/admin/subscriptions/:imobId/historico', authMiddleware(['super_adm
 // Subscription do cliente logado (para painel da imobiliária)
 app.get('/api/minha-assinatura', authMiddleware(['admin','corretor']), async (req, res) => {
   try {
-    const sub = await SubscriptionService.get(req.user.imobiliariaId);
-    const now = new Date();
-    const mesInicio = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-    const usadas = await db.autorizacoes.count({ imobiliariaId: req.user.imobiliariaId, criadoEm: { $gte: mesInicio } });
-    const limite = sub?.limiteAutorizacoes ?? 0;
-    const extras = sub?.extraAutorizacoes  ?? 0;
+    // Mesmos números que a regra central usa para bloquear (imobiliária, não subscription).
+    const { imob, sub, acesso } = await carregarAcessoTenant(req.user.imobiliariaId);
+    let usadas, limite, extras;
+    if (acesso.trial) {
+      ({ usadas, limite } = acesso.trial); extras = 0;
+    } else {
+      usadas = await contarUsoPlanoMes(req.user.imobiliariaId);
+      limite = imob?.limiteAutorizacoes ?? 0;
+      extras = imob?.creditosExtras ?? 0;
+    }
     const disponiveis = limite === -1 ? -1 : Math.max(0, limite + extras - usadas);
     const pct = limite > 0 ? Math.min(Math.round(usadas / limite * 100), 100) : 0;
+    const { podeOperar, statusEfetivo, motivo, trial } = acesso;
     res.json({ sub, usadas, limite, extras, disponiveis, pct,
-      alerta: pct >= 100 ? 'critico' : pct >= 90 ? 'urgente' : pct >= 80 ? 'aviso' : null });
+      alerta: pct >= 100 ? 'critico' : pct >= 90 ? 'urgente' : pct >= 80 ? 'aviso' : null,
+      acesso: { statusEfetivo, podeOperar, motivo, trial } });
   } catch(e) { res.status(500).json({ erro: e.message }); }
 });
 
@@ -2924,7 +3008,11 @@ app.get('/api/minha-assinatura', authMiddleware(['admin','corretor']), async (re
 app.post('/api/admin/subscriptions/:imobId/iniciar', authMiddleware(['super_admin']), async (req, res) => {
   try {
     const { planoId, status } = req.body;
-    const sub = await SubscriptionService.criar(req.params.imobId, planoId, status||'trial');
+    // O formulário de novo cliente envia o status administrativo (ativo/suspenso/inativo),
+    // já gravado na imobiliária; no eixo financeiro isso equivale a contrato ativo.
+    const statusFin = ['ativo', 'suspenso', 'inativo'].includes(status) ? 'active' : (status || 'trial');
+    if (!STATUS_FINANCEIROS.includes(statusFin)) return res.status(422).json({ erro: 'Status inválido.' });
+    const sub = await SubscriptionService.criar(req.params.imobId, planoId, statusFin);
     res.json({ ok: true, sub });
   } catch(e) { res.status(500).json({ erro: e.message }); }
 });
