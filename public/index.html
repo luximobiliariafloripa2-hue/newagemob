@@ -1464,11 +1464,11 @@ function renderTable(){
     const [cls,txt]=map[a.status]||['b-gray','Desconhecido'];
     const tipo = a.tipo==='exclusiva' ? '<span class="badge b-gold">⭐ Exclusiva</span>' : '<span class="badge b-gray">Sem exclusividade</span>';
     return `<tr>
-      <td><div class="prop">${a.prop}</div><div class="sub">${a.imovel} · ${a.corretor}</div></td>
+      <td><div class="prop">${esc(a.prop)}</div><div class="sub">${esc(a.imovel)} · ${esc(a.corretor)}</div></td>
       <td><b>${BRL(a.valor).replace(',00','')}</b><div class="sub">Comissão ${BRL(a.valor*0.06).replace(',00','')}</div></td>
       <td>${tipo}</td>
       <td><span class="badge ${cls}">${txt}</span></td>
-      <td>${a.venc}</td>
+      <td>${esc(a.venc)}</td>
       <td style="white-space:nowrap">
         <button class="icon-btn" title="Visualizar" onclick="visualizarAutorizacao(${idx})">👁</button>
         <button class="icon-btn" title="Baixar PDF" onclick="baixarPDFAutorizacao(${idx})">⬇</button>
@@ -1495,12 +1495,12 @@ function visualizarAutorizacao(idx){
   document.getElementById('modalViewContent').innerHTML = `
     <div class="detail-section">
       <h4>Proprietário</h4>
-      <div class="detail-row"><span>Nome</span><b>${a.prop}</b></div>
-      <div class="detail-row"><span>Corretor responsável</span><b>${a.corretor}</b></div>
+      <div class="detail-row"><span>Nome</span><b>${esc(a.prop)}</b></div>
+      <div class="detail-row"><span>Corretor responsável</span><b>${esc(a.corretor)}</b></div>
     </div>
     <div class="detail-section">
       <h4>Imóvel</h4>
-      <div class="detail-row"><span>Endereço / Tipo</span><b>${a.imovel}</b></div>
+      <div class="detail-row"><span>Endereço / Tipo</span><b>${esc(a.imovel)}</b></div>
       <div class="detail-row"><span>Valor de venda</span><b>${BRL(a.valor).replace(',00','')}</b></div>
       <div class="detail-row"><span>Comissão (6%)</span><b>${comissao}</b></div>
     </div>
@@ -1508,7 +1508,7 @@ function visualizarAutorizacao(idx){
       <h4>Autorização</h4>
       <div class="detail-row"><span>Modalidade</span><b>${tipo}</b></div>
       <div class="detail-row"><span>Status</span><b><span class="badge ${cls}">${txt}</span></b></div>
-      <div class="detail-row"><span>Vencimento</span><b>${a.venc}</b></div>
+      <div class="detail-row"><span>Vencimento</span><b>${esc(a.venc)}</b></div>
       <div class="detail-row"><span>Assinatura</span><b>${a.status==='aguardando'?'⏳ Pendente':'✓ Assinada'}</b></div>
     </div>`;
   // Configura botão de PDF no modal
