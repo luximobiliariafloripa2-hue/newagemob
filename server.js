@@ -35,6 +35,8 @@ const { enriquecerEventosComServidor } = require('./src/services/events/EventSer
 const { construirEventoBackend } = require('./src/services/events/EventBackendEmitter');
 const { carregarConfiguracaoTsa, solicitarCarimboTempo, verificarTokenArmazenado } = require('./src/services/tsa/Rfc3161TimestampClient');
 const { DIAS_TRIAL, avaliarAcessoImobiliaria, normalizarStatusFinanceiro } = require('./src/services/acesso/AcessoTenant');
+const { carregarConfiguracao: carregarConfiguracaoInfinitepay, criarInfinitepayService } = require('./services/infinitepayService');
+const rotasInfinitepay = require('./routes/infinitepay');
 
 const app  = express();
 const PORT = process.env.PORT || 3000;
@@ -63,6 +65,7 @@ const db = {
   subscription_history:Datastore.create({ filename: path.join(DATA_DIR, 'subscription_history.db'),autoload: true }),
   billing_transactions:Datastore.create({ filename: path.join(DATA_DIR, 'billing_transactions.db'),autoload: true }),
   boletos:             Datastore.create({ filename: path.join(DATA_DIR, 'boletos.db'),             autoload: true }),
+  pagamentos:          Datastore.create({ filename: path.join(DATA_DIR, 'pagamentos.db'),          autoload: true }),
   config:              Datastore.create({ filename: path.join(DATA_DIR, 'config.db'),              autoload: true }),
   logs:                Datastore.create({ filename: path.join(DATA_DIR, 'logs.db'),                autoload: true })
 };
@@ -286,6 +289,16 @@ if (process.env.NODE_ENV === 'production') {
     console.error(`ERRO FATAL: BASE_URL invalida (${e.message}).`);
     process.exit(1);
   }
+}
+
+// Gateway InfinitePay (M9-02). Em produção API key e handle são obrigatórios
+// e a URL da API é sempre a oficial; erros com código fixo, sem o valor.
+let infinitepay;
+try {
+  infinitepay = criarInfinitepayService(carregarConfiguracaoInfinitepay(process.env));
+} catch (e) {
+  console.error(`ERRO FATAL: configuracao InfinitePay invalida (${e.message}).`);
+  process.exit(1);
 }
 
 function getBaseUrl(req) {
@@ -727,6 +740,56 @@ const SubscriptionService = {
     }});
   },
 
+  // Pagamento confirmado (M9-02): aplica o plano pago por mais 30 dias a
+  // partir do vencimento ainda válido, ou de agora. Nunca toca imob.status /
+  // imob.ativo — conta suspensa pelo Super Admin continua suspensa. O plano e
+  // o valor vêm do registro do pagamento (snapshot do que foi pago).
+  async ativarPorPagamento(imobiliariaId, pagamento, agora) {
+    const plano = await db.planos.findOne({ _id: pagamento.planoId });
+    if (!plano) throw new Error('Plano do pagamento não encontrado.');
+    let sub = await this.get(imobiliariaId);
+    if (!sub) {
+      await this.criar(imobiliariaId, plano._id, 'active');
+      sub = await this.get(imobiliariaId);
+    }
+    const vencAtual = sub.planoVencimento ? new Date(sub.planoVencimento) : null;
+    const base = normalizarStatusFinanceiro(sub.status) === 'active' && vencAtual && vencAtual > agora ? vencAtual : agora;
+    const vencimento = new Date(base.getTime() + DIAS_CICLO_PAGO*24*60*60*1000).toISOString();
+    if (sub.planoId !== plano._id) {
+      await db.subscription_history.insert({
+        imobiliariaId,
+        previousPlanId:   sub.planoId,
+        previousPlanNome: sub.planoNome,
+        newPlanId:        plano._id,
+        newPlanNome:      plano.nome,
+        changedBy:        'pagamento',
+        motivo:           `Pagamento ${pagamento.orderNsu}`,
+        criadoEm:         agora.toISOString()
+      });
+    }
+    // suspended/canceled legados pertencem ao eixo administrativo: preservados.
+    const statusSub = ['suspended', 'canceled'].includes(sub.status) ? sub.status : 'active';
+    await db.subscriptions.update({ _id: sub._id }, { $set: {
+      status:             statusSub,
+      planoId:            plano._id,
+      planoSlug:          plano.slug,
+      planoNome:          plano.nome,
+      valorMensal:        pagamento.valorCentavos / 100,
+      limiteAutorizacoes: plano.limite,
+      planoVencimento:    vencimento,
+      renewalDate:        vencimento,
+      atualizadoEm:       agora.toISOString()
+    }});
+    await db.imobiliarias.update({ _id: imobiliariaId }, { $set: {
+      planoId:            plano._id,
+      planoSlug:          plano.slug,
+      planoNome:          plano.nome,
+      limiteAutorizacoes: plano.limite,
+      subscriptionStatus: 'active',
+      atualizadoEm:       agora.toISOString()
+    }});
+  },
+
   async resetarConsumo(imobiliariaId) {
     await db.subscriptions.update({ imobiliariaId }, { $set: { usedAutorizacoes: 0, atualizadoEm: new Date().toISOString() } });
   },
@@ -762,6 +825,7 @@ const SubscriptionService = {
 };
 
 const STATUS_FINANCEIROS = ['trial', 'active', 'pending'];
+const DIAS_CICLO_PAGO = 30;
 
 // Entrada do Super Admin para o eixo administrativo; 'cancelado' (opção do
 // formulário de edição) equivale a inativo. Retorna null se inválido.
@@ -3258,6 +3322,16 @@ app.post('/api/admin/suporte/:imobId', authMiddleware(['super_admin']), async (r
     });
   } catch(e) { res.status(500).json({ erro: e.message }); }
 });
+
+// ═══════════════════════════════════════════════════════
+// PAGAMENTOS — InfinitePay (M9-02). Antes do catch-all.
+// ═══════════════════════════════════════════════════════
+const infinitepayRotas = rotasInfinitepay({
+  db, authMiddleware, carregarAcessoTenant, log, getBaseUrl, infinitepay,
+  ativarPorPagamento: (imobiliariaId, pagamento, agora) => SubscriptionService.ativarPorPagamento(imobiliariaId, pagamento, agora)
+});
+app.use('/api/pagamentos', infinitepayRotas.pagamentos);
+app.use('/api/webhooks', infinitepayRotas.webhooks);
 
 // ═══════════════════════════════════════════════════════
 // SPA CATCH-ALL

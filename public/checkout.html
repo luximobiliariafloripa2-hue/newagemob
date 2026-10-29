@@ -24,9 +24,6 @@ h1{font-family:'Sora',sans-serif;font-size:26px;font-weight:800;color:var(--navy
 .plan-card h3{font-size:15px;font-weight:700;color:var(--navy);margin-bottom:6px}
 .plan-card .price{font-family:'Sora',sans-serif;font-size:22px;font-weight:800;color:var(--ink)}
 .plan-card .price span{font-size:12px;font-weight:600;color:var(--ink3)}
-.period-toggle{display:flex;gap:8px;margin-bottom:20px;background:var(--paper);border-radius:12px;padding:4px}
-.period-toggle button{flex:1;padding:10px;border:none;background:none;border-radius:9px;font-size:14px;font-weight:600;color:var(--ink2);cursor:pointer;transition:.15s}
-.period-toggle button.sel{background:#fff;color:var(--navy);box-shadow:0 1px 3px rgba(0,0,0,.1)}
 .resumo{background:var(--paper);border-radius:12px;padding:16px 18px;margin-bottom:20px}
 .resumo-row{display:flex;justify-content:space-between;font-size:14px;padding:6px 0}
 .resumo-row.total{font-weight:700;font-size:16px;border-top:1px solid var(--line);margin-top:6px;padding-top:12px;color:var(--navy)}
@@ -37,7 +34,6 @@ h1{font-family:'Sora',sans-serif;font-size:26px;font-weight:800;color:var(--navy
 .alert{padding:14px 16px;border-radius:10px;font-size:13.5px;margin-bottom:16px}
 .alert-warn{background:#FFFAEB;border:1px solid #FCD34D;color:#92400E}
 .alert-err{background:#FEF3F2;border:1px solid #FCA5A5;color:var(--red)}
-.badge-discount{display:inline-block;background:var(--gold);color:#fff;font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px;margin-left:6px}
 .loading{text-align:center;padding:30px;color:var(--ink3)}
 .spin{width:32px;height:32px;border:3px solid var(--line);border-top-color:var(--navy);border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 10px}
 @keyframes spin{to{transform:rotate(360deg)}}
@@ -48,7 +44,7 @@ h1{font-family:'Sora',sans-serif;font-size:26px;font-weight:800;color:var(--navy
 
 <main>
   <h1>Assinar plano</h1>
-  <p class="sub">Pagamento único — sem renovação automática. Você escolhe quando renovar.</p>
+  <p class="sub">Pagamento único por Pix ou cartão — libera 30 dias de plano, sem renovação automática.</p>
 
   <div id="configWarning"></div>
 
@@ -56,15 +52,9 @@ h1{font-family:'Sora',sans-serif;font-size:26px;font-weight:800;color:var(--navy
     <h3 style="font-size:14px;font-weight:700;color:var(--ink2);margin-bottom:14px;text-transform:uppercase;letter-spacing:.4px">Escolha o plano</h3>
     <div class="plan-grid" id="planGrid"><div class="loading"><div class="spin"></div>Carregando planos...</div></div>
 
-    <div class="period-toggle">
-      <button id="btnMensal" class="sel" onclick="selecionarPeriodo('mensal')">Mensal</button>
-      <button id="btnAnual" onclick="selecionarPeriodo('anual')">Anual <span class="badge-discount">economize</span></button>
-    </div>
-
     <div class="resumo" id="resumo" style="display:none">
       <div class="resumo-row"><span>Plano</span><span id="resumoPlano">—</span></div>
-      <div class="resumo-row"><span>Periodicidade</span><span id="resumoPeriodo">—</span></div>
-      <div class="resumo-row" id="resumoParcelasRow" style="display:none"><span>Parcelamento</span><span>Em até 12x no cartão</span></div>
+      <div class="resumo-row"><span>Período</span><span>30 dias</span></div>
       <div class="resumo-row total"><span>Total</span><span id="resumoTotal">—</span></div>
     </div>
 
@@ -77,92 +67,70 @@ const Auth = {
   token: localStorage.getItem('agemob_token'),
   headers() { return { 'Content-Type':'application/json', 'Authorization': `Bearer ${this.token}` }; }
 };
+if(!Auth.token) window.location.href = '/';
+
+const esc = (v) => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const brl = (v) => 'R$ ' + Number(v).toFixed(2).replace('.',',');
 
 let planos = [];
 let planoSelecionado = null;
-let periodoSelecionado = 'mensal';
+
+function mostrarErro(msg){
+  document.getElementById('configWarning').innerHTML = `<div class="alert alert-err">${esc(msg)}</div>`;
+}
 
 async function init(){
-  // Verifica configuração do gateway
   try {
-    const r = await fetch('/api/pagamentos/config');
-    const cfg = await r.json();
-    if(!cfg.configurado){
-      document.getElementById('configWarning').innerHTML = `
-        <div class="alert alert-warn">⚠️ O gateway de pagamento ainda não foi configurado pelo administrador.
-        Entre em contato com o suporte para mais informações.</div>`;
-    }
-  } catch(e){}
-
-  try {
-    const r = await fetch('/api/pagamentos/planos');
-    planos = await r.json();
+    const r = await fetch('/api/pagamentos/planos', { headers: Auth.headers() });
+    if(r.status === 401){ window.location.href = '/'; return; }
+    const d = await r.json();
+    if(!r.ok) throw new Error(d.erro || 'Erro ao carregar planos.');
+    planos = d;
     renderPlanos();
   } catch(e) {
-    document.getElementById('planGrid').innerHTML = '<div class="alert alert-err">Erro ao carregar planos.</div>';
+    document.getElementById('planGrid').innerHTML = `<div class="alert alert-err">${esc(e.message || 'Erro ao carregar planos.')}</div>`;
   }
 }
 
 function renderPlanos(){
-  document.getElementById('planGrid').innerHTML = planos.map(p => `
-    <div class="plan-card" id="plan-${p.slug}" onclick="selecionarPlano('${p.slug}')">
-      <h3>${p.nome}</h3>
-      <div class="price" id="price-${p.slug}">R$ ${p.mensal.toFixed(2).replace('.',',')}<span>/mês</span></div>
+  const grid = document.getElementById('planGrid');
+  if(!planos.length){ grid.innerHTML = '<div class="alert alert-warn">Nenhum plano disponível no momento.</div>'; return; }
+  grid.innerHTML = planos.map((p, i) => `
+    <div class="plan-card" data-i="${i}">
+      <h3>${esc(p.nome)}</h3>
+      <div class="price">${esc(brl(p.valorMensal))}<span>/30 dias</span></div>
     </div>`).join('');
+  grid.querySelectorAll('.plan-card').forEach(el => el.addEventListener('click', () => selecionarPlano(Number(el.dataset.i), el)));
 }
 
-function selecionarPlano(slug){
-  planoSelecionado = planos.find(p => p.slug === slug);
-  document.querySelectorAll('.plan-card').forEach(el => el.classList.remove('sel'));
-  document.getElementById('plan-'+slug).classList.add('sel');
-  atualizarResumo();
-}
-
-function selecionarPeriodo(periodo){
-  periodoSelecionado = periodo;
-  document.getElementById('btnMensal').classList.toggle('sel', periodo==='mensal');
-  document.getElementById('btnAnual').classList.toggle('sel', periodo==='anual');
-  // Atualiza preços exibidos nos cards
-  planos.forEach(p => {
-    const el = document.getElementById('price-'+p.slug);
-    if(!el) return;
-    el.innerHTML = periodo==='anual'
-      ? `R$ ${p.anual.toFixed(2).replace('.',',')}<span>/ano</span>`
-      : `R$ ${p.mensal.toFixed(2).replace('.',',')}<span>/mês</span>`;
-  });
-  atualizarResumo();
-}
-
-function atualizarResumo(){
-  if(!planoSelecionado){ return; }
-  const valor = periodoSelecionado === 'anual' ? planoSelecionado.anual : planoSelecionado.mensal;
+function selecionarPlano(i, el){
+  planoSelecionado = planos[i];
+  document.querySelectorAll('.plan-card').forEach(c => c.classList.remove('sel'));
+  el.classList.add('sel');
   document.getElementById('resumo').style.display = 'block';
   document.getElementById('resumoPlano').textContent = planoSelecionado.nome;
-  document.getElementById('resumoPeriodo').textContent = periodoSelecionado === 'anual' ? 'Anual (12 meses)' : 'Mensal (30 dias)';
-  document.getElementById('resumoParcelasRow').style.display = periodoSelecionado === 'anual' ? 'flex' : 'none';
-  document.getElementById('resumoTotal').textContent = 'R$ ' + valor.toFixed(2).replace('.',',');
-  document.getElementById('btnPagar').disabled = false;
-  document.getElementById('btnPagar').textContent = 'Ir para o pagamento →';
+  document.getElementById('resumoTotal').textContent = brl(planoSelecionado.valorMensal);
+  const btn = document.getElementById('btnPagar');
+  btn.disabled = false;
+  btn.textContent = 'Ir para o pagamento →';
 }
 
 async function iniciarPagamento(){
   if(!planoSelecionado) return;
   const btn = document.getElementById('btnPagar');
   btn.disabled = true; btn.textContent = 'Processando...';
-
   try {
-    const r = await fetch('/api/pagamentos/criar-pedido', {
+    const r = await fetch('/api/pagamentos/criar', {
       method: 'POST',
       headers: Auth.headers(),
-      body: JSON.stringify({ planoSlug: planoSelecionado.slug, periodicidade: periodoSelecionado })
+      body: JSON.stringify({ planoId: planoSelecionado._id })
     });
     const d = await r.json();
     if(!r.ok) throw new Error(d.erro || 'Falha ao iniciar pagamento.');
-
-    // Redireciona para o checkout hospedado pelo Mercado Pago (cartão/PIX/boleto)
-    window.location.href = d.sandboxInitPoint || d.initPoint;
+    // Checkout hospedado pela InfinitePay (Pix e cartão)
+    window.location.href = d.checkoutUrl;
   } catch(e) {
-    document.getElementById('configWarning').innerHTML = `<div class="alert alert-err">${e.message}</div>`;
+    mostrarErro(e.message);
     btn.disabled = false; btn.textContent = 'Tentar novamente';
   }
 }

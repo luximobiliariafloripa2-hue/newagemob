@@ -31,54 +31,69 @@ p{color:var(--ink2);font-size:14.5px;line-height:1.6;margin-bottom:24px}
 </div>
 
 <script>
+// O retorno do navegador não é prova de pagamento: os parâmetros só servem
+// para o backend perguntar à InfinitePay. Nada é ativado aqui.
 const Auth = { token: localStorage.getItem('agemob_token'), headers(){ return {'Authorization':`Bearer ${this.token}`}; } };
 const params = new URLSearchParams(window.location.search);
-const status = params.get('status');
-const pedidoId = params.get('pedido');
+const orderNsu = params.get('order_nsu') || '';
+const transactionNsu = params.get('transaction_nsu') || '';
+const slug = params.get('slug') || '';
+const esc = (v) => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const MAX_TENTATIVAS = 10, INTERVALO_MS = 3000;
+let tentativas = 0;
 
 async function verificar(){
-  // Consulta o status real do pedido no nosso banco (não confia no parâmetro da URL)
-  let pedido = null;
+  tentativas++;
+  let pedido = null, httpStatus = 0;
   try {
-    const r = await fetch('/api/pagamentos/pedido/'+pedidoId, { headers: Auth.headers() });
+    const qs = new URLSearchParams();
+    if(transactionNsu) qs.set('transaction_nsu', transactionNsu);
+    if(slug) qs.set('slug', slug);
+    const r = await fetch('/api/pagamentos/'+encodeURIComponent(orderNsu)+(qs.toString()?'?'+qs:''), { headers: Auth.headers() });
+    httpStatus = r.status;
     if(r.ok) pedido = await r.json();
   } catch(e){}
 
-  // Se ainda pendente no banco (webhook pode demorar alguns segundos), tenta de novo
-  if(pedido && pedido.status === 'pendente' && status === 'success'){
-    setTimeout(verificar, 2000);
+  if(httpStatus === 401) return render('login');
+  const st = pedido?.status;
+  if(st === 'approved' || st === 'rejected' || st === 'canceled') return render(st, pedido);
+  if(tentativas < MAX_TENTATIVAS && (st === 'pending' || st === 'processing' || !pedido)){
+    setTimeout(verificar, INTERVALO_MS);
     return;
   }
-
-  render(pedido);
+  render(pedido ? st : 'desconhecido', pedido);
 }
 
-function render(pedido){
+function render(st, pedido){
   const card = document.getElementById('card');
-  const st = pedido?.status || status;
-
-  if(st === 'aprovado' || status === 'success'){
+  if(st === 'approved'){
     card.innerHTML = `
       <div class="icon ok">✓</div>
       <h1>Pagamento aprovado!</h1>
-      <p>Seu plano <b>${pedido?.planoNome||''}</b> foi liberado com sucesso. Você já pode aproveitar todos os recursos.</p>
+      <p>Seu plano <b>${esc(pedido?.planoNome)}</b> foi liberado por 30 dias.</p>
       <a href="/index.html" class="btn">Acessar o painel →</a>`;
-  } else if(st === 'pendente' || status === 'pending'){
+  } else if(st === 'pending' || st === 'processing'){
     card.innerHTML = `
       <div class="icon pending">⏳</div>
       <h1>Pagamento em processamento</h1>
-      <p>Recebemos sua solicitação. Se você escolheu boleto ou PIX, a confirmação pode levar alguns minutos. Avisaremos assim que for aprovado.</p>
+      <p>Ainda não recebemos a confirmação. Assim que o pagamento for confirmado, o plano é liberado automaticamente. Se já pagou e o plano não for liberado em alguns minutos, fale com o suporte.</p>
       <a href="/index.html" class="btn">Voltar ao painel</a>`;
+  } else if(st === 'login'){
+    card.innerHTML = `
+      <div class="icon pending">⏳</div>
+      <h1>Entre na sua conta</h1>
+      <p>Faça login para ver o resultado do pagamento.</p>
+      <a href="/index.html" class="btn">Ir para o login</a>`;
   } else {
     card.innerHTML = `
       <div class="icon fail">✕</div>
       <h1>Pagamento não concluído</h1>
-      <p>Houve um problema ao processar seu pagamento. Você pode tentar novamente a qualquer momento.</p>
+      <p>Não encontramos um pagamento confirmado para este pedido. Você pode tentar novamente a qualquer momento.</p>
       <a href="/checkout.html" class="btn">Tentar novamente</a>`;
   }
 }
 
-verificar();
+if(/^[0-9a-f-]{36}$/i.test(orderNsu)) verificar(); else render('desconhecido');
 </script>
 </body>
 </html>
