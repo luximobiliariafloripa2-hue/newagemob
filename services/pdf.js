@@ -37,10 +37,17 @@ function gerarAutorizacaoPDF(aut, imob) {
     };
     const paragrafo = t => doc.font('Helvetica').fontSize(9.5).fillColor('#344054').text(t, { align: 'justify', lineGap: 2 }).moveDown(0.4);
 
-    titulo('1. IMOBILIÁRIA AUTORIZADA');
-    linha('Razão social:', imob.razao);
-    linha('CNPJ:', imob.cnpj);
-    linha('Endereço:', imob.endereco);
+    if (imob.tipo === 'corretor') {
+      titulo('1. CORRETOR AUTÔNOMO AUTORIZADO');
+      linha('Nome:', imob.razao);
+      if (imob.creci) linha('CRECI:', imob.creci);
+      if (imob.endereco) linha('Endereço:', imob.endereco);
+    } else {
+      titulo('1. IMOBILIÁRIA AUTORIZADA');
+      linha('Razão social:', imob.razao);
+      linha('CNPJ:', imob.cnpj);
+      linha('Endereço:', imob.endereco);
+    }
 
     titulo('2. PROPRIETÁRIO');
     linha('Nome:', aut.proprietario.nome);
@@ -65,11 +72,15 @@ function gerarAutorizacaoPDF(aut, imob) {
 
     titulo('4. CONDIÇÕES');
     paragrafo(`PRAZO E RENOVAÇÃO — A presente autorização terá validade inicial de 365 (trezentos e sessenta e cinco) dias, contados da data de assinatura, com vencimento previsto para ${venc.toLocaleDateString('pt-BR')}. Ao término do prazo, será renovada automaticamente por períodos iguais e sucessivos, até manifestação contrária de qualquer das partes, comunicada formalmente com antecedência mínima de 30 (trinta) dias do vencimento.`);
-    paragrafo('COMISSÃO DE CORRETAGEM — Será devida comissão de 6% (seis por cento) sobre o valor total da venda efetivamente realizada. A comissão permanecerá integralmente devida caso o imóvel seja vendido, durante a vigência desta autorização, a cliente apresentado pela imobiliária, originado de suas campanhas de marketing, cadastrado em seus sistemas ou apresentado por seus parceiros.');
+    // Só a identificação da parte autorizada acompanha o tipo do tenant; o texto das cláusulas é o mesmo.
+    const corretor = imob.tipo === 'corretor';
+    paragrafo(`COMISSÃO DE CORRETAGEM — Será devida comissão de 6% (seis por cento) sobre o valor total da venda efetivamente realizada. A comissão permanecerá integralmente devida caso o imóvel seja vendido, durante a vigência desta autorização, a cliente apresentado ${corretor ? 'pelo corretor autônomo' : 'pela imobiliária'}, originado de suas campanhas de marketing, cadastrado em seus sistemas ou apresentado por seus parceiros.`);
     if (aut.tipo === 'exclusiva') {
-      paragrafo('EXCLUSIVIDADE — Toda negociação do imóvel deverá ser conduzida exclusivamente pela imobiliária autorizada. Caso o proprietário realize a venda diretamente ou por intermédio de terceiros durante o prazo de exclusividade, a comissão contratada permanecerá devida.');
+      paragrafo(`EXCLUSIVIDADE — Toda negociação do imóvel deverá ser conduzida exclusivamente ${corretor ? 'pelo corretor autônomo autorizado' : 'pela imobiliária autorizada'}. Caso o proprietário realize a venda diretamente ou por intermédio de terceiros durante o prazo de exclusividade, a comissão contratada permanecerá devida.`);
     } else {
-      paragrafo('MODALIDADE SEM EXCLUSIVIDADE — O proprietário poderá anunciar ou negociar o imóvel por meio de outras imobiliárias, sendo a comissão devida apenas à imobiliária que efetivamente intermediar a venda.');
+      paragrafo(corretor
+        ? 'MODALIDADE SEM EXCLUSIVIDADE — O proprietário poderá anunciar ou negociar o imóvel por meio de imobiliárias ou outros corretores, sendo a comissão devida apenas ao profissional ou empresa que efetivamente intermediar a venda.'
+        : 'MODALIDADE SEM EXCLUSIVIDADE — O proprietário poderá anunciar ou negociar o imóvel por meio de outras imobiliárias, sendo a comissão devida apenas à imobiliária que efetivamente intermediar a venda.');
     }
 
     titulo('5. ASSINATURA ELETRÔNICA');

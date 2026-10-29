@@ -119,12 +119,14 @@ app.get('/api/sse', authMiddleware(['admin','corretor']), (req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════
-// SEED — Super Admin + Planos + Pacotes + Lux House
+// SEED — Super Admin + Planos + Pacotes (nenhum tenant é criado por código)
 // ═══════════════════════════════════════════════════════
-// Senhas padrão do seed de desenvolvimento. Em produção nunca criam conta e,
-// se uma conta existente ainda as aceitar, o startup é recusado — sem rotação
+// Senha padrão do Super Admin só em desenvolvimento. Ela e as senhas padrão de
+// versões anteriores ficam proibidas em produção: nunca criam conta e, se uma
+// conta existente ainda as aceitar, o startup é recusado — sem rotação
 // automática e sem tocar no hash. Erros carregam só um código fixo.
-const SENHAS_PADRAO_SEED = ['LuxAdmin2026!', 'lux2026'];
+const SENHA_DEV_SUPER_ADMIN = 'AgemobDev2026!';
+const SENHAS_PADRAO_SEED = [SENHA_DEV_SUPER_ADMIN, 'LuxAdmin2026!', 'lux2026'];
 
 class ErroSeed extends Error {
   constructor(codigo) {
@@ -144,22 +146,19 @@ async function aceitaSenhaPadraoSeed(usuario) {
   return false;
 }
 
-// Roda antes de qualquer escrita do seed, só em produção.
+// Roda antes de qualquer escrita do seed, só em produção. Confere os Super
+// Admins e as contas com o login legado 'admin' criado por versões antigas do
+// seed — de qualquer tenant, sem tratamento por slug.
 async function verificarCredenciaisSeedProducao() {
   const superAdmins = await db.usuarios.find({ role: 'super_admin' });
-  const luxHouse = await db.imobiliarias.findOne({ slug: 'lux-house' });
 
   if (superAdmins.length === 0) {
     if (senhaSeedAusente(process.env.SUPER_ADMIN_PASS)) throw new ErroSeed('SUPER_ADMIN_PASS_ausente');
     if (SENHAS_PADRAO_SEED.includes(process.env.SUPER_ADMIN_PASS)) throw new ErroSeed('credencial_padrao_ativa');
   }
-  if (!luxHouse) {
-    if (senhaSeedAusente(process.env.LUX_ADMIN_PASS)) throw new ErroSeed('LUX_ADMIN_PASS_ausente');
-    if (SENHAS_PADRAO_SEED.includes(process.env.LUX_ADMIN_PASS)) throw new ErroSeed('credencial_padrao_ativa');
-  }
 
-  const luxAdmins = await db.usuarios.find({ email: 'admin', imobiliariaSlug: 'lux-house' });
-  for (const usuario of [...superAdmins, ...luxAdmins]) {
+  const contasLegadas = await db.usuarios.find({ email: 'admin' });
+  for (const usuario of [...superAdmins, ...contasLegadas]) {
     if (await aceitaSenhaPadraoSeed(usuario)) throw new ErroSeed('credencial_padrao_ativa');
   }
 }
@@ -170,7 +169,7 @@ async function seed() {
   // Super admin
   const superAdmin = await db.usuarios.findOne({ role: 'super_admin' });
   if (!superAdmin) {
-    const hash = await bcrypt.hash(process.env.SUPER_ADMIN_PASS || 'LuxAdmin2026!', 10);
+    const hash = await bcrypt.hash(process.env.SUPER_ADMIN_PASS || SENHA_DEV_SUPER_ADMIN, 10);
     await db.usuarios.insert({
       nome: 'Super Admin AGEMOB', email: process.env.SUPER_ADMIN_EMAIL || 'admin@agemob.com.br',
       senha: hash, role: 'super_admin', ativo: true, criadoEm: new Date().toISOString()
@@ -203,31 +202,6 @@ async function seed() {
       { nome:'Max', quantidade:50, valor:0, ativo:true }
     ]) await db.pacotes.insert({ ...p, criadoEm: new Date().toISOString() });
     console.log('  ✓ Pacotes criados');
-  }
-
-  // Lux House
-  const luxHouse = await db.imobiliarias.findOne({ slug: 'lux-house' });
-  if (!luxHouse) {
-    const plano = await db.planos.findOne({ slug: 'pro' });
-    const imob = await db.imobiliarias.insert({
-      tipoCliente:'imobiliaria', nome:'Lux House Imóveis',
-      razaoSocial:'Lux House Imóveis Ltda.', nomeFantasia:'Lux House Imóveis',
-      slug:'lux-house', cnpj:'48.192.939/0001-21', creci:'', telefone:'', whatsapp:'',
-      email:'luximobiliariafloripa2@gmail.com', site:'',
-      endereco:{ cep:'', logradouro:'Rua das Algas', numero:'733',
-        complemento:'Sala 1', bairro:'Jurerê Internacional', cidade:'Florianópolis', estado:'SC' },
-      responsavel:{ nome:'Bruno Amorim Costa', cpf:'', creci:'', telefone:'', whatsapp:'', email:'luximobiliariafloripa2@gmail.com' },
-      corPrimaria:'#04273B', corSecundaria:'#C9A227',
-      planoId: plano?._id||null, planoSlug:'pro', planoNome:'Pro',
-      limiteAutorizacoes:30, creditosExtras:0, status:'ativo', ativo:true,
-      criadoEm: new Date().toISOString()
-    });
-    const hash = await bcrypt.hash(process.env.LUX_ADMIN_PASS || 'lux2026', 10);
-    await db.usuarios.insert({
-      nome:'Admin Lux House', email:'admin', senha:hash, role:'admin',
-      imobiliariaId:imob._id, imobiliariaSlug:'lux-house', ativo:true, criadoEm:new Date().toISOString()
-    });
-    console.log('  ✓ Lux House criada');
   }
 }
 
@@ -392,19 +366,11 @@ app.post('/api/auth/login', async (req, res) => {
 
     const login = email.toLowerCase().trim();
 
-    // 🔐 busca usuário
-    let user = await db.usuarios.findOne({
+    // 🔐 busca usuário pelo próprio identificador (Super Admin incluído)
+    const user = await db.usuarios.findOne({
       email: login,
       ativo: true
     });
-
-    // 🔐 fallback do super admin (garantia)
-    if (!user && login === 'admin' || login === 'admin@agemob.com.br') {
-      user = await db.usuarios.findOne({
-        email: 'admin@agemob.com.br',
-        ativo: true
-      });
-    }
 
     if (!user) {
       return res.status(401).json({ erro: 'Credenciais inválidas.' });
@@ -1282,6 +1248,19 @@ function selecionarCampos(obj, campos) {
   return selecionado;
 }
 
+// Identidade pública do tenant dono da autorização: só o que identifica a parte
+// autorizada. Corretor autônomo sai com nome e CRECI — CPF nunca é exposto.
+function identidadePublicaTenant(imob) {
+  if (!imob) return null;
+  const corretor = imob.tipoCliente === 'corretor';
+  return {
+    nome:        imob.razaoSocial || imob.nomeFantasia || imob.nome || '',
+    tipoCliente: corretor ? 'corretor' : 'imobiliaria',
+    documento:   corretor ? null : (imob.cnpj || null),
+    creci:       imob.creci || imob.responsavel?.creci || null
+  };
+}
+
 // Buscar dados de uma autorização pelo código (para pré-preencher link assistido)
 app.get('/api/autorizacoes/codigo/:codigo', async (req, res) => {
   try {
@@ -1290,7 +1269,10 @@ app.get('/api/autorizacoes/codigo/:codigo', async (req, res) => {
     // cancelada ou inexistente respondem igual (null), sem revelar o status —
     // a consulta pública da assinada é /api/validar/:codigo, com dados mascarados.
     if (!aut || aut.status !== 'rascunho') return res.json(null);
+    // Tenant sempre o da própria autorização (backend), nunca um padrão.
+    const imob = aut.imobiliariaId ? await db.imobiliarias.findOne({ _id: aut.imobiliariaId }) : null;
     res.json({
+      imobiliaria: identidadePublicaTenant(imob),
       preenchidoPorCorretor: aut.preenchidoPorCorretor || false,
       proprietario: selecionarCampos(aut.proprietario, CAMPOS_PREENCHIMENTO_PROPRIETARIO),
       imovel:       selecionarCampos(aut.imovel, CAMPOS_PREENCHIMENTO_IMOVEL)
@@ -1651,8 +1633,10 @@ function adaptarParaPDF(aut, imob) {
       }
     },
     imobPdf: {
-      razao:    imob?.razaoSocial || imob?.nomeFantasia || 'Lux House Imóveis',
-      cnpj:     imob?.cnpj || '',
+      tipo:     imob?.tipoCliente === 'corretor' ? 'corretor' : 'imobiliaria',
+      razao:    imob?.razaoSocial || imob?.nomeFantasia || imob?.nome || '',
+      cnpj:     imob?.tipoCliente === 'corretor' ? '' : (imob?.cnpj || ''),
+      creci:    imob?.creci || imob?.responsavel?.creci || '',
       endereco: enderecoImob
     }
   };
@@ -1665,7 +1649,7 @@ async function gerarESalvarPDFAssinatura(aut) {
   try {
     const imob = aut.imobiliariaId
       ? await db.imobiliarias.findOne({ _id: aut.imobiliariaId })
-      : await db.imobiliarias.findOne({ slug: 'lux-house' });
+      : null;
 
     const { autPdf, imobPdf } = adaptarParaPDF(aut, imob);
     const buffer = await gerarAutorizacaoPDF(autPdf, imobPdf);
@@ -2812,7 +2796,7 @@ app.post('/api/autorizacoes/assinar', async (req, res) => {
       imobiliariaId:   rascunho?.imobiliariaId   || null,
       imobiliariaSlug: rascunho?.imobiliariaSlug || null,
       corretorId:      rascunho?.corretorId      || null,
-      corretorNome:    rascunho?.corretorNome    || 'Lux House',
+      corretorNome:    rascunho?.corretorNome    || null,
       criadoEm:      new Date().toISOString(),
       assinadoEm:    new Date().toISOString(),
       vencimento:    venc.toLocaleDateString('pt-BR'),
@@ -2875,12 +2859,14 @@ app.get('/api/dashboard', authMiddleware(['admin','corretor','super_admin']), as
 });
 
 // Envio de e-mail via Brevo
+// Remetente técnico = BREVO_SENDER (configuração da plataforma), nunca um tenant.
 async function enviarEmailBrevo(destino, assunto, texto, html, nomeImob) {
+  if (!process.env.BREVO_SENDER) throw new Error('BREVO_SENDER ausente');
   const r = await fetch('https://api.brevo.com/v3/smtp/email', {
     method: 'POST',
     headers: { 'api-key': process.env.BREVO_API_KEY, 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      sender: { name: `AGEMOB · ${nomeImob||'Imóveis'}`, email: process.env.BREVO_SENDER || 'luximobiliariafloripa2@gmail.com' },
+      sender: { name: nomeImob ? `AGEMOB · ${nomeImob}` : 'AGEMOB', email: process.env.BREVO_SENDER },
       to: [{ email: destino }],
       subject: assunto,
       textContent: texto || undefined,
@@ -2904,13 +2890,14 @@ function escaparHtmlEmail(valor) {
   ));
 }
 
-function montarEmailOtp(codigoOtp, codigo, nomeImob) {
+// assinatura: "Equipe {imobiliária}" ou o nome do corretor autônomo.
+function montarEmailOtp(codigoOtp, codigo, assinatura) {
   const aviso = `Ele confirma a sua assinatura eletrônica da autorização de venda (código ${codigo}). Não compartilhe este código com ninguém.`;
   return {
     assunto: 'Seu código de verificação — AGEMOB',
-    texto: `Seu código de verificação é: ${codigoOtp}\n\n${aviso}\n\nEquipe ${nomeImob}`,
+    texto: `Seu código de verificação é: ${codigoOtp}\n\n${aviso}\n\n${assinatura}`,
     html: `<p>Seu código de verificação é: <b style="font-size:22px">${codigoOtp}</b></p>`
-      + `<p>${escaparHtmlEmail(aviso)}</p><p>Equipe ${escaparHtmlEmail(nomeImob)}</p>`
+      + `<p>${escaparHtmlEmail(aviso)}</p><p>${escaparHtmlEmail(assinatura)}</p>`
   };
 }
 
@@ -2922,14 +2909,15 @@ app.post('/api/enviar-email', emailLimiter, async (req, res) => {
       || typeof destino !== 'string' || destino.length > TAMANHO_MAXIMO_EMAIL || !FORMATO_EMAIL_DESTINO.test(destino)) {
       return res.status(422).json({ erro: 'Dados inválidos.' });
     }
-    if (!process.env.BREVO_API_KEY) return res.status(503).json({ erro: 'E-mail não configurado.' });
+    if (!process.env.BREVO_API_KEY || !process.env.BREVO_SENDER) return res.status(503).json({ erro: 'E-mail não configurado.' });
 
     const aut = await db.autorizacoes.findOne({ codigo });
     const imob = aut?.imobiliariaId ? await db.imobiliarias.findOne({ _id: aut.imobiliariaId }) : null;
     if (!aut || !imob?.nome) return res.status(404).json({ erro: 'Autorização não encontrada.' });
     if (aut.status !== 'rascunho') return res.status(409).json({ erro: 'Autorização não está mais disponível para assinatura.' });
 
-    const { assunto, texto, html } = montarEmailOtp(codigoOtp, codigo, imob.nome);
+    const assinatura = imob.tipoCliente === 'corretor' ? imob.nome : `Equipe ${imob.nome}`;
+    const { assunto, texto, html } = montarEmailOtp(codigoOtp, codigo, assinatura);
     await enviarEmailBrevo(destino, assunto, texto, html, imob.nome);
     res.json({ ok: true });
   } catch(e) { res.status(500).json({ erro: 'Falha ao enviar e-mail.' }); }
@@ -3331,7 +3319,8 @@ app.post('/api/admin/suporte/:imobId', authMiddleware(['super_admin']), async (r
     res.json({
       ok: true,
       token: tokenSuporte,
-      imobiliaria: { nome: imob.nome, slug: imob.slug, email: imob.email }
+      imobiliaria: { nome: imob.nome, slug: imob.slug, email: imob.email, tipoCliente: imob.tipoCliente || 'imobiliaria',
+        razaoSocial: imob.razaoSocial || '', cnpj: imob.cnpj || '', creci: imob.creci || imob.responsavel?.creci || '' }
     });
   } catch(e) { res.status(500).json({ erro: e.message }); }
 });
