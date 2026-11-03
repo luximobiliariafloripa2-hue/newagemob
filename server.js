@@ -2668,7 +2668,8 @@ function montarPayloadEvidencias({ codigo, imobiliariaIdCandidato, assinatura, s
 app.post('/api/autorizacoes/assinar', async (req, res) => {
   try {
     const { codigo, proprietario, imovel, tipo, hash, evidencias, otp, facial, liveness, uploads, assinatura, selfie, documentos, assinantes } = req.body;
-    if (!codigo || !proprietario?.nome) return res.status(422).json({ erro: 'Dados incompletos.' });
+    // codigo vai direto para a consulta do NeDB: só string, nunca objeto de operador ($gt, $ne…).
+    if (typeof codigo !== 'string' || !codigo || !proprietario?.nome) return res.status(422).json({ erro: 'Dados incompletos.' });
     const venc = new Date(); venc.setDate(venc.getDate() + 365);
     // Busca rascunho existente para preservar imobiliariaId
     const rascunho = await db.autorizacoes.findOne({ codigo });
