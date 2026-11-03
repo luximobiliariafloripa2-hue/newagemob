@@ -24,8 +24,18 @@ function gerarAutorizacaoPDF(aut, imob) {
     doc.fill('#FFFFFF').font('Helvetica-Bold').fontSize(13)
       .text('AGEMOB  ·  AUTORIZAÇÃO DE VENDA ' + tipoTxt, 52, 14);
 
+    // Logo do tenant (opcional, só visual): topo à direita, proporção
+    // preservada. Falha ao incorporar = documento sem logo.
+    let comLogo = false;
+    if (imob.logo) {
+      const yAntes = doc.y;
+      try { doc.image(imob.logo, W - 52 - 110, 46, { fit: [110, 36], align: 'right', valign: 'center' }); comLogo = true; } catch { comLogo = false; }
+      doc.y = yAntes;
+    }
+
     doc.fill('#101828').moveDown(2);
-    doc.fontSize(15).text('AUTORIZAÇÃO DE VENDA DE IMÓVEL ' + tipoTxt, 52, 60);
+    if (comLogo) doc.fontSize(15).text('AUTORIZAÇÃO DE VENDA DE IMÓVEL ' + tipoTxt, 52, 60, { width: W - 52 - 52 - 120 });
+    else doc.fontSize(15).text('AUTORIZAÇÃO DE VENDA DE IMÓVEL ' + tipoTxt, 52, 60);
     doc.font('Helvetica').fontSize(9).fillColor('#475467')
       .text(`Código: ${aut.codigo}  ·  Emitida em ${agora.toLocaleDateString('pt-BR')} às ${agora.toLocaleTimeString('pt-BR')}`)
       .moveDown(0.8);

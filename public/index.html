@@ -217,6 +217,11 @@ label{display:block;font-size:13px;font-weight:600;color:var(--ink-2);margin-bot
 /* ---------- Login Screen ---------- */
 #viewLogin{position:fixed;inset:0;background:radial-gradient(ellipse at 30% 20%,rgba(201,162,39,.08) 0%,transparent 55%),linear-gradient(180deg,var(--page-bg) 0%,var(--page-bg-2) 100%);z-index:200;display:flex;align-items:center;justify-content:center;padding:20px}
 #viewLogin.hidden{display:none!important}
+#viewRedefinir{position:fixed;inset:0;background:linear-gradient(180deg,var(--page-bg) 0%,var(--page-bg-2) 100%);z-index:300;display:flex;align-items:center;justify-content:center;padding:20px}
+#viewRedefinir.hidden{display:none!important}
+.painel-logo{height:48px;max-width:150px;object-fit:contain;border-radius:8px}
+.owner-brand .logo-tenant{height:44px;max-width:130px;object-fit:contain;border-radius:8px}
+.logo-conta-preview{max-height:90px;max-width:240px;object-fit:contain}
 .login-card{background:#fff;border:1px solid var(--line);border-radius:22px;padding:44px 40px;max-width:410px;width:100%;box-shadow:0 24px 64px -12px rgba(0,0,0,.4),0 8px 24px -4px rgba(0,0,0,.2);animation:loginPop .4s var(--ease);border-top:4px solid var(--gold)}
 @keyframes loginPop{from{transform:translateY(16px);opacity:0}to{transform:translateY(0);opacity:1}}
 .login-card .login-logo{display:flex;align-items:center;gap:10px;margin-bottom:30px;justify-content:center}
@@ -267,6 +272,12 @@ label{display:block;font-size:13px;font-weight:600;color:var(--ink-2);margin-bot
     </div>
     <div class="login-error" id="loginError">E-mail ou senha incorretos. Tente novamente.</div>
     <button class="btn btn-primary" style="width:100%;margin-top:4px" onclick="doLogin()">Entrar →</button>
+    <p style="text-align:center;margin-top:12px"><a href="#" onclick="mostrarEsqueciSenha(event)" style="font-size:13px;color:var(--brand);font-weight:600">Esqueci minha senha</a></p>
+    <div id="boxEsqueci" class="hidden" style="margin-top:8px">
+      <div class="field"><label>E-mail da conta</label><input type="email" id="esqueciEmail" placeholder="seu@email.com" onkeydown="if(event.key==='Enter')enviarEsqueciSenha()"></div>
+      <button class="btn btn-ghost" style="width:100%" id="btnEsqueci" onclick="enviarEsqueciSenha()">Enviar instruções</button>
+      <p id="esqueciMsg" style="font-size:12.5px;color:var(--ink-2);margin-top:8px;text-align:center"></p>
+    </div>
     <p style="font-size:12px;color:var(--ink-3);text-align:center;margin-top:16px">Acesso restrito a usuários cadastrados.</p>
   </div>
 </div>
@@ -288,6 +299,21 @@ label{display:block;font-size:13px;font-weight:600;color:var(--ink-2);margin-bot
     </div>
   </div>
 </header>
+
+<!-- ====================== VIEW: REDEFINIR SENHA ====================== -->
+<div id="viewRedefinir" class="hidden">
+  <div class="login-card">
+    <h2>Redefinir senha</h2>
+    <p class="sub" id="redefSub">Crie uma nova senha para sua conta.</p>
+    <div id="redefForm">
+      <div class="field"><label>Nova senha</label><input type="password" id="redefSenha" placeholder="mínimo 6 caracteres"></div>
+      <div class="field"><label>Confirmar nova senha</label><input type="password" id="redefSenha2" onkeydown="if(event.key==='Enter')redefinirSenha()"></div>
+      <p id="redefErro" style="font-size:12.5px;color:var(--red);margin-bottom:8px"></p>
+      <button class="btn btn-primary" style="width:100%" id="btnRedefinir" onclick="redefinirSenha()">Salvar nova senha</button>
+    </div>
+    <p style="text-align:center;margin-top:16px"><a href="/" style="font-size:13px;color:var(--brand);font-weight:600">Ir para o login</a></p>
+  </div>
+</div>
 
 <!-- ====================== VIEW: SUPER ADMIN ====================== -->
 <main class="wrap hidden" id="viewSuperAdmin">
@@ -615,14 +641,18 @@ label{display:block;font-size:13px;font-weight:600;color:var(--ink-2);margin-bot
 <!-- ====================== VIEW: ADMIN ====================== -->
 <main class="wrap" id="viewAdmin">
   <div class="page-head">
-    <div>
-      <h1 id="painelTitulo">Painel</h1>
-      <p id="painelSubtitulo"></p>
+    <div style="display:flex;align-items:center;gap:14px">
+      <img id="painelLogo" class="painel-logo hidden" alt="">
+      <div>
+        <h1 id="painelTitulo">Painel</h1>
+        <p id="painelSubtitulo"></p>
+      </div>
     </div>
     <div style="display:flex;gap:10px">
       <button class="btn btn-ghost btn-lg" id="btnRefresh" onclick="refreshPainel()" title="Atualizar autorizações">🔄 Atualizar</button>
       <button class="btn btn-ghost btn-lg" id="btnComprarCreditos" onclick="abrirComprarCreditos()">💳 Comprar Créditos</button>
       <button class="btn btn-ghost btn-lg" onclick="abrirBoletos()">📄 Boletos</button>
+      <button class="btn btn-ghost btn-lg" onclick="abrirIdentidadeConta()">🖼 Identidade</button>
       <button class="btn btn-primary btn-lg" onclick="novaAutorizacao()">+ NOVA AUTORIZAÇÃO</button>
     </div>
   </div>
@@ -752,6 +782,7 @@ label{display:block;font-size:13px;font-weight:600;color:var(--ink-2);margin-bot
 <!-- ====================== VIEW: PROPRIETÁRIO ====================== -->
 <main class="owner-shell hidden" id="viewOwner">
   <div class="owner-brand">
+    <img id="ownerLogo" class="logo-tenant hidden" alt="">
     <div class="mark" id="ownerMarca">AG</div>
     <div>
       <h2 id="ownerTenantNome">AGEMOB</h2>
@@ -930,6 +961,28 @@ label{display:block;font-size:13px;font-weight:600;color:var(--ink-2);margin-bot
 </main>
 
 
+
+<!-- ====================== MODAL: IDENTIDADE DA CONTA ====================== -->
+<div class="overlay" id="modalIdentidade">
+  <div class="modal" style="max-width:460px">
+    <h2>Identidade da conta</h2>
+    <p class="hint" id="identNome" style="margin:6px 0 14px"></p>
+    <div style="display:flex;align-items:center;justify-content:center;min-height:96px;border:1.5px dashed var(--line);border-radius:12px;padding:12px;margin-bottom:12px">
+      <img id="identLogo" class="logo-conta-preview hidden" alt="Logo da conta">
+      <span id="identSemLogo" style="font-size:13px;color:var(--ink-3)">Sem logo cadastrada</span>
+    </div>
+    <div id="identControles" class="hidden">
+      <p class="hint" style="font-size:12.5px;margin-bottom:10px">PNG ou JPEG, até 1 MB. A logo aparece no painel, no link do proprietário e no PDF da autorização.</p>
+      <input type="file" id="identArquivo" accept="image/png,image/jpeg" onchange="previewLogoConta(this)">
+    </div>
+    <p id="identErro" style="font-size:12.5px;color:var(--red);margin-top:8px"></p>
+    <div style="display:flex;gap:10px;margin-top:16px;justify-content:flex-end;flex-wrap:wrap">
+      <button class="btn btn-ghost" onclick="fecharIdentidadeConta()">Fechar</button>
+      <button class="btn btn-ghost hidden" id="identRemover" onclick="removerLogoConta()">Remover logo</button>
+      <button class="btn btn-primary hidden" id="identEnviar" onclick="enviarLogoConta()" disabled>Salvar logo</button>
+    </div>
+  </div>
+</div>
 
 <!-- ====================== MODAL: EMITIR BOLETO (SUPER ADMIN) ====================== -->
 <div class="overlay" id="modalEmitirBoleto">
@@ -1175,6 +1228,56 @@ label{display:block;font-size:13px;font-weight:600;color:var(--ink-2);margin-bot
 window.AGEMOB_BASE_URL = window.location.origin; // fallback imediato
 fetch('/api/base-url').then(r=>r.json()).then(d=>{ if(d.baseUrl) window.AGEMOB_BASE_URL = d.baseUrl; }).catch(()=>{});
 
+/* ================= RECUPERAÇÃO DE SENHA ================= */
+function mostrarEsqueciSenha(ev){
+  if(ev) ev.preventDefault();
+  const box = document.getElementById('boxEsqueci');
+  box.classList.toggle('hidden');
+  const email = document.getElementById('loginEmail').value.trim();
+  if(email.includes('@')) document.getElementById('esqueciEmail').value = email;
+}
+async function enviarEsqueciSenha(){
+  const email = document.getElementById('esqueciEmail').value.trim();
+  const msg = document.getElementById('esqueciMsg'), btn = document.getElementById('btnEsqueci');
+  if(!email){ msg.textContent = 'Informe o e-mail da conta.'; return; }
+  btn.disabled = true;
+  try{
+    const r = await fetch('/api/auth/esqueci-senha', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email }) });
+    const d = await r.json().catch(() => ({}));
+    msg.textContent = r.ok ? (d.mensagem || 'Verifique seu e-mail.') : (d.erro || 'Tente novamente em alguns minutos.');
+  }catch(e){ msg.textContent = 'Falha de conexão. Tente novamente.'; }
+  finally{ btn.disabled = false; }
+}
+// O token vem no fragmento (#): não chega ao servidor, a logs nem ao Referer,
+// e sai da barra de endereço assim que é lido.
+let _tokenRedefinicao = '';
+(function(){
+  if(window.location.pathname !== '/redefinir-senha') return;
+  _tokenRedefinicao = (window.location.hash || '').slice(1);
+  try{ history.replaceState(null, '', '/redefinir-senha'); }catch(e){}
+  document.getElementById('viewRedefinir').classList.remove('hidden');
+  if(!/^[A-Za-z0-9_-]{43}$/.test(_tokenRedefinicao)){
+    document.getElementById('redefSub').textContent = 'Link inválido ou expirado. Solicite uma nova redefinição de senha na tela de login.';
+    document.getElementById('redefForm').classList.add('hidden');
+  }
+})();
+async function redefinirSenha(){
+  const s1 = document.getElementById('redefSenha').value, s2 = document.getElementById('redefSenha2').value;
+  const erro = document.getElementById('redefErro'), btn = document.getElementById('btnRedefinir');
+  erro.textContent = '';
+  if(s1.length < 6){ erro.textContent = 'A senha deve ter pelo menos 6 caracteres.'; return; }
+  if(s1 !== s2){ erro.textContent = 'As senhas não conferem.'; return; }
+  btn.disabled = true;
+  try{
+    const r = await fetch('/api/auth/redefinir-senha', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: _tokenRedefinicao, senha: s1 }) });
+    const d = await r.json().catch(() => ({}));
+    if(!r.ok){ erro.textContent = d.erro || 'Não foi possível redefinir a senha.'; btn.disabled = false; return; }
+    _tokenRedefinicao = '';
+    document.getElementById('redefForm').classList.add('hidden');
+    document.getElementById('redefSub').textContent = 'Senha redefinida. Entre com a nova senha.';
+  }catch(e){ erro.textContent = 'Falha de conexão. Tente novamente.'; btn.disabled = false; }
+}
+
 /* ================= ROTA DO PROPRIETÁRIO ================= */
 (function(){
   const m = window.location.pathname.match(/^\/autorizacao\/([A-Z0-9]+)$/i);
@@ -1343,14 +1446,20 @@ function identidadeTenant(){
     creci:     im.creci || im.responsavel?.creci || '',
     endereco:  [[e.logradouro, e.numero].filter(Boolean).join(', ') + (e.complemento ? ' - ' + e.complemento : ''),
                 [e.bairro, e.cidade].filter(Boolean).join(', ')].filter(Boolean).join(' - '),
-    cidade:    e.cidade || ''
+    cidade:    e.cidade || '',
+    logoUrl:   urlLogoSegura(im.logoArquivo && im._id ? '/api/logos/' + im._id + '?v=' + encodeURIComponent(im.logoAtualizadoEm || '') : null)
   };
+}
+// Só URLs da rota de logos do próprio servidor viram src de imagem.
+function urlLogoSegura(u){
+  return typeof u === 'string' && /^\/api\/logos\/[A-Za-z0-9]{8,32}\?v=[A-Za-z0-9%._:-]*$/.test(u) ? u : null;
 }
 function carregarTenantPublico(dados){
   const t = dados && dados.imobiliaria;
   AG.tenantPublico = t && typeof t.nome === 'string' && t.nome ? {
     nome: t.nome, tipo: t.tipoCliente === 'corretor' ? 'corretor' : 'imobiliaria',
-    documento: t.tipoCliente === 'corretor' ? '' : (t.documento || ''), creci: t.creci || '', endereco: '', cidade: ''
+    documento: t.tipoCliente === 'corretor' ? '' : (t.documento || ''), creci: t.creci || '', endereco: '', cidade: '',
+    logoUrl: urlLogoSegura(t.logoUrl)
   } : null;
   aplicarIdentidadeProprietario();
 }
@@ -1376,6 +1485,11 @@ function aplicarIdentidadeProprietario(){
   const nome = t && t.nome ? t.nome : '';
   document.getElementById('ownerTenantNome').textContent = nome || 'AGEMOB';
   document.getElementById('ownerMarca').textContent = iniciaisTenant(nome) || 'AG';
+  // Logo do tenant dono da autorização (nunca da sessão, na rota pública).
+  const logo = urlLogoSegura(t && t.logoUrl);
+  const imgLogo = document.getElementById('ownerLogo');
+  if(logo){ imgLogo.src = logo; imgLogo.alt = nome; imgLogo.classList.remove('hidden'); document.getElementById('ownerMarca').classList.add('hidden'); }
+  else { imgLogo.removeAttribute('src'); imgLogo.classList.add('hidden'); document.getElementById('ownerMarca').classList.remove('hidden'); }
   if(isRotaProprietario()) document.getElementById('agencyName').textContent = nome || 'AGEMOB';
 }
 // Parte autorizada nos PDFs do navegador: só dados existentes, sem CPF.
@@ -1440,9 +1554,84 @@ function renderCabecalhoPainel(){
   document.getElementById('painelSubtitulo').textContent = [nome, doc].filter(Boolean).join(' · ');
 }
 
+/* ================= IDENTIDADE DA CONTA (logo) ================= */
+// Estado vem do backend (/api/minha-identidade); edição só se podeEditarLogo.
+let _identidadeConta = null, _logoPendente = null;
+async function carregarIdentidadeConta(){
+  try{
+    const r = await fetch('/api/minha-identidade', { headers: Auth.headers() });
+    if(!r.ok) return;
+    _identidadeConta = await r.json();
+    const img = document.getElementById('painelLogo');
+    const logo = urlLogoSegura(_identidadeConta.logoUrl);
+    if(logo){ img.src = logo; img.alt = _identidadeConta.nome || ''; img.classList.remove('hidden'); }
+    else { img.removeAttribute('src'); img.classList.add('hidden'); }
+  }catch(e){}
+}
+function mostrarLogoConta(src){
+  const img = document.getElementById('identLogo');
+  if(src){ img.src = src; img.classList.remove('hidden'); document.getElementById('identSemLogo').classList.add('hidden'); }
+  else { img.removeAttribute('src'); img.classList.add('hidden'); document.getElementById('identSemLogo').classList.remove('hidden'); }
+}
+async function abrirIdentidadeConta(){
+  await carregarIdentidadeConta();
+  const d = _identidadeConta || {};
+  const pode = d.podeEditarLogo === true;
+  _logoPendente = null;
+  document.getElementById('identNome').textContent = d.nome || '';
+  document.getElementById('identErro').textContent = '';
+  document.getElementById('identArquivo').value = '';
+  mostrarLogoConta(urlLogoSegura(d.logoUrl));
+  document.getElementById('identControles').classList.toggle('hidden', !pode);
+  document.getElementById('identEnviar').classList.toggle('hidden', !pode);
+  document.getElementById('identEnviar').disabled = true;
+  document.getElementById('identRemover').classList.toggle('hidden', !pode || !urlLogoSegura(d.logoUrl));
+  document.getElementById('modalIdentidade').classList.add('open');
+}
+function fecharIdentidadeConta(){ document.getElementById('modalIdentidade').classList.remove('open'); }
+// Conferência rápida no navegador; o backend continua sendo a autoridade.
+function previewLogoConta(input){
+  const erro = document.getElementById('identErro'), btn = document.getElementById('identEnviar');
+  const f = input.files && input.files[0];
+  erro.textContent = ''; _logoPendente = null; btn.disabled = true;
+  if(!f) return;
+  if(f.type !== 'image/png' && f.type !== 'image/jpeg'){ erro.textContent = 'Envie uma imagem PNG ou JPEG.'; return; }
+  if(f.size > 1024 * 1024){ erro.textContent = 'A imagem deve ter no máximo 1 MB.'; return; }
+  const leitor = new FileReader();
+  leitor.onload = () => {
+    const url = String(leitor.result || '');
+    if(!/^data:image\/(png|jpeg);base64,/.test(url)){ erro.textContent = 'Arquivo de imagem inválido.'; return; }
+    _logoPendente = url; mostrarLogoConta(url); btn.disabled = false;
+  };
+  leitor.readAsDataURL(f);
+}
+async function enviarLogoConta(){
+  if(!_logoPendente) return;
+  const erro = document.getElementById('identErro'), btn = document.getElementById('identEnviar');
+  btn.disabled = true;
+  try{
+    const r = await fetch('/api/minha-identidade/logo', { method: 'PUT', headers: Auth.headers(), body: JSON.stringify({ arquivo: _logoPendente }) });
+    const d = await r.json().catch(() => ({}));
+    if(!r.ok){ erro.textContent = d.erro || 'Não foi possível salvar a logo.'; btn.disabled = false; return; }
+    showToast('Logo atualizada ✓', 'success');
+    await abrirIdentidadeConta();
+  }catch(e){ erro.textContent = 'Falha de conexão. Tente novamente.'; btn.disabled = false; }
+}
+async function removerLogoConta(){
+  const erro = document.getElementById('identErro');
+  try{
+    const r = await fetch('/api/minha-identidade/logo', { method: 'DELETE', headers: Auth.headers() });
+    const d = await r.json().catch(() => ({}));
+    if(!r.ok){ erro.textContent = d.erro || 'Não foi possível remover a logo.'; return; }
+    showToast('Logo removida.', 'success');
+    await abrirIdentidadeConta();
+  }catch(e){ erro.textContent = 'Falha de conexão. Tente novamente.'; }
+}
+
 function iniciarAtualizacaoRealtime(){
   if(isRotaProprietario()) return;
   renderCabecalhoPainel();
+  carregarIdentidadeConta();
   carregarAutorizacoes();
   carregarUsoPlaino();
 

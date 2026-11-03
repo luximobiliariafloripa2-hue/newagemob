@@ -413,7 +413,7 @@ footer a{color:var(--gold2);font-weight:600}
           <li style="font-size:13.5px;display:flex;gap:8px;align-items:center"><span style="color:var(--navy);font-weight:800">✓</span> Gestão de Equipes</li>
           <li style="font-size:13.5px;display:flex;gap:8px;align-items:center"><span style="color:var(--navy);font-weight:800">✓</span> Assinatura Digital</li>
         </ul>
-        <div class="btn" aria-disabled="true" style="display:flex;width:100%;background:var(--paper);border:1.5px solid var(--line);color:var(--ink-3);border-radius:10px;padding:11px;justify-content:center;cursor:default">Contato comercial em breve</div>
+        <div class="btn" id="corporateCta" aria-disabled="true" style="display:flex;width:100%;background:var(--paper);border:1.5px solid var(--line);color:var(--ink-3);border-radius:10px;padding:11px;justify-content:center;cursor:default">Contato comercial em breve</div>
       </div>
     </div>
 
@@ -715,6 +715,28 @@ async function carregarPlanosPublicos(){
   });
 }
 carregarPlanosPublicos();
+
+// Contato Corporate configurado pela plataforma (https:// ou mailto:).
+// Sem configuração válida, o card continua "Contato comercial em breve".
+async function carregarContatoCorporate(){
+  let url;
+  try {
+    const r = await fetch('/api/config-publica');
+    if(!r.ok) return;
+    url = (await r.json()).contatoCorporate;
+  } catch(e) { return; }
+  if(typeof url !== 'string' || !/^(https:\/\/|mailto:)/i.test(url)) return;
+  const atual = document.getElementById('corporateCta');
+  if(!atual) return;
+  const a = document.createElement('a');
+  a.className = 'btn';
+  a.setAttribute('href', url);
+  if(/^https:/i.test(url)){ a.setAttribute('target', '_blank'); a.setAttribute('rel', 'noopener noreferrer'); }
+  a.setAttribute('style', 'display:flex;width:100%;background:var(--paper);border:1.5px solid var(--navy);color:var(--navy);border-radius:10px;padding:11px;justify-content:center');
+  a.textContent = 'Falar com consultor →';
+  atual.replaceWith(a);
+}
+carregarContatoCorporate();
 </script>
 </body>
 </html>

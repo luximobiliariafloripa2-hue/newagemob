@@ -37,6 +37,7 @@ const { carregarConfiguracaoTsa, solicitarCarimboTempo, verificarTokenArmazenado
 const { DIAS_TRIAL, avaliarAcessoImobiliaria, normalizarStatusFinanceiro } = require('./src/services/acesso/AcessoTenant');
 const { carregarConfiguracao: carregarConfiguracaoInfinitepay, criarInfinitepayService } = require('./services/infinitepayService');
 const rotasInfinitepay = require('./routes/infinitepay');
+const logoTenant = require('./services/logoTenant');
 
 const app  = express();
 const PORT = process.env.PORT || 3000;
@@ -66,6 +67,7 @@ const db = {
   billing_transactions:Datastore.create({ filename: path.join(DATA_DIR, 'billing_transactions.db'),autoload: true }),
   boletos:             Datastore.create({ filename: path.join(DATA_DIR, 'boletos.db'),             autoload: true }),
   pagamentos:          Datastore.create({ filename: path.join(DATA_DIR, 'pagamentos.db'),          autoload: true }),
+  resetSenha:          Datastore.create({ filename: path.join(DATA_DIR, 'reset_senha.db'),         autoload: true }),
   config:              Datastore.create({ filename: path.join(DATA_DIR, 'config.db'),              autoload: true }),
   logs:                Datastore.create({ filename: path.join(DATA_DIR, 'logs.db'),                autoload: true })
 };
@@ -1221,6 +1223,7 @@ app.post('/api/cadastro', async (req, res) => {
       user:{ _id:usuario._id, nome:usuario.nome, email:usuario.email, role:'admin', imobiliariaId:imobId, imobiliariaSlug:slug, imobiliaria:imob },
       imobiliaria:{ nome, slug, plano: planoTrial.nome, limite: acesso.trial.limite, trialExpiracao: acesso.trial.expiraEm }
     });
+    enviarBoasVindas({ email: usuario.email, responsavel, nomeConta: nome, tipo, imobiliariaId: imobId, baseUrl: getBaseUrl(req) });
   } catch(e) {
     // Desfaz o que foi criado; nunca devolve token de conta parcial.
     if (criados.imob) {
@@ -1257,7 +1260,8 @@ function identidadePublicaTenant(imob) {
     nome:        imob.razaoSocial || imob.nomeFantasia || imob.nome || '',
     tipoCliente: corretor ? 'corretor' : 'imobiliaria',
     documento:   corretor ? null : (imob.cnpj || null),
-    creci:       imob.creci || imob.responsavel?.creci || null
+    creci:       imob.creci || imob.responsavel?.creci || null,
+    logoUrl:     logoTenant.urlLogo(imob)
   };
 }
 
@@ -1652,6 +1656,7 @@ async function gerarESalvarPDFAssinatura(aut) {
       : null;
 
     const { autPdf, imobPdf } = adaptarParaPDF(aut, imob);
+    imobPdf.logo = await logoTenant.lerLogo(STORAGE_BASE, imob);
     const buffer = await gerarAutorizacaoPDF(autPdf, imobPdf);
 
     const pdfPath = `assinados/${aut.codigo}.pdf`;
@@ -3324,6 +3329,196 @@ app.post('/api/admin/suporte/:imobId', authMiddleware(['super_admin']), async (r
     });
   } catch(e) { res.status(500).json({ erro: e.message }); }
 });
+
+// ═══════════════════════════════════════════════════════
+// IDENTIDADE DA CONTA — logo do tenant (M9-04)
+// ═══════════════════════════════════════════════════════
+const MENSAGENS_LOGO = {
+  formato_nao_suportado: 'Envie uma imagem PNG ou JPEG.',
+  arquivo_grande:        'A imagem deve ter no máximo 1 MB.',
+  arquivo_invalido:      'Arquivo de imagem inválido.',
+  conteudo_invalido:     'Arquivo de imagem inválido ou corrompido.'
+};
+
+// A logo é configuração da conta: o titular (admin) a edita fora do modo
+// suporte enquanto a conta estiver administrativamente ativa — trial
+// encerrado, plano vencido ou pagamento pendente não bloqueiam.
+function podeEditarLogo(user, acesso) {
+  return user.role === 'admin' && !user.modoSuporte
+    && !['suspenso', 'desativado', 'inexistente'].includes(acesso.statusEfetivo);
+}
+
+async function tenantEditavel(req, res) {
+  const { imob, acesso } = await carregarAcessoTenant(req.user.imobiliariaId);
+  if (!imob || !podeEditarLogo(req.user, acesso)) {
+    res.status(403).json({ erro: 'Sem permissão para alterar a identidade da conta.' });
+    return null;
+  }
+  return imob;
+}
+
+app.get('/api/minha-identidade', authMiddleware(['admin','corretor']), async (req, res) => {
+  try {
+    const { imob, acesso } = await carregarAcessoTenant(req.user.imobiliariaId);
+    if (!imob) return res.status(404).json({ erro: 'Conta não encontrada.' });
+    res.json({
+      nome:           imob.razaoSocial || imob.nomeFantasia || imob.nome || '',
+      tipoCliente:    imob.tipoCliente === 'corretor' ? 'corretor' : 'imobiliaria',
+      logoUrl:        logoTenant.urlLogo(imob),
+      podeEditarLogo: podeEditarLogo(req.user, acesso)
+    });
+  } catch(e) { res.status(500).json({ erro: 'Erro interno.' }); }
+});
+
+// O tenant vem só da sessão; nenhum id é aceito no corpo.
+app.put('/api/minha-identidade/logo', authMiddleware(['admin']), async (req, res) => {
+  try {
+    const imob = await tenantEditavel(req, res);
+    if (!imob) return;
+    let logo;
+    try {
+      logo = await logoTenant.validarLogo(req.body?.arquivo);
+    } catch (e) {
+      if (!(e instanceof logoTenant.ErroLogo)) throw e;
+      return res.status(422).json({ erro: MENSAGENS_LOGO[e.codigo] || MENSAGENS_LOGO.arquivo_invalido });
+    }
+    const arquivo = await logoTenant.salvarLogo(STORAGE_BASE, imob._id, logo);
+    const agora = new Date().toISOString();
+    await db.imobiliarias.update({ _id: imob._id }, { $set: { logoArquivo: arquivo, logoMime: logo.mime, logoAtualizadoEm: agora, atualizadoEm: agora } });
+    if (imob.logoArquivo && imob.logoArquivo !== arquivo) await logoTenant.removerArquivo(STORAGE_BASE, imob._id, imob.logoArquivo).catch(() => {});
+    await log('identidade', 'Logo da conta atualizada', null, imob._id);
+    res.json({ logoUrl: logoTenant.urlLogo({ _id: imob._id, logoArquivo: arquivo, logoMime: logo.mime, logoAtualizadoEm: agora }) });
+  } catch(e) { res.status(500).json({ erro: 'Erro interno.' }); }
+});
+
+app.delete('/api/minha-identidade/logo', authMiddleware(['admin']), async (req, res) => {
+  try {
+    const imob = await tenantEditavel(req, res);
+    if (!imob) return;
+    if (imob.logoArquivo) {
+      await db.imobiliarias.update({ _id: imob._id }, { $unset: { logoArquivo: true, logoMime: true, logoAtualizadoEm: true }, $set: { atualizadoEm: new Date().toISOString() } });
+      await logoTenant.removerArquivo(STORAGE_BASE, imob._id, imob.logoArquivo).catch(() => {});
+      await log('identidade', 'Logo da conta removida', null, imob._id);
+    }
+    res.json({ logoUrl: null });
+  } catch(e) { res.status(500).json({ erro: 'Erro interno.' }); }
+});
+
+// Logo pública do tenant (identidade exibida a proprietários): só a logo
+// cadastrada, com o MIME gravado, lida de storage/marcas/<id>/.
+app.get('/api/logos/:tenantId', async (req, res) => {
+  try {
+    const { tenantId } = req.params;
+    if (!/^[A-Za-z0-9]{8,32}$/.test(tenantId)) return res.status(404).end();
+    const imob = await db.imobiliarias.findOne({ _id: tenantId });
+    const buffer = await logoTenant.lerLogo(STORAGE_BASE, imob);
+    if (!buffer) return res.status(404).end();
+    res.set({ 'Content-Type': imob.logoMime, 'X-Content-Type-Options': 'nosniff', 'Content-Disposition': 'inline', 'Cache-Control': 'public, max-age=300' });
+    res.end(buffer);
+  } catch(e) { res.status(500).end(); }
+});
+
+// ═══════════════════════════════════════════════════════
+// RECUPERAÇÃO DE SENHA (M9-04)
+// ═══════════════════════════════════════════════════════
+// O token só existe no e-mail; o banco guarda o SHA-256. A resposta pública é
+// sempre a mesma (sem enumeração) e o envio é assíncrono. Um pedido ativo por
+// usuário, intervalo mínimo de 60 s, validade de 30 min.
+const RESET_VALIDADE_MS = 30 * 60 * 1000;
+const RESET_INTERVALO_MS = 60 * 1000;
+const RESPOSTA_ESQUECI_SENHA = 'Se existir uma conta com este e-mail, enviaremos as instruções para redefinir sua senha.';
+const ERRO_LINK_RESET = 'Link inválido ou expirado. Solicite uma nova redefinição de senha.';
+const resetLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 5, message: { erro: 'Muitas tentativas. Aguarde 15 minutos.' } });
+db.resetSenha.ensureIndex({ fieldName: 'tokenHash', unique: true });
+const hashTokenReset = (token) => crypto.createHash('sha256').update(token).digest('hex');
+
+async function processarEsqueciSenha(email, baseUrl) {
+  const usuario = await db.usuarios.findOne({ email, ativo: true });
+  if (!usuario || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(usuario.email)) return;
+  const agora = Date.now();
+  const recente = await db.resetSenha.findOne({ usuarioId: usuario._id, criadoEm: { $gt: new Date(agora - RESET_INTERVALO_MS).toISOString() } });
+  if (recente) return;
+  if (!process.env.BREVO_API_KEY || !process.env.BREVO_SENDER) {
+    await log('aviso', 'Recuperação de senha solicitada sem e-mail configurado');
+    return;
+  }
+  const criadoEm = new Date(agora).toISOString();
+  await db.resetSenha.update({ usuarioId: usuario._id, usadoEm: null }, { $set: { usadoEm: criadoEm } }, { multi: true });
+  const token = crypto.randomBytes(32).toString('base64url');
+  await db.resetSenha.insert({ tokenHash: hashTokenReset(token), usuarioId: usuario._id, criadoEm,
+    expiraEm: new Date(agora + RESET_VALIDADE_MS).toISOString(), usadoEm: null });
+  const link = `${baseUrl}/redefinir-senha#${token}`;
+  const saudacao = usuario.nome ? `Olá, ${usuario.nome}!` : 'Olá!';
+  const corpo = 'Recebemos um pedido para redefinir a senha da sua conta no AGEMOB.';
+  const aviso = 'Se você não fez este pedido, ignore este e-mail — sua senha atual continua valendo.';
+  const texto = `${saudacao}\n\n${corpo}\n\nPara criar uma nova senha, acesse o link abaixo (válido por 30 minutos):\n${link}\n\n${aviso}\n\nEquipe AGEMOB`;
+  const html = `<p>${escaparHtmlEmail(saudacao)}</p><p>${escaparHtmlEmail(corpo)}</p>`
+    + `<p><a href="${escaparHtmlEmail(link)}">Criar nova senha</a> (válido por 30 minutos)</p><p>${escaparHtmlEmail(aviso)}</p><p>Equipe AGEMOB</p>`;
+  await enviarEmailBrevo(usuario.email, 'Redefinição de senha — AGEMOB', texto, html, null);
+}
+
+app.post('/api/auth/esqueci-senha', resetLimiter, (req, res) => {
+  const email = typeof req.body?.email === 'string' ? req.body.email.toLowerCase().trim() : '';
+  res.json({ ok: true, mensagem: RESPOSTA_ESQUECI_SENHA });
+  if (!email || email.length > 254) return;
+  processarEsqueciSenha(email, getBaseUrl(req)).catch(() => log('erro', 'Falha ao processar recuperação de senha'));
+});
+
+app.post('/api/auth/redefinir-senha', async (req, res) => {
+  try {
+    const { token, senha } = req.body || {};
+    if (typeof token !== 'string' || !/^[A-Za-z0-9_-]{43}$/.test(token)) return res.status(400).json({ erro: ERRO_LINK_RESET });
+    if (typeof senha !== 'string' || senha.length < 6) return res.status(422).json({ erro: 'A senha deve ter pelo menos 6 caracteres.' });
+    const tokenHash = hashTokenReset(token);
+    const agora = new Date().toISOString();
+    // Consumo atômico: só um uso, só dentro da validade.
+    const n = await db.resetSenha.update({ tokenHash, usadoEm: null, expiraEm: { $gt: agora } }, { $set: { usadoEm: agora } });
+    if (n !== 1) return res.status(400).json({ erro: ERRO_LINK_RESET });
+    const reg = await db.resetSenha.findOne({ tokenHash });
+    const usuario = reg ? await db.usuarios.findOne({ _id: reg.usuarioId, ativo: true }) : null;
+    if (!usuario) return res.status(400).json({ erro: ERRO_LINK_RESET });
+    await db.usuarios.update({ _id: usuario._id }, { $set: { senha: await bcrypt.hash(senha, 10), atualizadoEm: agora } });
+    await db.resetSenha.update({ usuarioId: usuario._id, usadoEm: null }, { $set: { usadoEm: agora } }, { multi: true });
+    await log('auth', 'Senha redefinida por recuperação', null, usuario.imobiliariaId || null);
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ erro: 'Erro interno.' }); }
+});
+
+// ═══════════════════════════════════════════════════════
+// BOAS-VINDAS (M9-04) — só cadastro pela landing; assíncrono, nunca afeta o cadastro
+// ═══════════════════════════════════════════════════════
+async function enviarBoasVindas({ email, responsavel, nomeConta, tipo, imobiliariaId, baseUrl }) {
+  try {
+    if (!process.env.BREVO_API_KEY || !process.env.BREVO_SENDER) return;
+    const saudacao = `Olá, ${responsavel}!`;
+    const conta = tipo === 'corretor' ? 'Sua conta no AGEMOB está pronta.' : `A conta da ${nomeConta} no AGEMOB está pronta.`;
+    const trial = 'Seu teste grátis começou: 1 autorização grátis ou 7 dias, o que acontecer primeiro.';
+    const texto = `${saudacao}\n\n${conta}\n\n${trial}\n\nAcesse: ${baseUrl}\n\nEquipe AGEMOB`;
+    const html = [saudacao, conta, trial].map(t => `<p>${escaparHtmlEmail(t)}</p>`).join('')
+      + `<p>Acesse: <a href="${escaparHtmlEmail(baseUrl)}">${escaparHtmlEmail(baseUrl)}</a></p><p>Equipe AGEMOB</p>`;
+    await enviarEmailBrevo(email, 'Bem-vindo(a) ao AGEMOB', texto, html, null);
+  } catch(e) {
+    await log('aviso', 'Falha no envio do e-mail de boas-vindas', null, imobiliariaId);
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// CONFIGURAÇÃO PÚBLICA (M9-04) — contato Corporate
+// ═══════════════════════════════════════════════════════
+// Só https:// ou mailto:. Inválido = não configurado (aviso, não fatal).
+function lerContatoCorporate(valor) {
+  const v = (valor || '').trim();
+  if (!v) return null;
+  if (/^mailto:[^\s@]+@[^\s@]+\.[^\s@]+$/i.test(v)) return v;
+  try {
+    const u = new URL(v);
+    if (u.protocol === 'https:' && !u.username && !u.password) return u.href;
+  } catch {}
+  console.warn('Aviso: CORPORATE_CONTACT_URL inválida — contato Corporate desativado.');
+  return null;
+}
+const CONTATO_CORPORATE = lerContatoCorporate(process.env.CORPORATE_CONTACT_URL);
+app.get('/api/config-publica', (_req, res) => res.json({ contatoCorporate: CONTATO_CORPORATE }));
 
 // ═══════════════════════════════════════════════════════
 // PAGAMENTOS — InfinitePay (M9-02). Antes do catch-all.
