@@ -67,7 +67,7 @@ const Auth = {
   token: localStorage.getItem('agemob_token'),
   headers() { return { 'Content-Type':'application/json', 'Authorization': `Bearer ${this.token}` }; }
 };
-if(!Auth.token) window.location.href = '/';
+if(!Auth.token) window.location.href = '/login';
 
 const esc = (v) => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const brl = (v) => 'R$ ' + Number(v).toFixed(2).replace('.',',');
@@ -82,7 +82,7 @@ function mostrarErro(msg){
 async function init(){
   try {
     const r = await fetch('/api/pagamentos/planos', { headers: Auth.headers() });
-    if(r.status === 401){ window.location.href = '/'; return; }
+    if(r.status === 401){ window.location.href = '/login'; return; }
     const d = await r.json();
     if(!r.ok) throw new Error(d.erro || 'Erro ao carregar planos.');
     planos = d;

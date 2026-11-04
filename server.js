@@ -300,7 +300,7 @@ const LIMITE_BODY_HTTP_BYTES =
   3 * 1024 * 1024;
 
 app.use(express.json({ limit: LIMITE_BODY_HTTP_BYTES }));
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(__dirname, 'public'), { index: 'landing.html' }));
 
 // Rate limiting — proteção brute force
 const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 20, message: { erro: 'Muitas tentativas. Aguarde 15 minutos.' } });
@@ -3497,9 +3497,9 @@ async function enviarBoasVindas({ email, responsavel, nomeConta, tipo, imobiliar
     const saudacao = `Olá, ${responsavel}!`;
     const conta = tipo === 'corretor' ? 'Sua conta no AGEMOB está pronta.' : `A conta da ${nomeConta} no AGEMOB está pronta.`;
     const trial = 'Seu teste grátis começou: 1 autorização grátis ou 7 dias, o que acontecer primeiro.';
-    const texto = `${saudacao}\n\n${conta}\n\n${trial}\n\nAcesse: ${baseUrl}\n\nEquipe AGEMOB`;
+    const texto = `${saudacao}\n\n${conta}\n\n${trial}\n\nAcesse: ${baseUrl}/login\n\nEquipe AGEMOB`;
     const html = [saudacao, conta, trial].map(t => `<p>${escaparHtmlEmail(t)}</p>`).join('')
-      + `<p>Acesse: <a href="${escaparHtmlEmail(baseUrl)}">${escaparHtmlEmail(baseUrl)}</a></p><p>Equipe AGEMOB</p>`;
+      + `<p>Acesse: <a href="${escaparHtmlEmail(baseUrl + '/login')}">${escaparHtmlEmail(baseUrl + '/login')}</a></p><p>Equipe AGEMOB</p>`;
     await enviarEmailBrevo(email, 'Bem-vindo(a) ao AGEMOB', texto, html, null);
   } catch(e) {
     await log('aviso', 'Falha no envio do e-mail de boas-vindas', null, imobiliariaId);
