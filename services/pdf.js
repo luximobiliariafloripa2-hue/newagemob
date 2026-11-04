@@ -361,7 +361,9 @@ function desenharDocumento(doc, aut, imob, ev) {
   }
 
   titulo('5. ASSINATURA ELETRÔNICA');
-  paragrafo('Este documento será assinado eletronicamente, atendendo aos requisitos de integridade, autenticidade e não repúdio previstos na legislação brasileira (MP 2.200-2/2001 e Lei 14.063/2020). A assinatura e o log de evidências integram este instrumento.');
+  // O PDF oficial só é emitido após a assinatura registrada pelo servidor:
+  // o tempo verbal acompanha o estado comprovado (assinadoEm do servidor).
+  paragrafo(`Este documento ${assinatura ? 'foi assinado' : 'será assinado'} eletronicamente, atendendo aos requisitos de integridade, autenticidade e não repúdio previstos na legislação brasileira (MP 2.200-2/2001 e Lei 14.063/2020). A assinatura e o log de evidências integram este instrumento.`);
 
   // ── 6. Assinatura e validação: bloco único, nunca partido ──
   const imgAssinatura = imagens.assinatura;
@@ -428,7 +430,7 @@ function desenharDocumento(doc, aut, imob, ev) {
   linha('Valor:', BRL(imv.valor));
 
   titulo('REGISTRO DO SERVIDOR NO MOMENTO DA ASSINATURA');
-  if (assinatura) linha('Data e hora:', `${assinatura.completo} (horário de Brasília)`);
+  if (assinatura) linha('Data e hora da assinatura:', `${assinatura.completo} (horário de Brasília)`);
   if (ev.servidor?.ip) linha('Endereço IP da conexão:', ev.servidor.ip);
   const ua = descreverUserAgent(ev.servidor?.userAgent);
   if (ua) {
