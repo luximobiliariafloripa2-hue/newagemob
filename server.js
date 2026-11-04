@@ -1652,7 +1652,10 @@ function adaptarParaPDF(aut, imob) {
 // Gera o PDF oficial da autorização assinada e salva em storage/assinados/.
 // Falha aqui NÃO desfaz a assinatura já persistida (mesma tolerância a erro já
 // usada hoje para a escrita paralela no Firebase) — apenas registra aviso no log.
-async function gerarESalvarPDFAssinatura(aut) {
+// evidenciasPdf: fatos da própria requisição de assinatura (imagens já
+// validadas pela ingestão, hashes calculados no servidor, IP/User-Agent da
+// conexão, eventos normalizados) — só lidos para o PDF, nada é persistido.
+async function gerarESalvarPDFAssinatura(aut, evidenciasPdf = {}) {
   try {
     const imob = aut.imobiliariaId
       ? await db.imobiliarias.findOne({ _id: aut.imobiliariaId })
@@ -1660,7 +1663,7 @@ async function gerarESalvarPDFAssinatura(aut) {
 
     const { autPdf, imobPdf } = adaptarParaPDF(aut, imob);
     imobPdf.logo = await logoTenant.lerLogo(STORAGE_BASE, imob);
-    const buffer = await gerarAutorizacaoPDF(autPdf, imobPdf);
+    const buffer = await gerarAutorizacaoPDF(autPdf, imobPdf, evidenciasPdf);
 
     const pdfPath = `assinados/${aut.codigo}.pdf`;
     await fs.promises.writeFile(path.join(STORAGE_BASE, pdfPath), buffer);
@@ -2764,8 +2767,9 @@ app.post('/api/autorizacoes/assinar', async (req, res) => {
     // estruturado; erro de gravação (EvidenceStorage) propaga para o catch
     // geral da rota (padrão já existente do arquivo).
     let resultadoIngestao;
+    let payloadEvidencias;
     try {
-      const payloadEvidencias = montarPayloadEvidencias({
+      payloadEvidencias = montarPayloadEvidencias({
         codigo,
         imobiliariaIdCandidato: rascunho?.imobiliariaId,
         assinatura, selfie, documentos, assinantes
@@ -2828,7 +2832,23 @@ app.post('/api/autorizacoes/assinar', async (req, res) => {
       await db.autorizacoes.insert(aut);
     }
     eventosNormalizados.push(construirEventoBackend('assinatura_realizada', {}, contextoEventoBackend));
-    await gerarESalvarPDFAssinatura(aut);
+    // Imagens e arquivos vêm da ingestão já concluída (formato e conteúdo
+    // validados, SHA-256 calculado no servidor); facial/liveness declarados
+    // pelo cliente nunca vão para o PDF.
+    const itemEvidencia = (campo) => payloadEvidencias.itens.find(i => i.campo === campo && i.indice === null) || null;
+    await gerarESalvarPDFAssinatura(aut, {
+      servidor:  { assinadoEm: aut.assinadoEm, ip: req.ip, userAgent: req.get('user-agent') || null },
+      criadoEm:  rascunho.criadoEm || null,
+      arquivos:  aut.evidenciasRecebidas.arquivos,
+      imagens: {
+        assinatura: itemEvidencia('assinatura'),
+        selfie:     itemEvidencia('selfie'),
+        assinantes: payloadEvidencias.itens.filter(i => i.indice !== null)
+      },
+      declarados:     { otp: aut.validacoes.otp, dispositivo: aut.evidencias },
+      eventos:        eventosNormalizados,
+      hashEvidencias: aut.registroAssinatura.hashEvidencias
+    });
     await criarDossieDigital(aut, eventosNormalizados);
     // Alerta se imobiliariaId ficou null — indica link gerado sem salvar rascunho
     if (!aut.imobiliariaId) {

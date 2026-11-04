@@ -16,6 +16,7 @@
     "mercadopago": "^3.1.0",
     "nedb-promises": "^6.2.3",
     "pdfkit": "^0.19.0",
-    "pkijs": "3.4.1"
+    "pkijs": "3.4.1",
+    "qrcode": "1.5.4"
   }
 }
