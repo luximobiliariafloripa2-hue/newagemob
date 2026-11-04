@@ -1361,6 +1361,9 @@ function checkAuth(){
     document.getElementById('viewLogin').classList.add('hidden');
     // Super admin vê botão especial
     if (Auth.isSuperAdmin()) mostrarBotaoSuperAdmin();
+    // Requisições autenticadas só depois do token carregado (mesmo caminho do doLogin).
+    // Token inválido/expirado continua levando ao logout via 401.
+    else iniciarAtualizacaoRealtime();
   } else {
     document.getElementById('viewLogin').classList.remove('hidden');
   }
@@ -1728,8 +1731,8 @@ function renderTable(){
   }).join('');
 }
 // Só inicia o painel se NÃO for o fluxo do proprietário
+// Os dados autenticados são carregados por checkAuth()/doLogin(), com token.
 if(!isRotaProprietario()){
-  iniciarAtualizacaoRealtime();
   renderChart();
 }
 
