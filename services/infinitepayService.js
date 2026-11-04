@@ -22,7 +22,19 @@ class ErroInfinitepay extends Error {
 
 // Produção: API key e handle obrigatórios, URL sempre a oficial.
 // INFINITEPAY_API_URL só existe para o servidor fake de development/test.
+//
+// Homologação (M11): INFINITEPAY_DESATIVADO=true (exatamente "true") desliga o
+// gateway — credenciais não são exigidas nem usadas, nenhuma chamada externa
+// sai daqui e as rotas respondem 503. Vazio/ausente/"false" mantém o
+// comportamento normal; qualquer outro valor é erro (falha fechada).
 function carregarConfiguracao(env = process.env) {
+  const flagDesativado = env.INFINITEPAY_DESATIVADO;
+  if (flagDesativado === 'true') {
+    return { desativado: true, configurado: false, apiKey: '', handle: '', apiUrl: URL_OFICIAL };
+  }
+  if (flagDesativado !== undefined && flagDesativado !== '' && flagDesativado !== 'false') {
+    throw new Error('INFINITEPAY_DESATIVADO_invalido');
+  }
   const producao = env.NODE_ENV === 'production';
   const apiKey = (env.INFINITEPAY_API_KEY || '').trim();
   const handle = (env.INFINITEPAY_HANDLE || '').trim();
@@ -40,7 +52,7 @@ function carregarConfiguracao(env = process.env) {
     if (u.protocol !== 'http:' && u.protocol !== 'https:') throw new Error('INFINITEPAY_API_URL_invalida');
     apiUrl = urlCustom.replace(/\/+$/, '');
   }
-  return { configurado: !!(apiKey && handle), apiKey, handle, apiUrl };
+  return { desativado: false, configurado: !!(apiKey && handle), apiKey, handle, apiUrl };
 }
 
 // O nome do campo da URL na resposta de POST /links não está documentado
@@ -75,7 +87,11 @@ function avaliarConfirmacao(resposta, valorCentavos) {
 }
 
 function criarInfinitepayService(config) {
+  const desativado = config.desativado === true;
+  const configurado = !desativado && config.configurado === true;
+
   async function post(caminho, corpo) {
+    if (!configurado) throw new ErroInfinitepay(desativado ? 'desativado' : 'nao_configurado');
     const controle = new AbortController();
     const timer = setTimeout(() => controle.abort(), TIMEOUT_MS);
     let r;
@@ -100,7 +116,7 @@ function criarInfinitepayService(config) {
   }
 
   async function criarLink({ orderNsu, valorCentavos, descricao, redirectUrl, webhookUrl, cliente, validoAte }) {
-    if (!config.configurado) throw new ErroInfinitepay('nao_configurado');
+    if (!configurado) throw new ErroInfinitepay(desativado ? 'desativado' : 'nao_configurado');
     const corpo = {
       handle: config.handle,
       items: [{ quantity: 1, price: valorCentavos, description: descricao }],
@@ -123,14 +139,14 @@ function criarInfinitepayService(config) {
   // Lança ErroInfinitepay só em falha temporária/de transporte; pagamento não
   // confirmado volta como { pago:false, motivo }.
   async function verificarPagamento({ orderNsu, transactionNsu, slug, valorCentavos }) {
-    if (!config.configurado) throw new ErroInfinitepay('nao_configurado');
+    if (!configurado) throw new ErroInfinitepay(desativado ? 'desativado' : 'nao_configurado');
     const resposta = await post('/payment_check', {
       handle: config.handle, order_nsu: orderNsu, transaction_nsu: transactionNsu, slug
     });
     return avaliarConfirmacao(resposta, valorCentavos);
   }
 
-  return { configurado: config.configurado, criarLink, verificarPagamento };
+  return { desativado, configurado, criarLink, verificarPagamento };
 }
 
 module.exports = {

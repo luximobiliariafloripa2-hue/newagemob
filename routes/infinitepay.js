@@ -15,6 +15,9 @@
 // Aplicação do plano: aplicacaoStatus pending → processing (claim atômico)
 // → applied | failed. failed/processing parados exigem reconciliação manual;
 // nada é reaplicado automaticamente.
+//
+// Com INFINITEPAY_DESATIVADO=true (homologação, M11): /criar e o webhook
+// respondem 503 sem gravar nada; a consulta de pedido só lê o registro local.
 
 const express = require('express');
 const crypto = require('crypto');
@@ -24,6 +27,7 @@ const RE_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f
 const RE_ID_EXTERNO = /^[A-Za-z0-9_-]{1,100}$/;
 const VALIDADE_LINK_MS = 48 * 60 * 60 * 1000;
 const VALOR_MINIMO_CENTAVOS = 100;
+const MSG_DESATIVADO = 'Pagamento temporariamente indisponível: ambiente de homologação, sem cobrança.';
 
 function valorCentavosVendavel(plano) {
   if (!plano || plano.ativo !== true || plano.slug === 'trial') return null;
@@ -114,6 +118,7 @@ module.exports = function rotasInfinitepay({ db, authMiddleware, carregarAcessoT
       if (!imob || acesso.statusEfetivo === 'suspenso' || acesso.statusEfetivo === 'desativado') {
         return res.status(403).json({ erro: acesso.motivo || 'Conta indisponível.' });
       }
+      if (infinitepay.desativado) return res.status(503).json({ erro: MSG_DESATIVADO });
       if (!infinitepay.configurado) return res.status(503).json({ erro: 'Pagamento indisponível no momento.' });
 
       const { planoId } = req.body || {};
@@ -201,6 +206,8 @@ module.exports = function rotasInfinitepay({ db, authMiddleware, carregarAcessoT
   const webhooks = express.Router();
 
   webhooks.post('/infinitepay', async (req, res) => {
+    // Desativado (homologação): nada é lido nem gravado.
+    if (infinitepay.desativado) return res.sendStatus(503);
     const corpo = req.body && typeof req.body === 'object' ? req.body : {};
     const { order_nsu: orderNsu, transaction_nsu: transactionNsu, invoice_slug: slug } = corpo;
     if (typeof orderNsu !== 'string' || !RE_UUID.test(orderNsu)

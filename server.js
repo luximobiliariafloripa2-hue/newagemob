@@ -276,6 +276,9 @@ try {
   console.error(`ERRO FATAL: configuracao InfinitePay invalida (${e.message}).`);
   process.exit(1);
 }
+if (infinitepay.desativado) {
+  console.warn('AVISO: InfinitePay DESATIVADA (INFINITEPAY_DESATIVADO=true) — homologacao, sem cobranca. Remover antes do lancamento.');
+}
 
 function getBaseUrl(req) {
   if (baseUrlProducao) return baseUrlProducao;
