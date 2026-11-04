@@ -604,7 +604,7 @@ function fecharCadastro(){ document.getElementById('modalCadastro').classList.re
 function mostrar(id){
   ['telaEscolha','formImobiliaria','formCorretor','sucessoCadastro'].forEach(i=>{
     const el=document.getElementById(i);
-    if(el) el.style.display = i===id ? '' : 'none';
+    if(el) el.style.display = i===id ? 'block' : 'none';
   });
 }
 function escolherTipo(tipo){ mostrar(tipo==='imobiliaria'?'formImobiliaria':'formCorretor'); }
@@ -619,6 +619,12 @@ function maskCNPJ(el){
     .replace(/(\d{3})(\d)/,'$1.$2')
     .replace(/(\d{3})(\d)/,'$1/$2')
     .replace(/(\d{4})(\d{1,2})$/,'$1-$2');
+}
+function maskCPF(el){
+  el.value = el.value.replace(/\D/g,'').slice(0,11)
+    .replace(/(\d{3})(\d)/,'$1.$2')
+    .replace(/(\d{3})(\d)/,'$1.$2')
+    .replace(/(\d{3})(\d{1,2})$/,'$1-$2');
 }
 function maskTel(el){
   el.value = el.value.replace(/\D/g,'').slice(0,11)
