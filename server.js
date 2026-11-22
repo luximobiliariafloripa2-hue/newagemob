@@ -37,6 +37,8 @@ const { carregarConfiguracaoTsa, solicitarCarimboTempo, verificarTokenArmazenado
 const { DIAS_TRIAL, avaliarAcessoImobiliaria, normalizarStatusFinanceiro } = require('./src/services/acesso/AcessoTenant');
 const { carregarConfiguracao: carregarConfiguracaoInfinitepay, criarInfinitepayService } = require('./services/infinitepayService');
 const rotasInfinitepay = require('./routes/infinitepay');
+const { carregarConfiguracao: carregarConfiguracaoGoogle, criarGoogleOidc } = require('./services/googleOidc');
+const rotasAuthGoogle = require('./routes/authGoogle');
 const logoTenant = require('./services/logoTenant');
 
 const app  = express();
@@ -69,8 +71,37 @@ const db = {
   pagamentos:          Datastore.create({ filename: path.join(DATA_DIR, 'pagamentos.db'),          autoload: true }),
   resetSenha:          Datastore.create({ filename: path.join(DATA_DIR, 'reset_senha.db'),         autoload: true }),
   config:              Datastore.create({ filename: path.join(DATA_DIR, 'config.db'),              autoload: true }),
-  logs:                Datastore.create({ filename: path.join(DATA_DIR, 'logs.db'),                autoload: true })
+  logs:                Datastore.create({ filename: path.join(DATA_DIR, 'logs.db'),                autoload: true }),
+  // Login com Google (M11 Fase B): vínculos provedor+sub → usuário, e estados/
+  // resultados OAuth de uso único (curta duração). Coleções novas e isoladas.
+  identidades:         Datastore.create({ filename: path.join(DATA_DIR, 'identidades.db'),         autoload: true }),
+  oauth:               Datastore.create({ filename: path.join(DATA_DIR, 'oauth.db'),               autoload: true })
 };
+// Uma identidade de provedor (ex.: "google:<sub>") só pode apontar para um usuário.
+// Índices únicos do M11 — criados no startup DEPOIS que os dados terminaram de
+// carregar (garantirIndicesUnicos, chamada após o seed). Criados antes da carga,
+// o NeDB gravaria o índice com a coleção ainda vazia e, havendo duplicidade
+// antiga no arquivo, a carga falharia e derrubaria o servidor. Aqui nunca
+// rejeitam: com duplicidade o índice simplesmente não é criado (nada é gravado),
+// o servidor segue protegido pela trava de e-mail e o aviso pede a auditoria.
+// A mensagem do NeDB traz o valor duplicado; só o tipo do erro vai ao log.
+async function garantirIndicesUnicos() {
+  const indices = [
+    [db.identidades, { fieldName: 'chave', unique: true }, 'identidades.chave'],
+    // Uma conta de cada provedor por usuário ("google:<usuarioId>").
+    [db.identidades, { fieldName: 'usuarioProvedor', unique: true, sparse: true }, 'identidades.usuarioProvedor'],
+    // E-mail de login único.
+    [db.usuarios, { fieldName: 'email', unique: true, sparse: true }, 'usuarios.email']
+  ];
+  for (const [colecao, opcoes, nome] of indices) {
+    try {
+      await colecao.findOne({}); // aguarda a carga completa do arquivo
+      await colecao.ensureIndex(opcoes);
+    } catch (e) {
+      console.warn(`AVISO: indice unico de ${nome} nao criado (${e.errorType || 'erro'}). Rode scripts/auditar-duplicidades.js.`);
+    }
+  }
+}
 
 // Índice único no campo "codigo" — última linha de defesa contra colisão/duplicidade
 // entre autorizações (inclusive entre imobiliárias diferentes). `sparse` evita
@@ -280,6 +311,28 @@ if (infinitepay.desativado) {
   console.warn('AVISO: InfinitePay DESATIVADA (INFINITEPAY_DESATIVADO=true) — homologacao, sem cobranca. Remover antes do lancamento.');
 }
 
+// Login com Google (M11 Fase B). Só ativa com AUTH_GOOGLE_ATIVO=true e as duas
+// credenciais; sem elas fica desativado (o botão não aparece). Valor inválido ou
+// URL de provedor de teste em produção impedem o startup (falha fechada).
+let googleOidc = null;
+let oauthTtlTesteMs = null;
+try {
+  const cfgGoogle = carregarConfiguracaoGoogle(process.env);
+  if (cfgGoogle.ativo) {
+    googleOidc = criarGoogleOidc(cfgGoogle);
+    if (cfgGoogle.teste) {
+      console.warn('AVISO: Login com Google usando provedor de TESTE (GOOGLE_OIDC_TEST_URL) — somente testes automatizados.');
+      const ttl = Number(process.env.OAUTH_TTL_TESTE_MS);
+      if (Number.isInteger(ttl) && ttl >= 1000) oauthTtlTesteMs = ttl;
+    }
+  } else if (cfgGoogle.motivo === 'credenciais_ausentes') {
+    console.warn('AVISO: AUTH_GOOGLE_ATIVO=true sem GOOGLE_CLIENT_ID/GOOGLE_CLIENT_SECRET — login com Google desativado.');
+  }
+} catch (e) {
+  console.error(`ERRO FATAL: configuracao do login com Google invalida (${e.codigo || 'desconhecido'}).`);
+  process.exit(1);
+}
+
 function getBaseUrl(req) {
   if (baseUrlProducao) return baseUrlProducao;
   if (process.env.BASE_URL) return process.env.BASE_URL.replace(/\/$/, '');
@@ -381,7 +434,8 @@ app.post('/api/auth/login', async (req, res) => {
       return res.status(401).json({ erro: 'Credenciais inválidas.' });
     }
 
-    const ok = await bcrypt.compare(senha, user.senha);
+    // Conta criada só pelo Google não tem senha: mesma resposta de credencial inválida.
+    const ok = typeof user.senha === 'string' && user.senha ? await bcrypt.compare(senha, user.senha) : false;
 
     if (!ok) {
       return res.status(401).json({ erro: 'Credenciais inválidas.' });
@@ -1273,10 +1327,75 @@ function comTravaEmail(email, fn) { return comTrava('email:' + String(email || '
 // Toda escrita de assinatura de um tenant passa por esta trava (M11).
 function comTravaTenant(imobiliariaId, fn) { return comTrava('tenant:' + String(imobiliariaId || ''), fn); }
 
+// Desfaz uma conta parcialmente criada (tenant, usuários e assinatura).
+async function desfazerContaCriada(imobId) {
+  try { await db.subscriptions.remove({ imobiliariaId: imobId }, { multi: true }); } catch(_) {}
+  try { await db.usuarios.remove({ imobiliariaId: imobId }, { multi: true }); } catch(_) {}
+  try { await db.imobiliarias.remove({ _id: imobId }); } catch(_) {}
+}
+
+// Criação de conta nova em trial — rotina única do auto-cadastro (e-mail e
+// senha, M9) e do cadastro pelo Google (M11 Fase B). As validações de entrada
+// ficam em quem chama. senhaHash null = conta sem senha (só Google, até a pessoa
+// criar uma senha pela recuperação). Qualquer falha desfaz tudo e lança erro;
+// nunca sobra conta parcial. Retorna null se o plano trial não existir.
+async function criarContaTrial({ tipo, nome, cnpj, cpf, creci, responsavel, email, telefone, whatsapp, senhaHash, origem }) {
+  const planoTrial = await db.planos.findOne({ slug: 'trial' });
+  if (!planoTrial) return null;
+  let imobId = null;
+  try {
+    const slugBase = nome.toLowerCase().normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    const slug = slugBase + '-' + Date.now().toString(36);
+
+    // Nasce inativa: se qualquer passo abaixo falhar e o desfazer também
+    // falhar, a sobra nunca é uma conta operacional sem assinatura.
+    const criada = await db.imobiliarias.insert({
+      tipoCliente: tipo, nome, razaoSocial:nome, nomeFantasia:nome,
+      slug, cnpj: cnpj||'', cpf: cpf||'', creci: creci||'',
+      email, telefone:telefone||'', whatsapp:whatsapp||'',
+      responsavel:{ nome:responsavel, email },
+      corPrimaria:'#04273B', corSecundaria:'#C9A227',
+      planoId:planoTrial._id, planoSlug:planoTrial.slug, planoNome:planoTrial.nome,
+      limiteAutorizacoes:planoTrial.limite, creditosExtras:0,
+      status:'inativo', ativo:false, origem,
+      criadoEm:new Date().toISOString(), atualizadoEm:new Date().toISOString()
+    });
+    imobId = criada._id;
+
+    const usuario = await db.usuarios.insert({
+      nome:responsavel, email:email.toLowerCase().trim(), senha:senhaHash,
+      role:'admin', imobiliariaId:imobId, imobiliariaSlug:slug,
+      ativo:true, criadoEm:new Date().toISOString()
+    });
+
+    await SubscriptionService.criar(imobId, planoTrial._id, 'trial');
+    await db.imobiliarias.update({ _id: imobId }, { $set: { status:'ativo', ativo:true, atualizadoEm:new Date().toISOString() } });
+
+    const { imob, acesso } = await carregarAcessoTenant(imobId);
+    if (acesso.statusEfetivo !== 'trial_ativo') throw new Error('Trial não ficou válido após o cadastro.');
+    return { usuario, imob, acesso, planoTrial, slug, imobId };
+  } catch (e) {
+    if (imobId) await desfazerContaCriada(imobId);
+    throw e;
+  }
+}
+
+// Mesmo formato de sessão (JWT 8h + user) do login e do cadastro por e-mail.
+async function emitirSessaoUsuario(user) {
+  const imobiliaria = user.imobiliariaId ? await db.imobiliarias.findOne({ _id: user.imobiliariaId }) : null;
+  const token = jwt.sign({
+    userId: user._id, nome: user.nome, email: user.email, role: user.role,
+    imobiliariaId: user.imobiliariaId || null, imobiliariaSlug: user.imobiliariaSlug || null,
+    imobiliariaNome: imobiliaria?.nome || null
+  }, JWT_SECRET, { expiresIn: '8h' });
+  return { token, user: { _id: user._id, nome: user.nome, email: user.email, role: user.role,
+    imobiliariaId: user.imobiliariaId || null, imobiliariaSlug: user.imobiliariaSlug || null, imobiliaria } };
+}
+
 // Auto-cadastro publico via landing page — toda conta nova nasce em trial
 // (plano 'trial' de db.planos). O plano escolhido na landing não é aplicado.
 app.post('/api/cadastro', async (req, res) => {
-  const criados = { imob: null, usuario: null };
   try {
     const { tipoCliente, nome, cnpj, cpf, creci, responsavel, email, telefone, whatsapp, senha } = req.body;
     const tipo = tipoCliente === 'corretor'
@@ -1293,47 +1412,19 @@ app.post('/api/cadastro', async (req, res) => {
     if (senha.length < 6)
       return res.status(422).json({ erro: 'A senha deve ter pelo menos 6 caracteres.' });
 
-    const exEmail = await db.usuarios.findOne({ email: email.toLowerCase().trim() });
-    if (exEmail) return res.status(422).json({ erro: 'E-mail ja cadastrado.' });
-
-    const planoTrial = await db.planos.findOne({ slug: 'trial' });
-    if (!planoTrial) return res.status(503).json({ erro: 'Cadastro temporariamente indisponível. Tente novamente mais tarde.' });
-
-    const slugBase = nome.toLowerCase().normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-    const slug = slugBase + '-' + Date.now().toString(36);
-
-    // Nasce inativa: se qualquer passo abaixo falhar e o desfazer também
-    // falhar, a sobra nunca é uma conta operacional sem assinatura.
-    criados.imob = await db.imobiliarias.insert({
-      tipoCliente: tipo, nome, razaoSocial:nome, nomeFantasia:nome,
-      slug, cnpj: cnpj||'', cpf: cpf||'', creci: creci||'',
-      email, telefone:telefone||'', whatsapp:whatsapp||'',
-      responsavel:{ nome:responsavel, email },
-      corPrimaria:'#04273B', corSecundaria:'#C9A227',
-      planoId:planoTrial._id, planoSlug:planoTrial.slug, planoNome:planoTrial.nome,
-      limiteAutorizacoes:planoTrial.limite, creditosExtras:0,
-      status:'inativo', ativo:false, origem:'landing',
-      criadoEm:new Date().toISOString(), atualizadoEm:new Date().toISOString()
+    const senhaHash = await bcrypt.hash(senha, 10);
+    // Verificação + criação sob a trava do e-mail: cadastros simultâneos com o
+    // mesmo e-mail resultam em uma conta e um "E-mail ja cadastrado.".
+    const criada = await comTravaEmail(email, async () => {
+      if (await db.usuarios.findOne({ email: email.toLowerCase().trim() })) return 'duplicado';
+      return criarContaTrial({ tipo, nome, cnpj, cpf, creci, responsavel, email, telefone, whatsapp, senhaHash, origem: 'landing' });
     });
-    const imobId = criados.imob._id;
-
-    const hash = await bcrypt.hash(senha, 10);
-    criados.usuario = await db.usuarios.insert({
-      nome:responsavel, email:email.toLowerCase().trim(), senha:hash,
-      role:'admin', imobiliariaId:imobId, imobiliariaSlug:slug,
-      ativo:true, criadoEm:new Date().toISOString()
-    });
-
-    await SubscriptionService.criar(imobId, planoTrial._id, 'trial');
-    await db.imobiliarias.update({ _id: imobId }, { $set: { status:'ativo', ativo:true, atualizadoEm:new Date().toISOString() } });
-
-    const { imob, acesso } = await carregarAcessoTenant(imobId);
-    if (acesso.statusEfetivo !== 'trial_ativo') throw new Error('Trial não ficou válido após o cadastro.');
+    if (criada === 'duplicado') return res.status(422).json({ erro: 'E-mail ja cadastrado.' });
+    if (!criada) return res.status(503).json({ erro: 'Cadastro temporariamente indisponível. Tente novamente mais tarde.' });
+    const { usuario, imob, acesso, planoTrial, slug, imobId } = criada;
 
     await log('cadastro', `Novo cliente via landing (${tipo}): ${nome} (${email}) — trial`);
 
-    const usuario = criados.usuario;
     const token = jwt.sign({
       userId:usuario._id, nome:usuario.nome, email:usuario.email,
       role:'admin', imobiliariaId:imobId, imobiliariaSlug:slug, imobiliariaNome:nome
@@ -1346,12 +1437,7 @@ app.post('/api/cadastro', async (req, res) => {
     });
     enviarBoasVindas({ email: usuario.email, responsavel, nomeConta: nome, tipo, imobiliariaId: imobId, baseUrl: getBaseUrl(req) });
   } catch(e) {
-    // Desfaz o que foi criado; nunca devolve token de conta parcial.
-    if (criados.imob) {
-      try { await db.subscriptions.remove({ imobiliariaId: criados.imob._id }, { multi: true }); } catch(_) {}
-      try { await db.usuarios.remove({ imobiliariaId: criados.imob._id }, { multi: true }); } catch(_) {}
-      try { await db.imobiliarias.remove({ _id: criados.imob._id }); } catch(_) {}
-    }
+    // criarContaTrial já desfez o que criou; nunca devolve token de conta parcial.
     res.status(500).json({ erro: 'Falha ao criar conta. Tente novamente.' });
   }
 });
@@ -1469,17 +1555,18 @@ async function criarUsuarioTenant(actor, dados, role) {
   const autorizacao = await autorizarCriacaoUsuario(actor);
   if (!autorizacao.permitido) return { ok:false, status:autorizacao.status, erro:autorizacao.erro };
 
-  const exEmail = await db.usuarios.findOne({ email: email.toLowerCase().trim() });
-  if (exEmail) return { ok:false, status:422, erro:'E-mail já cadastrado.' };
-
   const hash = await bcrypt.hash(senha, 10);
-  const usuario = await db.usuarios.insert({
-    nome, email: email.toLowerCase().trim(), senha: hash,
-    role, creci: creci||'', telefone: telefone||'',
-    imobiliariaId: actor.imobiliariaId, imobiliariaSlug: actor.imobiliariaSlug,
-    convidadoPor: actor.userId,
-    ativo: true, criadoEm: new Date().toISOString(), atualizadoEm: new Date().toISOString()
+  const usuario = await comTravaEmail(email, async () => {
+    if (await db.usuarios.findOne({ email: email.toLowerCase().trim() })) return null;
+    return db.usuarios.insert({
+      nome, email: email.toLowerCase().trim(), senha: hash,
+      role, creci: creci||'', telefone: telefone||'',
+      imobiliariaId: actor.imobiliariaId, imobiliariaSlug: actor.imobiliariaSlug,
+      convidadoPor: actor.userId,
+      ativo: true, criadoEm: new Date().toISOString(), atualizadoEm: new Date().toISOString()
+    });
   });
+  if (!usuario) return { ok:false, status:422, erro:'E-mail já cadastrado.' };
 
   await log('corretor', `Corretor criado: ${nome} (${email})`, null, actor.imobiliariaId);
   const { senha:_senha, ...usuarioSafe } = usuario;
@@ -1535,18 +1622,19 @@ app.patch('/api/corretores/:id', authMiddleware(['admin']), async (req, res) => 
     const { nome, email, telefone, creci } = req.body;
     const novoEmail = email !== undefined ? email.toLowerCase().trim() : undefined;
 
-    if (novoEmail && novoEmail !== alvo.email) {
-      const exEmail = await db.usuarios.findOne({ email: novoEmail });
-      if (exEmail) return res.status(422).json({ erro: 'E-mail já cadastrado.' });
-    }
-
     const upd = { atualizadoEm: new Date().toISOString() };
     if (nome !== undefined)      upd.nome = nome;
     if (novoEmail !== undefined) upd.email = novoEmail;
     if (telefone !== undefined)  upd.telefone = telefone;
     if (creci !== undefined)     upd.creci = creci;
 
-    await db.usuarios.update({ _id: alvo._id }, { $set: upd });
+    // Troca de e-mail: verificação e gravação sob a trava do novo e-mail.
+    const gravado = await comTravaEmail(novoEmail || alvo.email, async () => {
+      if (novoEmail && novoEmail !== alvo.email && await db.usuarios.findOne({ email: novoEmail })) return false;
+      await db.usuarios.update({ _id: alvo._id }, { $set: upd });
+      return true;
+    });
+    if (!gravado) return res.status(422).json({ erro: 'E-mail já cadastrado.' });
     const atualizado = { ...alvo, ...upd };
 
     await log('corretor', `Corretor atualizado: ${atualizado.nome} (${atualizado.email})`, null, req.user.imobiliariaId);
@@ -3681,7 +3769,7 @@ function lerContatoCorporate(valor) {
   return null;
 }
 const CONTATO_CORPORATE = lerContatoCorporate(process.env.CORPORATE_CONTACT_URL);
-app.get('/api/config-publica', (_req, res) => res.json({ contatoCorporate: CONTATO_CORPORATE }));
+app.get('/api/config-publica', (_req, res) => res.json({ contatoCorporate: CONTATO_CORPORATE, authGoogle: !!googleOidc }));
 
 // ═══════════════════════════════════════════════════════
 // PAGAMENTOS — InfinitePay (M9-02). Antes do catch-all.
@@ -3692,6 +3780,19 @@ const infinitepayRotas = rotasInfinitepay({
 });
 app.use('/api/pagamentos', infinitepayRotas.pagamentos);
 app.use('/api/webhooks', infinitepayRotas.webhooks);
+
+// ═══════════════════════════════════════════════════════
+// LOGIN COM GOOGLE (M11 Fase B) — /api/oauth/google/*. Antes do catch-all.
+// Limitador próprio: não consome a cota do login por senha (/api/auth).
+// ═══════════════════════════════════════════════════════
+const oauthLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 60, message: { erro: 'Muitas tentativas. Aguarde 15 minutos.' } });
+const authGoogle = rotasAuthGoogle({
+  db, log, getBaseUrl, carregarAcessoTenant, criarContaTrial, desfazerContaCriada, emitirSessaoUsuario,
+  enviarBoasVindas, bcrypt, google: googleOidc, producao: process.env.NODE_ENV === 'production', ttlTesteMs: oauthTtlTesteMs,
+  comTravaEmail
+});
+app.use('/api/oauth/google', oauthLimiter, authGoogle.router);
+setInterval(authGoogle.limparExpirados, 30 * 60 * 1000).unref();
 
 // ═══════════════════════════════════════════════════════
 // SPA CATCH-ALL
@@ -3707,7 +3808,7 @@ app.get('/{*path}', (req, res) => {
 // ═══════════════════════════════════════════════════════
 // START
 // ═══════════════════════════════════════════════════════
-seed().then(() => {
+seed().then(garantirIndicesUnicos).then(() => {
   app.listen(PORT, () => {
     console.log(`\n  AGEMOB v2 rodando em http://localhost:${PORT}`);
     console.log(`  BASE_URL: ${process.env.BASE_URL || '(automático)'}\n`);
