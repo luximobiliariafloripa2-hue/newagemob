@@ -577,7 +577,7 @@ label{display:block;font-size:13px;font-weight:600;color:var(--ink-2);margin-bot
       <div class="grid2">
         <div class="field" style="grid-column:1/-1"><label>Nome completo *</label><input id="ni_nome_corr" placeholder="Ex.: João da Silva"></div>
         <div class="field"><label>CPF *</label><input id="ni_cpf_corr" placeholder="000.000.000-00" oninput="maskCPF(this)" maxlength="14"></div>
-        <div class="field"><label>CRECI *</label><input id="ni_creci_corr" placeholder="Ex.: 12345-F"></div>
+        <div class="field"><label for="ni_creci_corr">CRECI <span style="font-weight:500;color:var(--ink-3)">(opcional)</span></label><input id="ni_creci_corr" placeholder="Ex.: 12345-F" aria-describedby="ni_creci_corr_dica"><p id="ni_creci_corr_dica" style="font-size:11.5px;color:var(--ink-3);margin-top:4px">Pode ser informado depois pelo corretor. É obrigatório antes da primeira autorização.</p></div>
         <div class="field"><label>Telefone</label><input id="ni_tel_corr" placeholder="(48) 9 9999-9999" oninput="maskTel(this)" maxlength="16"></div>
         <div class="field"><label>WhatsApp</label><input id="ni_zap_corr" placeholder="(48) 9 9999-9999" oninput="maskTel(this)" maxlength="16"></div>
         <div class="field"><label>E-mail *</label><input id="ni_email_corr" type="email" placeholder="corretor@email.com"></div>
@@ -655,6 +655,12 @@ label{display:block;font-size:13px;font-weight:600;color:var(--ink-2);margin-bot
       <button class="btn btn-ghost btn-lg" onclick="abrirIdentidadeConta()">🖼 Identidade</button>
       <button class="btn btn-primary btn-lg" onclick="novaAutorizacao()">+ NOVA AUTORIZAÇÃO</button>
     </div>
+  </div>
+
+  <!-- CRECI pendente do corretor autônomo (M11 Fase A) -->
+  <div id="creciBanner" class="hidden" role="status" style="margin-bottom:14px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:14px 18px;border-radius:14px;background:#FFF8E6;border:1.5px solid #F1D58A;color:#6B5208">
+    <div style="flex:1;min-width:220px"><b style="color:var(--brand)">Complete seu perfil</b><br><span id="creciBannerTexto" style="font-size:13.5px">Informe seu CRECI para criar autorizações de venda.</span></div>
+    <button class="btn btn-primary" id="creciBannerBtn" onclick="abrirModalCreci()">Informar CRECI</button>
   </div>
 
   <!-- Barra de consumo do plano -->
@@ -963,6 +969,19 @@ label{display:block;font-size:13px;font-weight:600;color:var(--ink-2);margin-bot
 
 
 <!-- ====================== MODAL: IDENTIDADE DA CONTA ====================== -->
+<div class="overlay" id="modalCreci" style="z-index:120" role="dialog" aria-modal="true" aria-labelledby="creciTitulo">
+  <div class="modal" style="max-width:440px">
+    <h2 id="creciTitulo">Informe seu CRECI</h2>
+    <p class="hint" style="margin:6px 0 16px">O CRECI identifica você como corretor autônomo no PDF oficial e na página do proprietário. Ele é obrigatório para criar autorizações de venda.</p>
+    <div class="field"><label for="creciInput">CRECI *</label><input id="creciInput" placeholder="Ex.: 12345-F" maxlength="20" autocomplete="off" onkeydown="if(event.key==='Enter')salvarCreci()"></div>
+    <p id="creciErro" role="alert" style="font-size:12.5px;color:var(--red);min-height:18px;margin-top:4px"></p>
+    <div style="display:flex;gap:10px;margin-top:12px;justify-content:flex-end;flex-wrap:wrap">
+      <button class="btn btn-ghost" onclick="fecharModalCreci()">Agora não</button>
+      <button class="btn btn-primary" id="creciSalvar" onclick="salvarCreci()">Salvar CRECI</button>
+    </div>
+  </div>
+</div>
+
 <div class="overlay" id="modalIdentidade">
   <div class="modal" style="max-width:460px">
     <h2>Identidade da conta</h2>
@@ -976,6 +995,10 @@ label{display:block;font-size:13px;font-weight:600;color:var(--ink-2);margin-bot
       <input type="file" id="identArquivo" accept="image/png,image/jpeg" onchange="previewLogoConta(this)">
     </div>
     <p id="identErro" style="font-size:12.5px;color:var(--red);margin-top:8px"></p>
+    <div id="identCreci" class="hidden" style="margin-top:12px;padding:12px 14px;border-radius:12px;background:var(--bg,#F6F7F9);font-size:13.5px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <span style="flex:1">CRECI: <b id="identCreciValor"></b></span>
+      <button class="btn btn-ghost hidden" id="identCreciBtn" onclick="fecharIdentidadeConta();abrirModalCreci()">Informar CRECI</button>
+    </div>
     <div style="display:flex;gap:10px;margin-top:16px;justify-content:flex-end;flex-wrap:wrap">
       <button class="btn btn-ghost" onclick="fecharIdentidadeConta()">Fechar</button>
       <button class="btn btn-ghost hidden" id="identRemover" onclick="removerLogoConta()">Remover logo</button>
@@ -1569,7 +1592,65 @@ async function carregarIdentidadeConta(){
     const logo = urlLogoSegura(_identidadeConta.logoUrl);
     if(logo){ img.src = logo; img.alt = _identidadeConta.nome || ''; img.classList.remove('hidden'); }
     else { img.removeAttribute('src'); img.classList.add('hidden'); }
+    renderCreciPerfil();
   }catch(e){}
+}
+
+/* ---- CRECI do corretor autônomo (M11 Fase A) ----
+ * Obrigatório antes de criar autorizações (o backend recusa com CRECI_OBRIGATORIO).
+ * Só o titular (admin) informa; um CRECI já cadastrado não é alterado por aqui. */
+let _creciAoSalvar = null;
+function renderCreciPerfil(){
+  const d = _identidadeConta || {};
+  const titular = Auth.user?.role === 'admin' && !Auth.user?.modoSuporte;
+  const banner = document.getElementById('creciBanner');
+  if(banner){
+    banner.classList.toggle('hidden', d.creciPendente !== true);
+    document.getElementById('creciBannerTexto').textContent = titular
+      ? 'Informe seu CRECI para criar autorizações de venda.'
+      : 'O titular da conta precisa informar o CRECI no perfil para criar autorizações de venda.';
+    document.getElementById('creciBannerBtn').classList.toggle('hidden', !titular);
+  }
+  const box = document.getElementById('identCreci');
+  if(box){
+    const corretor = d.tipoCliente === 'corretor';
+    box.classList.toggle('hidden', !corretor);
+    document.getElementById('identCreciValor').textContent = d.creci || 'não informado';
+    document.getElementById('identCreciBtn').classList.toggle('hidden', !(corretor && d.creciPendente === true && titular));
+  }
+}
+function abrirModalCreci(aoSalvar){
+  _creciAoSalvar = typeof aoSalvar === 'function' ? aoSalvar : null;
+  document.getElementById('creciErro').textContent = '';
+  document.getElementById('creciInput').value = '';
+  document.getElementById('modalCreci').classList.add('open');
+  setTimeout(()=>document.getElementById('creciInput').focus(), 50);
+}
+function fecharModalCreci(){ _creciAoSalvar = null; document.getElementById('modalCreci').classList.remove('open'); }
+async function salvarCreci(){
+  const input = document.getElementById('creciInput'), erro = document.getElementById('creciErro'), btn = document.getElementById('creciSalvar');
+  const creci = input.value.trim();
+  if(!creci){ erro.textContent = 'Informe o número do CRECI.'; input.focus(); return; }
+  btn.disabled = true; btn.textContent = 'Salvando…'; erro.textContent = '';
+  try{
+    const r = await fetch('/api/minha-identidade/creci', { method:'PUT', headers: Auth.headers(), body: JSON.stringify({ creci }) });
+    const d = await r.json().catch(()=>({}));
+    if(!r.ok) throw new Error(d.erro || 'Não foi possível salvar o CRECI.');
+    const depois = _creciAoSalvar;
+    fecharModalCreci();
+    await carregarIdentidadeConta();
+    showToast('CRECI salvo. ✓', 'success');
+    if(depois) depois();
+  }catch(e){ erro.textContent = e.message; input.focus(); }
+  finally{ btn.disabled = false; btn.textContent = 'Salvar CRECI'; }
+}
+/* Resposta 422 CRECI_OBRIGATORIO da criação de autorização: abre o modal e,
+ * depois de salvo, repete a ação. Devolve true quando tratou a resposta. */
+function tratarCreciObrigatorio(d, repetir){
+  if(!d || d.codigo !== 'CRECI_OBRIGATORIO') return false;
+  if(Auth.user?.role === 'admin' && !Auth.user?.modoSuporte) abrirModalCreci(repetir);
+  else showToast(d.erro || 'O titular precisa informar o CRECI no perfil.', 'error');
+  return true;
 }
 function mostrarLogoConta(src){
   const img = document.getElementById('identLogo');
@@ -1884,6 +1965,10 @@ async function fluxoVazio(){
       tratarErroLimite(d);
       return;
     }
+    if (r.status === 422) {
+      const d = await r.json().catch(()=>({}));
+      if (tratarCreciObrigatorio(d, fluxoVazio)) return;
+    }
     if (!r.ok) throw new Error('Falha ao criar autorização.');
     const salvo = await r.json();
     AG.code = salvo.codigo;
@@ -1944,6 +2029,10 @@ async function gerarLinkAssistido(){
       body: JSON.stringify(dados)
     });
     if(r.status === 402){ tratarErroLimite(await r.json()); return; }
+    if(r.status === 422){
+      const d = await r.json().catch(()=>({}));
+      if(tratarCreciObrigatorio(d, gerarLinkAssistido)) return;
+    }
     if(!r.ok) throw new Error('Falha ao salvar');
     const salvo = await r.json();
     AG.code = salvo.codigo;
@@ -3129,6 +3218,7 @@ async function confirmarInserirAutorizacao(){
       body: JSON.stringify(payload)
     });
     const d = await r.json();
+    if(r.status === 422 && tratarCreciObrigatorio(d, confirmarInserirAutorizacao)) return;
     if(!r.ok) throw new Error(d.erro || 'Falha ao inserir.');
     document.getElementById('modalInserirAutorizacao').classList.remove('open');
     showToast('Autorização inserida com sucesso! ✓','success');

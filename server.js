@@ -962,6 +962,19 @@ async function contarUsoPlanoMes(imobiliariaId) {
 // Decide se a imobiliária pode criar mais uma autorização e qual cota ela
 // consome: 'trial' | 'plano' | 'credito_extra'. O crédito extra é debitado
 // aqui, de forma atômica (só debita se ainda houver saldo).
+// CRECI do corretor autônomo (M11 Fase A): opcional no cadastro inicial e
+// obrigatório antes de criar qualquer autorização. Vale só para contas
+// tipoCliente 'corretor'; imobiliárias não passam por esta regra. Mesma
+// origem do CRECI usada no PDF e na identidade pública.
+function creciDoTenant(imob) {
+  return String(imob?.creci || imob?.responsavel?.creci || '').trim();
+}
+const ERRO_CRECI_OBRIGATORIO = { erro: 'Informe seu CRECI no perfil antes de criar autorizações de venda.', codigo: 'CRECI_OBRIGATORIO' };
+async function creciPendente(imobiliariaId) {
+  const imob = await db.imobiliarias.findOne({ _id: imobiliariaId });
+  return !!imob && imob.tipoCliente === 'corretor' && !creciDoTenant(imob);
+}
+
 async function reservarAutorizacao(imobiliariaId) {
   const { imob, acesso } = await carregarAcessoTenant(imobiliariaId);
   // Token desatualizado (banco recriado) → 401 força novo login
@@ -1613,6 +1626,7 @@ app.get('/api/autorizacoes', authMiddleware(['admin','corretor','super_admin']),
 // Criar rascunho (link vazio) — com verificação de limite
 app.post('/api/autorizacoes', authMiddleware(['admin','corretor']), async (req, res) => {
   try {
+    if (await creciPendente(req.user.imobiliariaId)) return res.status(422).json(ERRO_CRECI_OBRIGATORIO);
     const { reserva, codigo, salvo } = await reservarEInserirAutorizacao(req.user.imobiliariaId, (codigo, reserva) => ({
       codigo, linkPublico: `${getBaseUrl(req)}/autorizacao/${codigo}`,
       imobiliariaId:   req.user.imobiliariaId,
@@ -1638,6 +1652,7 @@ app.post('/api/autorizacoes/rascunho', authMiddleware(['admin','corretor']), asy
   try {
     const { proprietario, imovel } = req.body;
     if (!proprietario?.nome) return res.status(422).json({ erro: 'Dados incompletos.' });
+    if (await creciPendente(req.user.imobiliariaId)) return res.status(422).json(ERRO_CRECI_OBRIGATORIO);
     const linkDe = (c) => `${getBaseUrl(req)}/autorizacao/${c}`;
     const { reserva, codigo } = await reservarEInserirAutorizacao(req.user.imobiliariaId, (codigo, reserva) => ({
       codigo, linkPublico: linkDe(codigo),
@@ -1669,6 +1684,7 @@ app.post('/api/autorizacoes/manual', authMiddleware(['admin','corretor']), async
 
     const { proprietario, imovel, tipo, status, vencimento, corretor, inseridoManualmente } = req.body;
     if (!proprietario?.nome || !imovel?.end) return res.status(422).json({ erro: 'Dados incompletos.' });
+    if (await creciPendente(user.imobiliariaId)) return res.status(422).json(ERRO_CRECI_OBRIGATORIO);
 
     const { reserva, codigo } = await reservarEInserirAutorizacao(user.imobiliariaId, (codigo, reserva) => ({
       codigo,
@@ -3489,8 +3505,31 @@ app.get('/api/minha-identidade', authMiddleware(['admin','corretor']), async (re
       nome:           imob.razaoSocial || imob.nomeFantasia || imob.nome || '',
       tipoCliente:    imob.tipoCliente === 'corretor' ? 'corretor' : 'imobiliaria',
       logoUrl:        logoTenant.urlLogo(imob),
-      podeEditarLogo: podeEditarLogo(req.user, acesso)
+      podeEditarLogo: podeEditarLogo(req.user, acesso),
+      creci:          creciDoTenant(imob) || null,
+      creciPendente:  imob.tipoCliente === 'corretor' && !creciDoTenant(imob)
     });
+  } catch(e) { res.status(500).json({ erro: 'Erro interno.' }); }
+});
+
+// CRECI do corretor autônomo informado pelo próprio titular (M11 Fase A).
+// Só preenche quando ainda não há CRECI: um CRECI já cadastrado nunca é
+// alterado por aqui (correções seguem pelo Super Admin). Tenant só da sessão.
+app.put('/api/minha-identidade/creci', authMiddleware(['admin']), async (req, res) => {
+  try {
+    const imob = await tenantEditavel(req, res);
+    if (!imob) return;
+    if (imob.tipoCliente !== 'corretor') return res.status(403).json({ erro: 'O CRECI pelo perfil é exclusivo de corretor autônomo.' });
+    if (creciDoTenant(imob)) return res.status(409).json({ erro: 'CRECI já cadastrado. Para alterá-lo, fale com o suporte.' });
+    const creci = typeof req.body?.creci === 'string' ? req.body.creci.trim().toUpperCase() : '';
+    if (!/^[0-9A-Z][0-9A-Z.\-\/ ]{1,19}$/.test(creci) || !/\d/.test(creci)) {
+      return res.status(422).json({ erro: 'Informe um CRECI válido (ex.: 12345-F).' });
+    }
+    const outro = await db.imobiliarias.findOne({ creci, _id: { $ne: imob._id } });
+    if (outro) return res.status(422).json({ erro: 'CRECI já cadastrado em outra conta.' });
+    await db.imobiliarias.update({ _id: imob._id }, { $set: { creci, atualizadoEm: new Date().toISOString() } });
+    await log('conta', 'CRECI informado no perfil do corretor autônomo', null, imob._id);
+    res.json({ ok: true, creci });
   } catch(e) { res.status(500).json({ erro: 'Erro interno.' }); }
 });
 
