@@ -582,10 +582,13 @@ app.patch('/api/admin/imobiliarias/:id', authMiddleware(['super_admin']), async 
           planoId: plano._id, planoSlug: plano.slug, planoNome: plano.nome,
           limiteAutorizacoes: limiteAutorizacoes !== undefined ? limiteAutorizacoes : plano.limite
         }});
-        await db.subscriptions.update({ imobiliariaId: req.params.id }, { $set: {
-          planoId: plano._id, planoSlug: plano.slug, planoNome: plano.nome,
-          limiteAutorizacoes: plano.limite, atualizadoEm: new Date().toISOString()
-        }});
+        await comTravaTenant(req.params.id, async () => {
+          const vigente = await obterAssinaturaVigente(req.params.id);
+          if (vigente) await db.subscriptions.update({ _id: vigente._id }, { $set: {
+            planoId: plano._id, planoSlug: plano.slug, planoNome: plano.nome,
+            limiteAutorizacoes: plano.limite, atualizadoEm: new Date().toISOString()
+          }});
+        });
       }
     }
 
@@ -628,12 +631,42 @@ app.get('/api/admin/imobiliarias/:id/usuarios', authMiddleware(['super_admin']),
 // ═══════════════════════════════════════════════════════
 // SUBSCRIPTION SERVICE — Entidade separada de assinatura
 // ═══════════════════════════════════════════════════════
+// ── Assinatura vigente (M11) ──
+// Regra única: cada tenant tem no máximo UMA assinatura vigente.
+//   1. a apontada por imobiliarias.subscriptionId, se existir, for do tenant e
+//      não tiver sido substituída;
+//   2. senão (dados legados sem ponteiro), a mais recente não substituída
+//      (criadoEm, depois _id — ordem determinística).
+// Criar uma assinatura para quem já tem uma marca a anterior como substituída
+// (substituidaEm/substituidaPor) e registra em subscription_history — nada é
+// apagado. Toda escrita mira a vigente pelo _id, dentro da trava do tenant.
+async function obterAssinaturaVigente(imobiliariaId, imob) {
+  if (!imobiliariaId) return null;
+  const tenant = imob !== undefined ? imob : await db.imobiliarias.findOne({ _id: imobiliariaId });
+  if (tenant && tenant.subscriptionId) {
+    const apontada = await db.subscriptions.findOne({ _id: tenant.subscriptionId, imobiliariaId });
+    if (apontada && !apontada.substituidaEm) return apontada;
+  }
+  const candidatas = (await db.subscriptions.find({ imobiliariaId })).filter(s => !s.substituidaEm);
+  if (!candidatas.length) return null;
+  candidatas.sort((a, b) => String(b.criadoEm || '').localeCompare(String(a.criadoEm || '')) || String(b._id).localeCompare(String(a._id)));
+  return candidatas[0];
+}
+const ehAssinaturaVigente = (s) => !s.substituidaEm;
+
 const SubscriptionService = {
 
+  // Contrato mantido: cria e torna vigente. Se já houver vigente, ela é
+  // substituída (histórico preservado). Serializado por tenant.
   async criar(imobiliariaId, planoId, status='trial') {
+    return comTravaTenant(imobiliariaId, () => this._criarSemTrava(imobiliariaId, planoId, status));
+  },
+
+  async _criarSemTrava(imobiliariaId, planoId, status='trial') {
     if (!STATUS_FINANCEIROS.includes(status)) throw new Error('Status de assinatura inválido.');
     const plano = await db.planos.findOne({ _id: planoId });
     if (!plano) throw new Error('Plano não encontrado.');
+    const anterior = await obterAssinaturaVigente(imobiliariaId);
     const now = new Date();
     const renewal = new Date(now); renewal.setMonth(renewal.getMonth() + 1);
     const trialExp = status === 'trial' ? new Date(now.getTime() + DIAS_TRIAL*24*60*60*1000).toISOString() : null;
@@ -663,14 +696,30 @@ const SubscriptionService = {
       subscriptionStatus:   status,
       atualizadoEm:         now.toISOString()
     }});
+    // Ponteiro já aponta para a nova; a anterior vira histórico (nunca apagada).
+    if (anterior) {
+      await db.subscriptions.update({ _id: anterior._id }, { $set: { substituidaEm: now.toISOString(), substituidaPor: sub._id } });
+      await db.subscription_history.insert({
+        imobiliariaId, tipo: 'substituicao',
+        previousSubscriptionId: anterior._id, newSubscriptionId: sub._id,
+        previousPlanId: anterior.planoId, previousPlanNome: anterior.planoNome, previousStatus: anterior.status,
+        newPlanId: plano._id, newPlanNome: plano.nome, newStatus: status,
+        changedBy: 'system', motivo: 'Nova assinatura criada para tenant com assinatura vigente',
+        criadoEm: now.toISOString()
+      });
+    }
     return sub;
   },
 
   async get(imobiliariaId) {
-    return db.subscriptions.findOne({ imobiliariaId });
+    return obterAssinaturaVigente(imobiliariaId);
   },
 
   async alterarPlano(imobiliariaId, novoPlanoId, motivo, changedBy) {
+    return comTravaTenant(imobiliariaId, () => this._alterarPlanoSemTrava(imobiliariaId, novoPlanoId, motivo, changedBy));
+  },
+
+  async _alterarPlanoSemTrava(imobiliariaId, novoPlanoId, motivo, changedBy) {
     const sub = await this.get(imobiliariaId);
     const novoPlano = await db.planos.findOne({ _id: novoPlanoId });
     if (!novoPlano) throw new Error('Plano não encontrado.');
@@ -699,9 +748,9 @@ const SubscriptionService = {
       atualizadoEm:       new Date().toISOString()
     };
     if (sub) {
-      await db.subscriptions.update({ imobiliariaId }, { $set: upd });
+      await db.subscriptions.update({ _id: sub._id }, { $set: upd });
     } else {
-      await this.criar(imobiliariaId, novoPlanoId, 'active');
+      await this._criarSemTrava(imobiliariaId, novoPlanoId, 'active');
       return;
     }
     // Sync imobiliaria
@@ -716,11 +765,15 @@ const SubscriptionService = {
   // imob.ativo — conta suspensa pelo Super Admin continua suspensa. O plano e
   // o valor vêm do registro do pagamento (snapshot do que foi pago).
   async ativarPorPagamento(imobiliariaId, pagamento, agora) {
+    return comTravaTenant(imobiliariaId, () => this._ativarPorPagamentoSemTrava(imobiliariaId, pagamento, agora));
+  },
+
+  async _ativarPorPagamentoSemTrava(imobiliariaId, pagamento, agora) {
     const plano = await db.planos.findOne({ _id: pagamento.planoId });
     if (!plano) throw new Error('Plano do pagamento não encontrado.');
     let sub = await this.get(imobiliariaId);
     if (!sub) {
-      await this.criar(imobiliariaId, plano._id, 'active');
+      await this._criarSemTrava(imobiliariaId, plano._id, 'active');
       sub = await this.get(imobiliariaId);
     }
     const vencAtual = sub.planoVencimento ? new Date(sub.planoVencimento) : null;
@@ -762,11 +815,19 @@ const SubscriptionService = {
   },
 
   async resetarConsumo(imobiliariaId) {
-    await db.subscriptions.update({ imobiliariaId }, { $set: { usedAutorizacoes: 0, atualizadoEm: new Date().toISOString() } });
+    return comTravaTenant(imobiliariaId, async () => {
+      const sub = await this.get(imobiliariaId);
+      if (sub) await db.subscriptions.update({ _id: sub._id }, { $set: { usedAutorizacoes: 0, atualizadoEm: new Date().toISOString() } });
+    });
   },
 
   async adicionarCreditos(imobiliariaId, quantidade, motivo, adminId) {
-    await db.subscriptions.update({ imobiliariaId }, { $inc: { extraAutorizacoes: quantidade } });
+    return comTravaTenant(imobiliariaId, () => this._adicionarCreditosSemTrava(imobiliariaId, quantidade, motivo, adminId));
+  },
+
+  async _adicionarCreditosSemTrava(imobiliariaId, quantidade, motivo, adminId) {
+    const sub = await this.get(imobiliariaId);
+    if (sub) await db.subscriptions.update({ _id: sub._id }, { $inc: { extraAutorizacoes: quantidade } });
     await db.imobiliarias.update({ _id: imobiliariaId }, { $inc: { creditosExtras: quantidade } });
     await db.billing_transactions.insert({
       imobiliariaId, tipo: 'extra_credits', quantidade,
@@ -780,6 +841,10 @@ const SubscriptionService = {
   // active/delinquent/trial no financeiro (sub.status). Motivo financeiro
   // nunca altera imob.ativo — isso derrubaria os links públicos.
   async alterarStatus(imobiliariaId, novoStatus) {
+    return comTravaTenant(imobiliariaId, () => this._alterarStatusSemTrava(imobiliariaId, novoStatus));
+  },
+
+  async _alterarStatusSemTrava(imobiliariaId, novoStatus) {
     const agora = new Date().toISOString();
     const adm = { suspended: 'suspenso', canceled: 'inativo', active: 'ativo' }[novoStatus];
     if (adm) {
@@ -789,7 +854,8 @@ const SubscriptionService = {
     if (fin) {
       const set = { status: fin, atualizadoEm: agora };
       if (fin === 'trial') set.trialExpiration = new Date(Date.now() + DIAS_TRIAL*24*60*60*1000).toISOString();
-      await db.subscriptions.update({ imobiliariaId }, { $set: set });
+      const sub = await this.get(imobiliariaId);
+      if (sub) await db.subscriptions.update({ _id: sub._id }, { $set: set });
       await db.imobiliarias.update({ _id: imobiliariaId }, { $set: { subscriptionStatus: fin, atualizadoEm: agora } });
     }
   }
@@ -809,7 +875,7 @@ function statusAdministrativoEntrada(status) {
 // aplica a regra central. Única porta de entrada para decisões de acesso.
 async function carregarAcessoTenant(imobiliariaId) {
   const imob = imobiliariaId ? await db.imobiliarias.findOne({ _id: imobiliariaId }) : null;
-  const sub = imob ? await db.subscriptions.findOne({ imobiliariaId }) : null;
+  const sub = imob ? await obterAssinaturaVigente(imobiliariaId, imob) : null;
   let planoTrial = null, usoTrial = 0;
   if (sub && normalizarStatusFinanceiro(sub.status) === 'trial') {
     planoTrial = await db.planos.findOne({ slug: 'trial' });
@@ -832,12 +898,12 @@ const BillingService = {
   },
 
   async calcularMRR() {
-    const subs = await db.subscriptions.find({ status: 'active' });
+    const subs = (await db.subscriptions.find({ status: 'active' })).filter(ehAssinaturaVigente);
     return subs.reduce((s, sub) => s + (sub.valorMensal || 0), 0);
   },
 
   async metricas() {
-    const subs      = await db.subscriptions.find({});
+    const subs      = (await db.subscriptions.find({})).filter(ehAssinaturaVigente);
     const imobs     = await db.imobiliarias.find({});
     const now       = new Date();
     const mesInicio = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
@@ -918,6 +984,20 @@ async function reservarAutorizacao(imobiliariaId) {
   };
 }
 
+// Reserva de cota + gravação da autorização numa única seção crítica por tenant
+// (M11): sem isso, duas requisições simultâneas com uma única vaga (ou com a
+// única autorização do trial) passavam ambas pela contagem antes de gravar.
+async function reservarEInserirAutorizacao(imobiliariaId, montar) {
+  return comTravaTenant(imobiliariaId, async () => {
+    const reserva = await reservarAutorizacao(imobiliariaId);
+    if (!reserva.ok) return { reserva };
+    const codigo = await gerarCodigoUnico();
+    const aut = montar(codigo, reserva);
+    const salvo = await db.autorizacoes.insert(aut);
+    return { reserva, codigo, salvo };
+  });
+}
+
 function calcularPorcentagem(usadas, limite) {
   if (limite === -1) return 0;
   return Math.round((usadas / Math.max(limite, 1)) * 100);
@@ -955,7 +1035,7 @@ app.put('/api/admin/planos/:id', authMiddleware(['super_admin']), async (req, re
     };
     await db.planos.update({ _id: req.params.id }, { $set: update });
     // Propagar preço/limite atualizado para todas as subscriptions com esse plano
-    const subs = await db.subscriptions.find({ planoId: req.params.id });
+    const subs = (await db.subscriptions.find({ planoId: req.params.id })).filter(ehAssinaturaVigente);
     for (const sub of subs) {
       await db.subscriptions.update({ _id: sub._id }, { $set: {
         planoNome:          nome,
@@ -1154,6 +1234,31 @@ app.get('/api/admin/ranking', authMiddleware(['super_admin']), async (_req, res)
 // ROTAS PÚBLICAS (sem auth)
 // ═══════════════════════════════════════════════════════
 app.get('/api/health', (_req, res) => res.json({ ok: true, ts: new Date().toISOString(), version: '2.0.0' }));
+
+// Trava por e-mail de login (M11): serializa, dentro do processo, toda operação
+// que cria um usuário ou troca o e-mail de login, para que duas requisições
+// simultâneas com o mesmo e-mail não criem duas contas (o NeDB roda em um
+// único processo). Complementa o índice único de usuarios.email, que pode não
+// existir se houver duplicidade antiga nos dados.
+const travas = new Map();
+// Fila por chave: quem chega depois espera o anterior terminar (sem reentrada).
+async function comTrava(chave, fn) {
+  const anterior = travas.get(chave) || Promise.resolve();
+  let liberar;
+  const minha = new Promise(r => { liberar = r; });
+  const fila = anterior.then(() => minha);
+  travas.set(chave, fila);
+  try {
+    await anterior;
+    return await fn();
+  } finally {
+    liberar();
+    if (travas.get(chave) === fila) travas.delete(chave);
+  }
+}
+function comTravaEmail(email, fn) { return comTrava('email:' + String(email || '').toLowerCase().trim(), fn); }
+// Toda escrita de assinatura de um tenant passa por esta trava (M11).
+function comTravaTenant(imobiliariaId, fn) { return comTrava('tenant:' + String(imobiliariaId || ''), fn); }
 
 // Auto-cadastro publico via landing page — toda conta nova nasce em trial
 // (plano 'trial' de db.planos). O plano escolhido na landing não é aplicado.
@@ -1508,14 +1613,8 @@ app.get('/api/autorizacoes', authMiddleware(['admin','corretor','super_admin']),
 // Criar rascunho (link vazio) — com verificação de limite
 app.post('/api/autorizacoes', authMiddleware(['admin','corretor']), async (req, res) => {
   try {
-    const reserva = await reservarAutorizacao(req.user.imobiliariaId);
-    if (!reserva.ok) {
-      return res.status(reserva.status).json({ erro: reserva.erro, usadas: reserva.usadas, limiteTotal: (reserva.limite||0)+(reserva.extras||0) });
-    }
-    const codigo = await gerarCodigoUnico();
-    const linkPublico = `${getBaseUrl(req)}/autorizacao/${codigo}`;
-    const aut = {
-      codigo, linkPublico,
+    const { reserva, codigo, salvo } = await reservarEInserirAutorizacao(req.user.imobiliariaId, (codigo, reserva) => ({
+      codigo, linkPublico: `${getBaseUrl(req)}/autorizacao/${codigo}`,
       imobiliariaId:   req.user.imobiliariaId,
       imobiliariaSlug: req.user.imobiliariaSlug,
       corretorId:      req.user.userId,
@@ -1524,8 +1623,10 @@ app.post('/api/autorizacoes', authMiddleware(['admin','corretor']), async (req, 
       consumo:         reserva.consumo,
       criadoEm:        new Date().toISOString(),
       atualizadoEm:    new Date().toISOString()
-    };
-    const salvo = await db.autorizacoes.insert(aut);
+    }));
+    if (!reserva.ok) {
+      return res.status(reserva.status).json({ erro: reserva.erro, usadas: reserva.usadas, limiteTotal: (reserva.limite||0)+(reserva.extras||0) });
+    }
     await log('autorizacao', `Link vazio gerado: ${codigo}`, null, req.user.imobiliariaId);
     sseNotificar(req.user.imobiliariaId, 'autorizacao_nova', { codigo, status: 'rascunho' });
     res.json(salvo);
@@ -1537,12 +1638,9 @@ app.post('/api/autorizacoes/rascunho', authMiddleware(['admin','corretor']), asy
   try {
     const { proprietario, imovel } = req.body;
     if (!proprietario?.nome) return res.status(422).json({ erro: 'Dados incompletos.' });
-    const reserva = await reservarAutorizacao(req.user.imobiliariaId);
-    if (!reserva.ok) return res.status(reserva.status).json({ erro: reserva.erro });
-    const codigo = await gerarCodigoUnico();
-    const linkPublico = `${getBaseUrl(req)}/autorizacao/${codigo}`;
-    const aut = {
-      codigo, linkPublico,
+    const linkDe = (c) => `${getBaseUrl(req)}/autorizacao/${c}`;
+    const { reserva, codigo } = await reservarEInserirAutorizacao(req.user.imobiliariaId, (codigo, reserva) => ({
+      codigo, linkPublico: linkDe(codigo),
       proprietario, imovel,
       tipo:            null,
       status:          'rascunho',
@@ -1554,8 +1652,9 @@ app.post('/api/autorizacoes/rascunho', authMiddleware(['admin','corretor']), asy
       corretorNome:    req.user.nome,
       criadoEm:        new Date().toISOString(),
       atualizadoEm:    new Date().toISOString()
-    };
-    await db.autorizacoes.insert(aut);
+    }));
+    if (!reserva.ok) return res.status(reserva.status).json({ erro: reserva.erro });
+    const linkPublico = linkDe(codigo);
     await log('autorizacao', `Rascunho assistido: ${codigo} (${proprietario.nome})`, null, req.user.imobiliariaId);
     sseNotificar(req.user.imobiliariaId, 'autorizacao_nova', { codigo, status: 'rascunho', proprietario: proprietario.nome });
     res.json({ ok: true, codigo, linkPublico });
@@ -1571,11 +1670,7 @@ app.post('/api/autorizacoes/manual', authMiddleware(['admin','corretor']), async
     const { proprietario, imovel, tipo, status, vencimento, corretor, inseridoManualmente } = req.body;
     if (!proprietario?.nome || !imovel?.end) return res.status(422).json({ erro: 'Dados incompletos.' });
 
-    const reserva = await reservarAutorizacao(user.imobiliariaId);
-    if (!reserva.ok) return res.status(reserva.status).json({ erro: reserva.erro });
-
-    const codigo = await gerarCodigoUnico();
-    const aut = {
+    const { reserva, codigo } = await reservarEInserirAutorizacao(user.imobiliariaId, (codigo, reserva) => ({
       codigo,
       proprietario,
       imovel,
@@ -1590,8 +1685,8 @@ app.post('/api/autorizacoes/manual', authMiddleware(['admin','corretor']), async
       consumo:           reserva.consumo,
       criadoEm:          new Date().toISOString(),
       atualizadoEm:      new Date().toISOString()
-    };
-    await db.autorizacoes.insert(aut);
+    }));
+    if (!reserva.ok) return res.status(reserva.status).json({ erro: reserva.erro });
     await log('autorizacao', `Inserida manualmente: ${codigo} (${proprietario.nome})`, null, user.imobiliariaId);
     res.json({ ok: true, codigo });
   } catch(e) { res.status(500).json({ erro: e.message }); }
@@ -2983,7 +3078,7 @@ app.get('/api/admin/subscriptions', authMiddleware(['super_admin']), async (req,
     const mesInicio = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
 
     const result = await Promise.all(imobs.map(async imob => {
-      const sub = await db.subscriptions.findOne({ imobiliariaId: imob._id });
+      const sub = await obterAssinaturaVigente(imob._id, imob);
       const usadas = await db.autorizacoes.count({ imobiliariaId: imob._id, criadoEm: { $gte: mesInicio } });
       const limite  = sub?.limiteAutorizacoes ?? imob.limiteAutorizacoes ?? 0;
       const extras  = sub?.extraAutorizacoes  ?? imob.creditosExtras     ?? 0;
@@ -3063,7 +3158,10 @@ app.patch('/api/admin/subscriptions/:imobId/resetar', authMiddleware(['super_adm
 app.patch('/api/admin/subscriptions/:imobId/limite', authMiddleware(['super_admin']), async (req, res) => {
   try {
     const { limite } = req.body;
-    await db.subscriptions.update({ imobiliariaId: req.params.imobId }, { $set: { limiteAutorizacoes: parseInt(limite), atualizadoEm: new Date().toISOString() } });
+    await comTravaTenant(req.params.imobId, async () => {
+      const vigente = await obterAssinaturaVigente(req.params.imobId);
+      if (vigente) await db.subscriptions.update({ _id: vigente._id }, { $set: { limiteAutorizacoes: parseInt(limite), atualizadoEm: new Date().toISOString() } });
+    });
     await db.imobiliarias.update({ _id: req.params.imobId }, { $set: { limiteAutorizacoes: parseInt(limite), atualizadoEm: new Date().toISOString() } });
     res.json({ ok: true });
   } catch(e) { res.status(500).json({ erro: e.message }); }
@@ -3271,14 +3369,16 @@ app.patch('/api/admin/boletos/:id/status', authMiddleware(['super_admin']), asyn
     if (status === 'pago') {
       const boleto = await db.boletos.findOne({ _id: req.params.id });
       if (boleto?.imobiliariaId) {
-        const sub = await db.subscriptions.findOne({ imobiliariaId: boleto.imobiliariaId });
-        if (sub) {
-          const renewal = new Date(); renewal.setMonth(renewal.getMonth()+1);
-          await db.subscriptions.update({ _id: sub._id }, { $set: {
-            status: 'active', usedAutorizacoes: 0, renewalDate: renewal.toISOString(), atualizadoEm: new Date().toISOString()
-          }});
-          await db.imobiliarias.update({ _id: boleto.imobiliariaId }, { $set: { subscriptionStatus:'active', atualizadoEm: new Date().toISOString() } });
-        }
+        await comTravaTenant(boleto.imobiliariaId, async () => {
+          const sub = await obterAssinaturaVigente(boleto.imobiliariaId);
+          if (sub) {
+            const renewal = new Date(); renewal.setMonth(renewal.getMonth()+1);
+            await db.subscriptions.update({ _id: sub._id }, { $set: {
+              status: 'active', usedAutorizacoes: 0, renewalDate: renewal.toISOString(), atualizadoEm: new Date().toISOString()
+            }});
+            await db.imobiliarias.update({ _id: boleto.imobiliariaId }, { $set: { subscriptionStatus:'active', atualizadoEm: new Date().toISOString() } });
+          }
+        });
         await log('boleto', `Boleto ${req.params.id} marcado como pago — créditos renovados`);
       }
     }
